@@ -1,16 +1,16 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
-import { useState } from 'react'; // الحفاظ على وجود useState
-import { TikTokPage } from 'lucide-react'; // الحفاظ على وجود lucide-react و TikTokPage
+import { useState } from 'react';
+import { TikTokPage } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [color, setColor] = useState('blue'); // مثال على استخدام useState
+  const [color, setColor] = useState('blue');
 
   return (
     <div className="app">
       <h1>مرحبًا بك في صفحتنا!</h1>
-      <TikTokPage /> {/* استخدام TikTokPage للتأكد من الحفاظ عليه */}
+      <TikTokPage />
     </div>
   );
 }
@@ -36,7 +36,6 @@ const style = document.createElement("style");
 style.appendChild(document.createTextNode(css));
 document.head.appendChild(style);
 
-// الحفاظ على وظيفة syncWithN8n
 const syncWithN8n = () => {
   console.log('Syncing with N8N');
 };
