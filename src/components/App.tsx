@@ -1,28 +1,12 @@
-This code snippet processes a piece of JSON data, extracting a text property and formatting it into a new JSON structure. Here's a breakdown:
+This code is designed to retrieve and format text data in a specific structure. Here's a breakdown of what it does:
 
-1. **Extract Text Data**: Retrieves text data from the first item in the `items` array using `your_text_property`.
+1. **Extract Text Data**: It accesses a property from a potential data structure called `items` and retrieves `your_text_property` from the first item. This assumes `items` is an array of objects and each object has a `json` property containing `your_text_property`.
 
-   ```javascript
-   const textData = items[0].json.your_text_property;
-   ```
-
-2. **Format Data**: Creates a new JSON object containing:
-   - `instruction`: A string "process_code".
+2. **Format the Data**: It creates an object called `formattedData` with the following structure:
+   - `instruction`: A string set to `"process_code"` indicating a command or action to be taken.
    - `content`: The extracted text data.
-   - `timestamp`: The current date and time in ISO format.
+   - `timestamp`: The current date and time in ISO format to log when the data was processed.
 
-   ```javascript
-   const formattedData = {
-       instruction: "process_code",
-       content: textData,
-       timestamp: new Date().toISOString()
-   };
-   ```
+3. **Return the Data**: It returns an array containing an object with a `json` property holding the `formattedData`.
 
-3. **Return Result**: Encapsulates the formatted data in an array and returns it.
-
-   ```javascript
-   return [{ json: formattedData }];
-   ```
-
-This is typically used in a workflow to prepare data for further processing or transmission.
+This kind of structure can be used for data processing tasks, logging, or sending information in a standardized format. If you have any specific questions about this code, feel free to ask!
