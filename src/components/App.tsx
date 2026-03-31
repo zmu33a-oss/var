@@ -1,12 +1,12 @@
-This JavaScript code is part of a data transformation process. It extracts a text property from a JSON object and formats it for further processing. Here’s a breakdown of what each part does:
+It looks like you've provided a snippet of JavaScript code. Here's a breakdown of what this code does:
 
-1. **Extract Text Data**:
+1. **Extract Text Data:**
    ```javascript
-   const textData = items[0].json.your_text_property; // استلام النص
+   const textData = items[0].json.your_text_property;
    ```
-   This line retrieves the value of `your_text_property` from the first item in the `items` array. This is assumed to be a JSON object.
+   This line extracts the value from `your_text_property` of the first item in the `items` array.
 
-2. **Create Formatted Data Object**:
+2. **Format the Data:**
    ```javascript
    const formattedData = {
        instruction: "process_code",
@@ -14,14 +14,15 @@ This JavaScript code is part of a data transformation process. It extracts a tex
        timestamp: new Date().toISOString()
    };
    ```
-   - `instruction`: A fixed string "process_code" indicating the purpose or action required for the data.
-   - `content`: The actual text data extracted earlier.
-   - `timestamp`: The current date and time in ISO string format, providing a timestamp for when the processing occurred.
+   This creates an object `formattedData` with:
+   - `instruction`: a static string "process_code".
+   - `content`: contains the extracted `textData`.
+   - `timestamp`: the current date and time in ISO format.
 
-3. **Return the Formatted Data**:
+3. **Return the Formatted Data:**
    ```javascript
    return [{ json: formattedData }];
    ```
-   This line wraps the `formattedData` object in an array and returns it, structured in a way that's likely meant to be compatible with further processing or output requirements.
+   This wraps `formattedData` in an array with an object containing a `json` key, then returns it.
 
-This code snippet can be used in environments that support JavaScript, such as Node.js, particularly in automation or data processing workflows.
+This code is typically used in environments like Node.js or workflow automation platforms to process and pass around structured data.
