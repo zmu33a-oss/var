@@ -1,12 +1,18 @@
-This code is designed to retrieve and format text data in a specific structure. Here's a breakdown of what it does:
+Certainly! This JavaScript snippet processes and formats text data. Here's a breakdown of what it does:
 
-1. **Extract Text Data**: It accesses a property from a potential data structure called `items` and retrieves `your_text_property` from the first item. This assumes `items` is an array of objects and each object has a `json` property containing `your_text_property`.
+1. **Extract Text Data**: 
+   - `const textData = items[0].json.your_text_property;`
+     - This line extracts text data from the provided input (assuming `items` is an array of objects and `your_text_property` is the key holding the text).
 
-2. **Format the Data**: It creates an object called `formattedData` with the following structure:
-   - `instruction`: A string set to `"process_code"` indicating a command or action to be taken.
-   - `content`: The extracted text data.
-   - `timestamp`: The current date and time in ISO format to log when the data was processed.
+2. **Format Data**:
+   - `const formattedData = { instruction: "process_code", content: textData, timestamp: new Date().toISOString() };`
+     - Creates an object called `formattedData` with:
+       - An `instruction` field set to the string `"process_code"`.
+       - A `content` field containing the extracted text (`textData`).
+       - A `timestamp` field with the current date and time in ISO format.
 
-3. **Return the Data**: It returns an array containing an object with a `json` property holding the `formattedData`.
+3. **Return Formatted Data**:
+   - `return [{ json: formattedData }];`
+     - Returns an array containing one object, which has a `json` field holding the `formattedData` object. 
 
-This kind of structure can be used for data processing tasks, logging, or sending information in a standardized format. If you have any specific questions about this code, feel free to ask!
+This structure is useful for data processing tasks where formatted information needs to be passed along the workflow with a time-stamped record.
