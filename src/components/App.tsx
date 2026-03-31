@@ -1,12 +1,12 @@
-Certainly! Here's a breakdown of what the code snippet is doing:
+This JavaScript code is part of a data transformation process. It extracts a text property from a JSON object and formats it for further processing. Here’s a breakdown of what each part does:
 
-1. **Extract Text Data:**
+1. **Extract Text Data**:
    ```javascript
    const textData = items[0].json.your_text_property; // استلام النص
    ```
-   This line retrieves a piece of text from the first item in an array called `items`. The text is located at `your_text_property` within the `json` object of the item.
+   This line retrieves the value of `your_text_property` from the first item in the `items` array. This is assumed to be a JSON object.
 
-2. **Format the Data:**
+2. **Create Formatted Data Object**:
    ```javascript
    const formattedData = {
        instruction: "process_code",
@@ -14,15 +14,14 @@ Certainly! Here's a breakdown of what the code snippet is doing:
        timestamp: new Date().toISOString()
    };
    ```
-   This code creates an object named `formattedData` that includes:
-   - `instruction`: A string "process_code" indicating what should be done with the content.
-   - `content`: The extracted text from the first step.
-   - `timestamp`: The current date and time in ISO format for tracking when the data was processed.
+   - `instruction`: A fixed string "process_code" indicating the purpose or action required for the data.
+   - `content`: The actual text data extracted earlier.
+   - `timestamp`: The current date and time in ISO string format, providing a timestamp for when the processing occurred.
 
-3. **Return the Result:**
+3. **Return the Formatted Data**:
    ```javascript
    return [{ json: formattedData }];
    ```
-   Finally, the code returns an array with a single object inside. The object contains the `formattedData` encapsulated within a `json` property.
+   This line wraps the `formattedData` object in an array and returns it, structured in a way that's likely meant to be compatible with further processing or output requirements.
 
-This code snippet formats and prepares text data for further processing by adding meta-information such as an instruction and a timestamp.
+This code snippet can be used in environments that support JavaScript, such as Node.js, particularly in automation or data processing workflows.
