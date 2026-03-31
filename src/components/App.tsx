@@ -1,14 +1,12 @@
-Certainly, here's a breakdown of your JavaScript code:
+This JavaScript code takes text data from a JSON object and formats it into a new structure with specific properties. Here's a breakdown:
 
-### Code Explanation
-
-1. **Extracting Text Data:**
+1. **Extract the Text:**
    ```javascript
    const textData = items[0].json.your_text_property;
    ```
-   - This line retrieves a property named `your_text_property` from the JSON object located at `items[0]`.
+   This line retrieves the text from a property called `your_text_property` within the first item of an array `items`.
 
-2. **Formatting the Data:**
+2. **Create Formatted Data:**
    ```javascript
    const formattedData = {
        instruction: "process_code",
@@ -16,19 +14,14 @@ Certainly, here's a breakdown of your JavaScript code:
        timestamp: new Date().toISOString()
    };
    ```
-   - A new object `formattedData` is created.
-   - It includes:
-     - `instruction` field with the value `"process_code"`.
-     - `content` field containing the extracted text data.
-     - `timestamp` field with the current date and time in ISO format.
+   - **`instruction`:** Set to a string `"process_code"`.
+   - **`content`:** Contains the extracted text `textData`.
+   - **`timestamp`:** Adds the current date and time in ISO 8601 format.
 
-3. **Returning the Result:**
+3. **Return as JSON Object:**
    ```javascript
    return [{ json: formattedData }];
    ```
-   - The function returns an array containing a single object with a `json` property set to `formattedData`.
+   This returns an array containing a single object with `json` property set to `formattedData`.
 
-### Use Case
-This script is often used in workflows where data needs to be reformatted or enriched with additional information like timestamps before further processing. It is typical in scenarios involving automation or data transfer between systems.
-
-If you have any specific questions or need further modifications, feel free to ask!
+This setup is useful in scenarios where you need to reformat and keep a log of the text processing with a timestamp.
