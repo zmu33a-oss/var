@@ -10,10 +10,10 @@ const App: React.FC = () => {
   );
 }
 
-// تعديل CSS لتغيير لون الخلفية إلى الأحمر
+// تعديل CSS لتغيير لون الخلفية إلى الأزرق
 const css = `
   body {
-    background-color: red;
+    background-color: blue;
   }
   .app {
     text-align: center;
