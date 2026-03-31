@@ -1,16 +1,28 @@
-Here's a breakdown of what this JavaScript code does:
+This code snippet processes a piece of JSON data, extracting a text property and formatting it into a new JSON structure. Here's a breakdown:
 
-1. **Extract Text Data**:
-   - `const textData = items[0].json.your_text_property;`
-   - This line retrieves text data from the first item in an array. It accesses the JSON property `your_text_property`.
+1. **Extract Text Data**: Retrieves text data from the first item in the `items` array using `your_text_property`.
 
-2. **Format Data**:
-   - A `formattedData` object is created with three properties:
-     - `instruction`: A string value `"process_code"`.
-     - `content`: The text data extracted in the first step.
-     - `timestamp`: The current date and time in ISO format, obtained with `new Date().toISOString()`.
+   ```javascript
+   const textData = items[0].json.your_text_property;
+   ```
 
-3. **Return Results**:
-   - The result is returned as an array containing a single object with a `json` property set to the `formattedData`.
+2. **Format Data**: Creates a new JSON object containing:
+   - `instruction`: A string "process_code".
+   - `content`: The extracted text data.
+   - `timestamp`: The current date and time in ISO format.
 
-The code is creating a structured format for handling the imported text data, useful for further processing or data manipulation tasks.
+   ```javascript
+   const formattedData = {
+       instruction: "process_code",
+       content: textData,
+       timestamp: new Date().toISOString()
+   };
+   ```
+
+3. **Return Result**: Encapsulates the formatted data in an array and returns it.
+
+   ```javascript
+   return [{ json: formattedData }];
+   ```
+
+This is typically used in a workflow to prepare data for further processing or transmission.
