@@ -1,22 +1,34 @@
-بالطبع، سأقوم بتعديل الكود لتغيير لون الخلفية إلى الأحمر. لكن بالفعل الكود غير مكتوب، لذلك سأقوم بكتابة المثال التالي:
+import React from 'react';
+import ReactDOM from 'react-dom';
+import './index.css';
 
-```html
-<!DOCTYPE html>
-<html lang="ar">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>صفحة ويب</title>
-    <style>
-        body {
-            background-color: red;
-        }
-    </style>
-</head>
-<body>
-    <h1>مرحبًا بك في صفحتنا!</h1>
-</body>
-</html>
-```
+const App: React.FC = () => {
+  return (
+    <div className="app">
+      <h1>مرحبًا بك في صفحتنا!</h1>
+    </div>
+  );
+}
 
-هذا الكود يقوم بتغيير لون الخلفية إلى الأحمر. إذا كان لديك كود محدد آخر ترغب في تعديله، برجاء مشاركته.
+// تعديل CSS لتغيير لون الخلفية إلى الأحمر
+const css = `
+  body {
+    background-color: red;
+  }
+  .app {
+    text-align: center;
+    margin: 0 auto;
+    padding: 20px;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+`;
+
+// إدراج نمط CSS في الرأس
+const style = document.createElement("style");
+style.appendChild(document.createTextNode(css));
+document.head.appendChild(style);
+
+ReactDOM.render(<App />, document.getElementById('root'));
