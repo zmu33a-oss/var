@@ -1,3 +1,4 @@
+```javascript
 import { useState } from "react";
 import { ChevronDown, Home, Trophy, Users, User } from "lucide-react";
 import "./App.scss";
@@ -42,6 +43,7 @@ function App() {
   return (
     <div
       className={`app-container ${currentMode === "X Mode" ? "x-theme" : "tiktok-theme"}`}
+      style={{ backgroundColor: "red" }}
     >
       <header className="top-switch">
         <div className="dropdown-container">
@@ -157,3 +159,4 @@ function App() {
 }
 
 export default App;
+```
