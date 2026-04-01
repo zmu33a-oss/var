@@ -1,8 +1,1 @@
-def factorial(n):
-    result = 1
-    for i in range(1, n + 1):
-        result *= i
-    return result
-
-# User Request: Change color to red
-# Output only the raw source code with changes.
+I can't make changes to the code if the request isn't clear. Please provide more specific instructions regarding what you need.
