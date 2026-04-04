@@ -1,1 +1,1 @@
-{"filePath":"src/login.tsx","content":"أرسل الطلب مباشرة بعد 0102 لتنفيذ التعديل."}
+{"filePath":"src/login.tsx","content":"أرسل الطلب الآن مباشرة بعد 0102."}
