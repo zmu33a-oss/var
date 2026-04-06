@@ -1,5 +1,190 @@
+```json
 {
-  "type": "react",
-  "filePath": "src/login.tsx",
-  "content": "import React, { useState } from 'react';\n\nexport default function Login() {\n  const [email, setEmail] = useState('');\n  const [password, setPassword] = useState('');\n  const [remember, setRemember] = useState(false);\n  const [showPassword, setShowPassword] = useState(false);\n\n  const handleSubmit = (e: React.FormEvent) => {\n    e.preventDefault();\n    console.log('Login submitted', { email, password, remember });\n  };\n\n  return (\n    <div style={styles.page}>\n      <div style={styles.card}>\n        <div style={styles.header}>\n          <div style={styles.badge}>Secure Access</div>\n          <h1 style={styles.title}>Login</h1>\n          <p style={styles.subtitle}>Welcome back. Please sign in to your account.</p>\n        </div>\n\n        <form onSubmit={handleSubmit} style={styles.form}>\n          <div style={styles.field}>\n            <label htmlFor=\"email\" style={styles.label}>Email</label>\n            <input\n              id=\"email\"\n              type=\"email\"\n              placeholder=\"you@example.com\"\n              value={email}\n              onChange={(e) => setEmail(e.target.value)}\n              style={styles.input}\n            />\n          </div>\n\n          <div style={styles.field}>\n            <label htmlFor=\"password\" style={styles.label}>Password</label>\n            <div style={styles.passwordWrap}>\n              <input\n                id=\"password\"\n                type={showPassword ? 'text' : 'password'}\n                placeholder=\"Enter your password\"\n                value={password}\n                onChange={(e) => setPassword(e.target.value)}\n                style={styles.passwordInput}\n              />\n              <button\n                type=\"button\"\n                onClick={() => setShowPassword(!showPassword)}\n                style={styles.showButton}\n              >\n                {showPassword ? 'Hide' : 'Show'}\n              </button>\n            </div>\n          </div>\n\n          <div style={styles.options}>\n            <label style={styles.rememberWrap}>\n              <input\n                type=\"checkbox\"\n                checked={remember}\n                onChange={(e) => setRemember(e.target.checked)}\n              />\n              <span>Remember me</span>\n            </label>\n\n            <a href=\"#\" style={styles.link}>Forgot password?</a>\n          </div>\n\n          <button type=\"submit\" style={styles.button}>Sign In</button>\n        </form>\n      </div>\n    </div>\n  );\n}\n\nconst styles: Record<string, React.CSSProperties> = {\n  page: {\n    minHeight: '100vh',\n    display: 'flex',\n    alignItems: 'center',\n    justifyContent: 'center',\n    padding: '24px',\n    background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%)',\n    fontFamily: 'Inter, Arial, sans-serif',\n  },\n  card: {\n    width: '100%',\n    maxWidth: '430px',\n    background: 'rgba(255,255,255,0.96)',\n    borderRadius: '24px',\n    padding: '32px',\n    boxShadow: '0 24px 60px rgba(15, 23, 42, 0.25)',\n    border: '1px solid rgba(255,255,255,0.7)',\n  },\n  header: {\n    marginBottom: '24px',\n  },\n  badge: {\n    display: 'inline-block',\n    padding: '6px 12px',\n    borderRadius: '999px',\n    background: '#dbeafe',\n    color: '#1d4ed8',\n    fontSize: '12px',\n    fontWeight: 700,\n    marginBottom: '14px',\n  },\n  title: {\n    margin: 0,\n    fontSize: '32px',\n    fontWeight: 800,\n    color: '#0f172a',\n  },\n  subtitle: {\n    margin: '10px 0 0',\n    color: '#64748b',\n    fontSize: '14px',\n    lineHeight: 1.6,\n  },\n  form: {\n    display: 'flex',\n    flexDirection: 'column',\n    gap: '18px',\n  },\n  field: {\n    display: 'flex',\n    flexDirection: 'column',\n    gap: '8px',\n  },\n  label: {\n    fontSize: '14px',\n    fontWeight: 700,\n    color: '#334155',\n  },\n  input: {\n    width: '100%',\n    boxSizing: 'border-box',\n    padding: '14px 16px',\n    borderRadius: '14px',\n    border: '1px solid #cbd5e1',\n    background: '#ffffff',\n    fontSize: '15px',\n    color: '#0f172a',\n    outline: 'none',\n  },\n  passwordWrap: {\n    display: 'flex',\n    alignItems: 'center',\n    border: '1px solid #cbd5e1',\n    borderRadius: '14px',\n    background: '#ffffff',\n    overflow: 'hidden',\n  },\n  passwordInput: {\n    flex: 1,\n    border: 'none',\n    padding: '14px 16px',\n    fontSize: '15px',\n    color: '#0f172a',\n    outline: 'none',\n  },\n  showButton: {\n    border: 'none',\n    background: 'transparent',\n    color: '#2563eb',\n    fontWeight: 700,\n    cursor: 'pointer',\n    padding: '0 16px',\n    height: '100%',\n  },\n  options: {\n    display: 'flex',\n    alignItems: 'center',\n    justifyContent: 'space-between',\n    gap: '12px',\n    fontSize: '14px',\n  },\n  rememberWrap: {\n    display: 'flex',\n    alignItems: 'center',\n    gap: '8px',\n    color: '#475569',\n  },\n  link: {\n    color: '#2563eb',\n    textDecoration: 'none',\n    fontWeight: 600,\n  },\n  button: {\n    marginTop: '4px',\n    border: 'none',\n    borderRadius: '14px',\n    padding: '15px 18px',\n    background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',\n    color: '#ffffff',\n    fontSize: '16px',\n    fontWeight: 800,\n    cursor: 'pointer',\n    boxShadow: '0 14px 30px rgba(37, 99, 235, 0.28)',\n  },\n};\n"
+  "files": [
+    {
+      "path": "json/login-page.json",
+      "content": {
+        "page": {
+          "name": "LoginPage",
+          "title": "تسجيل الدخول",
+          "language": "ar",
+          "direction": "rtl",
+          "layout": {
+            "type": "centered-card",
+            "background": {
+              "color": "#f5f7fb"
+            }
+          },
+          "components": [
+            {
+              "type": "logo",
+              "text": "MyApp",
+              "style": {
+                "fontSize": "32px",
+                "fontWeight": "700",
+                "color": "#1f2937",
+                "marginBottom": "10px",
+                "textAlign": "center"
+              }
+            },
+            {
+              "type": "heading",
+              "text": "مرحباً بعودتك",
+              "style": {
+                "fontSize": "24px",
+                "fontWeight": "700",
+                "color": "#111827",
+                "textAlign": "center",
+                "marginBottom": "8px"
+              }
+            },
+            {
+              "type": "text",
+              "text": "سجل الدخول للمتابعة إلى حسابك",
+              "style": {
+                "fontSize": "14px",
+                "color": "#6b7280",
+                "textAlign": "center",
+                "marginBottom": "24px"
+              }
+            },
+            {
+              "type": "form",
+              "name": "loginForm",
+              "fields": [
+                {
+                  "type": "email",
+                  "name": "email",
+                  "label": "البريد الإلكتروني",
+                  "placeholder": "example@email.com",
+                  "required": true
+                },
+                {
+                  "type": "password",
+                  "name": "password",
+                  "label": "كلمة المرور",
+                  "placeholder": "********",
+                  "required": true
+                }
+              ],
+              "actions": [
+                {
+                  "type": "submit",
+                  "text": "تسجيل الدخول",
+                  "style": "primary"
+                }
+              ]
+            },
+            {
+              "type": "divider",
+              "text": "أو",
+              "style": {
+                "marginTop": "20px",
+                "marginBottom": "20px",
+                "color": "#9ca3af"
+              }
+            },
+            {
+              "type": "button",
+              "name": "googleLogin",
+              "text": "تسجيل الدخول عبر Google",
+              "icon": "google",
+              "action": "oauth-google",
+              "style": "google"
+            },
+            {
+              "type": "link",
+              "text": "ليس لديك حساب؟ إنشاء حساب جديد",
+              "href": "/register",
+              "style": {
+                "display": "block",
+                "textAlign": "center",
+                "marginTop": "20px",
+                "fontSize": "14px",
+                "color": "#2563eb"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "path": "json/login-style.json",
+      "content": {
+        "theme": {
+          "card": {
+            "width": "420px",
+            "backgroundColor": "#ffffff",
+            "padding": "32px",
+            "borderRadius": "18px",
+            "boxShadow": "0 10px 30px rgba(0, 0, 0, 0.08)"
+          },
+          "input": {
+            "width": "100%",
+            "padding": "14px",
+            "border": "1px solid #d1d5db",
+            "borderRadius": "12px",
+            "fontSize": "14px",
+            "marginBottom": "16px",
+            "outline": "none"
+          },
+          "label": {
+            "display": "block",
+            "marginBottom": "8px",
+            "fontSize": "14px",
+            "fontWeight": "600",
+            "color": "#374151"
+          },
+          "buttonPrimary": {
+            "width": "100%",
+            "padding": "14px",
+            "backgroundColor": "#2563eb",
+            "color": "#ffffff",
+            "border": "none",
+            "borderRadius": "12px",
+            "fontSize": "15px",
+            "fontWeight": "600",
+            "cursor": "pointer"
+          },
+          "buttonGoogle": {
+            "width": "100%",
+            "padding": "14px",
+            "backgroundColor": "#ffffff",
+            "color": "#111827",
+            "border": "1px solid #d1d5db",
+            "borderRadius": "12px",
+            "fontSize": "15px",
+            "fontWeight": "600",
+            "cursor": "pointer"
+          }
+        }
+      }
+    },
+    {
+      "path": "json/login-config.json",
+      "content": {
+        "auth": {
+          "emailPasswordLogin": true,
+          "googleLogin": true,
+          "googleOAuth": {
+            "enabled": true,
+            "provider": "google",
+            "callbackUrl": "/auth/google/callback"
+          },
+          "redirectAfterLogin": "/dashboard"
+        },
+        "validation": {
+          "email": {
+            "required": true,
+            "format": "email"
+          },
+          "password": {
+            "required": true,
+            "minLength": 6
+          }
+        }
+      }
+    }
+  ]
 }
+```
