@@ -1,0 +1,67 @@
+.leagues-page {
+  padding: 15px;
+  background: #0f1419;
+  min-height: 100vh;
+}
+
+.match-card {
+  background: #161b22;
+  border-radius: 16px;
+  padding: 15px;
+  margin-bottom: 15px;
+}
+
+.teams {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.score {
+  font-size: 22px;
+  color: #1d9bf0;
+}
+
+.time {
+  font-size: 12px;
+  color: #aaa;
+  margin-bottom: 10px;
+}
+
+.comments p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.reply-box {
+  display: flex;
+  margin-top: 10px;
+  gap: 8px;
+}
+
+.reply-box input {
+  flex: 1;
+  background: #0f1419;
+  border: none;
+  border-radius: 10px;
+  padding: 8px;
+  color: white;
+}
+
+.reply-box button {
+  background: #1d9bf0;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: white;
+  cursor: pointer;
+}
+
+.go-x {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #1d9bf0;
+  cursor: pointer;
+}

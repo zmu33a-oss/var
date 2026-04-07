@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import "../index.css"; // نقطتين للخروج للمجلد الأعلى
-import App from "./App"; // نقطتين للخروج للمجلد الأعلى
+import ".././index.css"; // تطلع من components ثم src
+import App from "./App"; // هذا صحيح
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -1,0 +1,98 @@
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  background-color: #0f1419; /* قريب من تويتر */
+  color: #fff;
+}
+
+.page {
+  max-width: 600px;
+  margin: auto;
+  padding: 20px;
+}
+
+/* ===== الايقونات ===== */
+
+.icons-section {
+  margin-bottom: 30px;
+}
+
+.icons-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+}
+
+.icon-card {
+  background: #161b22;
+  border-radius: 16px;
+  width: 30%;
+  text-align: center;
+  padding: 15px 10px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.icon-card:hover {
+  background: #1d9bf0;
+  transform: translateY(-3px);
+}
+
+.icon {
+  font-size: 24px;
+  margin-bottom: 5px;
+}
+
+/* ===== المشجعين ===== */
+
+.top-fans h2 {
+  margin-bottom: 15px;
+}
+
+.fans-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.fan-card {
+  background: #161b22;
+  border-radius: 16px;
+  width: 30%;
+  text-align: center;
+  padding: 15px 10px;
+}
+
+.fan-card img {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  margin-bottom: 10px;
+}
+
+.fan-card span {
+  color: #1d9bf0;
+  font-weight: bold;
+}
+
+/* ===== البوستات ===== */
+
+.posts {
+  margin-top: 30px;
+}
+
+.post-card {
+  background: #161b22;
+  padding: 15px;
+  border-radius: 16px;
+  margin-bottom: 15px;
+}
+
+.post-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: #aaa;
+}
