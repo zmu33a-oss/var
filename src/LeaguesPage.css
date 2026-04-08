@@ -1,67 +1,383 @@
-.leagues-page {
-  padding: 15px;
-  background: #0f1419;
+:root {
+  --bg-main: #030712;
+  --text-main: #fff;
+  --text-soft: #b9b8d9;
+  --text-muted: #8b93a7;
+
+  --border-main: rgba(167, 139, 250, 0.7);
+  --border-soft: rgba(255, 255, 255, 0.18);
+
+  --radius-card: 28px;
+  --radius-pill: 999px;
+
+  /* مقاسات */
+  --card-max: 400px;
+  --team-size: 140px;
+  --team-width: 170px;
+  --score-size: 90px;
+  --title-size: 40px;
+  --time-size: 26px;
+}
+
+/* reset */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: var(--bg-main);
+}
+
+/* wrapper */
+.league-card-wrapper {
   min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 20px;
+  direction: rtl;
+  background:
+    radial-gradient(circle at top, rgba(71, 85, 105, 0.12), transparent 30%),
+    linear-gradient(180deg, #020617 0%, var(--bg-main) 100%);
 }
 
-.match-card {
-  background: #161b22;
-  border-radius: 16px;
-  padding: 15px;
-  margin-bottom: 15px;
+/* card */
+.league-card {
+  width: 100%;
+  max-width: var(--card-max);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  border: 2px solid var(--border-main);
+
+  background:
+    linear-gradient(rgba(10, 10, 30, 0.7), rgba(10, 10, 30, 0.9)),
+    url("/bg.jpg") center/cover;
+
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  position: relative;
 }
 
-.teams {
+/* header */
+.league-header {
+  text-align: center;
+  padding: 26px 18px 8px;
+}
+
+.league-title-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.league-title-row h2 {
+  margin: 0;
+  font-size: var(--title-size);
+  color: var(--text-main);
+  font-weight: 800;
+}
+
+.league-header p {
+  margin: 8px 0 0;
+  color: var(--text-soft);
+}
+
+.live-badge {
+  margin: 10px auto 0;
+  width: fit-content;
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-soft);
+  background: rgba(20, 18, 45, 0.9);
+  color: #ff4d6d;
+  font-weight: 800;
+}
+
+/* match */
+.match-main {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-weight: bold;
-  margin-bottom: 8px;
-}
-
-.score {
-  font-size: 22px;
-  color: #1d9bf0;
-}
-
-.time {
-  font-size: 12px;
-  color: #aaa;
-  margin-bottom: 10px;
-}
-
-.comments p {
-  margin: 4px 0;
-  font-size: 14px;
-}
-
-.reply-box {
-  display: flex;
-  margin-top: 10px;
+  padding: 24px 28px 14px;
   gap: 8px;
 }
 
-.reply-box input {
+.team-block {
+  width: var(--team-width);
+  text-align: center;
+}
+
+.team-logo {
+  width: var(--team-size);
+  height: var(--team-size);
+  object-fit: contain;
+}
+
+.team-block h3 {
+  margin: 6px 0 0;
+  color: var(--text-main);
+  font-size: 26px;
+}
+
+.score-block {
   flex: 1;
-  background: #0f1419;
-  border: none;
-  border-radius: 10px;
-  padding: 8px;
-  color: white;
+  text-align: center;
 }
 
-.reply-box button {
-  background: #1d9bf0;
-  border: none;
-  border-radius: 10px;
-  padding: 8px 12px;
-  color: white;
-  cursor: pointer;
+.score-block h1 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: var(--score-size);
+  font-weight: 900;
 }
 
-.go-x {
-  margin-top: 10px;
+.time-pill {
+  margin-top: 14px;
+  display: inline-block;
+  padding: 10px 20px;
+  border-radius: 20px;
+  background: rgba(18, 26, 46, 0.95);
+  color: var(--text-main);
+  font-size: var(--time-size);
+}
+
+/* line */
+.stadium-line {
+  width: calc(100% - 40px);
+  height: 1px;
+  margin: 6px auto;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+}
+
+/* meta */
+.match-meta {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  padding: 14px;
+  color: #e5e7eb;
+  font-size: 14px;
+  flex-wrap: wrap;
+}
+
+/* tweet */
+.tweet-box {
+  width: calc(100% - 20px);
+  margin: 0 auto 12px;
+  padding: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(4, 11, 26, 0.35);
+  border-radius: 0 0 20px 20px;
+}
+
+.tweet-top,
+.tweet-user,
+.tweet-name-row,
+.tweet-actions,
+.quick-reply-row {
+  display: flex;
+  align-items: center;
+}
+
+.tweet-top {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tweet-user {
+  gap: 10px;
+}
+
+.tweet-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #0c5b4c;
+  color: #d9ff63;
+  font-weight: 900;
+}
+
+.tweet-name-row strong {
+  color: var(--text-main);
+  font-size: 14px;
+}
+
+.tweet-handle,
+.tweet-time {
+  color: var(--text-muted);
   font-size: 12px;
-  color: #1d9bf0;
-  cursor: pointer;
+}
+
+.tweet-content {
+  padding-top: 10px;
+}
+
+.tweet-content h4 {
+  margin: 0 0 8px;
+  color: var(--text-main);
+  font-size: 14px;
+}
+
+.tweet-content p,
+.tweet-content a {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-main);
+}
+
+.tweet-actions {
+  justify-content: space-between;
+  padding-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* input */
+.quick-reply-row {
+  gap: 8px;
+}
+
+.quick-reply-row input,
+.quick-reply-row button {
+  height: 40px;
+  border-radius: var(--radius-pill);
+}
+
+.quick-reply-row input {
+  flex: 1;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(8, 14, 28, 0.7);
+  color: #fff;
+}
+
+.quick-reply-row button {
+  min-width: 90px;
+  border: none;
+  background: #d6ef7a;
+  font-weight: 900;
+}
+
+/* ====== MOBILE ====== */
+@media (max-width: 768px) {
+  .league-card-wrapper {
+    padding: 10px;
+  }
+
+  .league-card {
+    max-width: 100%;
+  }
+
+  .league-title-row h2 {
+    font-size: 22px;
+  }
+
+  .team-block {
+    width: 80px;
+  }
+
+  .team-logo {
+    width: 55px;
+    height: 55px;
+  }
+
+  .team-block h3 {
+    font-size: 14px;
+  }
+
+  .score-block h1 {
+    font-size: 40px;
+  }
+
+  .time-pill {
+    font-size: 14px;
+    padding: 6px 12px;
+  }
+
+  /* ===== التويته (معدلة) ===== */
+
+  .tweet-box {
+    width: calc(100% - 12px);
+    margin: 0 auto 10px;
+    padding: 10px;
+  }
+
+  .tweet-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .tweet-user {
+    display: flex;
+    gap: 8px;
+    flex: 1; /* يخلي النص يتمدد */
+  }
+
+  .tweet-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+
+  .tweet-name-row {
+    display: flex;
+    flex-wrap: nowrap; /* يمنع النزول */
+    gap: 6px;
+  }
+
+  .tweet-name-row strong {
+    font-size: 13px;
+  }
+
+  .tweet-handle,
+  .tweet-time {
+    font-size: 11px;
+  }
+
+  .tweet-content {
+    width: 100%;
+    padding-top: 8px;
+  }
+
+  .tweet-content h4 {
+    font-size: 13px;
+  }
+
+  .tweet-content p,
+  .tweet-content a {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .tweet-actions {
+    font-size: 11px;
+    padding-top: 8px;
+  }
+
+  .quick-reply-row {
+    flex-direction: row;
+    gap: 6px;
+  }
+
+  .quick-reply-row input {
+    height: 36px;
+    font-size: 13px;
+  }
+
+  .quick-reply-row button {
+    height: 36px;
+    min-width: 70px;
+    font-size: 13px;
+  }
 }
