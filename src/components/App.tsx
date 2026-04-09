@@ -6,16 +6,23 @@ import BottomNav, { type TabType } from "../BottomNav";
 import XPage from "./XPage";
 import FansPage from "../FansPage";
 import LeaguesPage from "../LeaguesPage";
-
 export default function App() {
   const [tab, setTab] = useState<TabType>("home");
+  const [mode, setMode] = useState<"tiktok" | "x">("tiktok");
 
   return (
     <div style={{ paddingBottom: "90px" }}>
-      <ThemeSwitch setTab={setTab} />
+      {tab === "home" && (
+        <ThemeSwitch
+          currentTab={mode === "tiktok" ? "home" : "x"}
+          setTab={(value) => {
+            setMode(value === "x" ? "x" : "tiktok");
+          }}
+        />
+      )}
 
-      {tab === "x" && <XPage />}
-      {tab === "home" && <TikTokPage />}
+      {tab === "home" && mode === "tiktok" && <TikTokPage />}
+      {tab === "home" && mode === "x" && <XPage />}
       {tab === "fans" && <FansPage />}
       {tab === "leagues" && <LeaguesPage />}
       {tab === "account" && <LoginPage />}

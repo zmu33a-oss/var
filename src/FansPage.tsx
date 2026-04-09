@@ -1,113 +1,73 @@
 import "./FansPage.css";
+import DigitalCounter from "./DigitalCounter";
 
-type IconItem = {
-  title: string;
-  icon: string;
-};
-
-type Fan = {
+type ClubCard = {
   name: string;
-  club: string;
-  score: string;
-  avatar: string;
-};
-
-type Post = {
-  user: string;
-  time: string;
-  text: string;
+  logo: string;
+  votes: number;
+  percentage: number;
+  buttonText: string;
+  fanImage?: string;
 };
 
 export default function FansPage() {
-  const topIcons: IconItem[] = [
-    { title: "الهلال", icon: "⚽" },
-    { title: "النصر", icon: "🔥" },
-    { title: "الاتحاد", icon: "⭐" },
-  ];
-
-  const bottomIcons: IconItem[] = [
-    { title: "الأهلي", icon: "🏆" },
-    { title: "الشباب", icon: "⚡" },
-    { title: "التعاون", icon: "🎯" },
-  ];
-
-  const topFans: Fan[] = [
+  const clubs: ClubCard[] = [
     {
-      name: "فهد",
-      club: "الهلال",
-      score: "2.1K",
-      avatar: "https://i.pravatar.cc/100?img=1",
+      name: "الهلال",
+      logo: "https://upload.wikimedia.org/wikipedia/en/thumb/5/55/Al_Hilal_SFC_Logo.svg/200px-Al_Hilal_SFC_Logo.svg.png",
+      fanImage: "/alhelalfans.png",
+      votes: 6850,
+      percentage: 32,
+      buttonText: "شجّع",
     },
     {
-      name: "سالم",
-      club: "النصر",
-      score: "1.8K",
-      avatar: "https://i.pravatar.cc/100?img=2",
+      name: "النصر",
+      logo: "https://upload.wikimedia.org/wikipedia/en/thumb/9/98/Al_Nassr_FC_logo.svg/200px-Al_Nassr_FC_logo.svg.png",
+      votes: 5720,
+      percentage: 28,
+      buttonText: "شجّع",
     },
     {
-      name: "راكان",
-      club: "الاتحاد",
-      score: "1.5K",
-      avatar: "https://i.pravatar.cc/100?img=3",
+      name: "الاتحاد",
+      logo: "https://upload.wikimedia.org/wikipedia/en/thumb/4/46/Al-Ittihad_Club_logo.svg/200px-Al-Ittihad_Club_logo.svg.png",
+      fanImage: "/athadfans.png",
+      votes: 5280,
+      percentage: 24,
+      buttonText: "شجّع",
     },
-  ];
-
-  const posts: Post[] = [
-    { user: "فهد", time: "قبل 5 دقائق", text: "الهلال راجع بقوة اليوم 🔥" },
-    { user: "سالم", time: "قبل 8 دقائق", text: "النصر لازم يفوز اليوم 💛" },
-    { user: "راكان", time: "قبل 10 دقائق", text: "الاتحاد فوق الجميع 🖤" },
   ];
 
   return (
-    <div className="page">
-      {/* الايقونات */}
-      <div className="icons-section">
-        <div className="icons-row">
-          {topIcons.map((item, i) => (
-            <div key={i} className="icon-card">
-              <div className="icon">{item.icon}</div>
-              <span>{item.title}</span>
+    <div className="fans-page">
+      <h1 className="fans-title">رابطة المشجعين</h1>
+      <p className="fans-subtitle">أقوى جماهير اليوم من النادي الأكثر تفاعل؟</p>
+
+      <div className="clubs-grid">
+        {clubs.map((club, index) => (
+          <div className="club-card" key={index}>
+            <div className="club-top">
+              <img src={club.logo} alt={club.name} className="club-logo" />
             </div>
-          ))}
-        </div>
 
-        <div className="icons-row">
-          {bottomIcons.map((item, i) => (
-            <div key={i} className="icon-card">
-              <div className="icon">{item.icon}</div>
-              <span>{item.title}</span>
+            <h3 className="club-name">{club.name}</h3>
+
+            <div className="club-actions">
+              {club.fanImage && (
+                <img
+                  src={club.fanImage}
+                  alt={`${club.name} fans`}
+                  className="club-image"
+                />
+              )}
+
+              <DigitalCounter value={club.votes} />
+              <button className="club-button">{club.buttonText}</button>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* اكثر المشجعين */}
-      <div className="top-fans">
-        <h2>أكثر المشجعين تفاعل</h2>
-
-        <div className="fans-row">
-          {topFans.map((fan, i) => (
-            <div key={i} className="fan-card">
-              <img src={fan.avatar} />
-              <h3>{fan.name}</h3>
-              <p>{fan.club}</p>
-              <span>{fan.score}</span>
+            <div className="club-stats">
+              <span className="fire">🔥</span>
+              <span>نسبة التفاعل {club.percentage}%</span>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* الترند */}
-      <div className="posts">
-        <h2>الترند الآن</h2>
-
-        {posts.map((post, i) => (
-          <div key={i} className="post-card">
-            <div className="post-header">
-              <strong>{post.user}</strong>
-              <span>{post.time}</span>
-            </div>
-            <p>{post.text}</p>
           </div>
         ))}
       </div>

@@ -1,14 +1,15 @@
 import { useState } from "react";
 
 type ThemeSwitchProps = {
-  setTab: (tab: "home" | "x") => void;
+  currentTab: "home" | "x" | "fans" | "leagues" | "account";
+  setTab: (tab: "home" | "x" | "fans" | "leagues" | "account") => void;
 };
 
-export default function ThemeSwitch({ setTab }: ThemeSwitchProps) {
+export default function ThemeSwitch({ currentTab, setTab }: ThemeSwitchProps) {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<"tiktok" | "x">("tiktok");
 
-  const label = mode === "tiktok" ? "TikTok Mode" : "X Mode";
+  const label = currentTab === "home" ? "TikTok Mode" : "X Mode";
+  const nextLabel = currentTab === "home" ? "X Mode" : "TikTok Mode";
 
   return (
     <div
@@ -54,9 +55,8 @@ export default function ThemeSwitch({ setTab }: ThemeSwitchProps) {
         >
           <button
             onClick={() => {
-              setMode("tiktok");
               setOpen(false);
-              setTab("home");
+              setTab(currentTab === "home" ? "x" : "home");
             }}
             style={{
               background: "transparent",
@@ -66,24 +66,7 @@ export default function ThemeSwitch({ setTab }: ThemeSwitchProps) {
               cursor: "pointer",
             }}
           >
-            TikTok Mode
-          </button>
-
-          <button
-            onClick={() => {
-              setMode("x");
-              setOpen(false);
-              setTab("x");
-            }}
-            style={{
-              background: "transparent",
-              color: "#fff",
-              border: "none",
-              padding: "12px",
-              cursor: "pointer",
-            }}
-          >
-            X Mode
+            {nextLabel}
           </button>
         </div>
       )}

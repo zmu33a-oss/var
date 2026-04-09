@@ -1,98 +1,153 @@
-body {
-  margin: 0;
-  font-family:
-    system-ui,
-    -apple-system,
-    sans-serif;
-  background-color: #0f1419; /* قريب من تويتر */
+.fans-page {
+  min-height: 100vh;
+  background: #000000;
+  padding: 40px;
+  direction: rtl;
   color: #fff;
 }
 
-.page {
-  max-width: 600px;
-  margin: auto;
-  padding: 20px;
-}
-
-/* ===== الايقونات ===== */
-
-.icons-section {
-  margin-bottom: 30px;
-}
-
-.icons-row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 15px;
-}
-
-.icon-card {
-  background: #161b22;
-  border-radius: 16px;
-  width: 30%;
+.fans-title {
   text-align: center;
-  padding: 15px 10px;
-  cursor: pointer;
-  transition: 0.2s;
+  font-size: 48px;
+  font-weight: 800;
+  margin: 0;
 }
 
-.icon-card:hover {
-  background: #1d9bf0;
-  transform: translateY(-3px);
-}
-
-.icon {
+.fans-subtitle {
+  text-align: center;
   font-size: 24px;
-  margin-bottom: 5px;
+  margin-top: 14px;
+  margin-bottom: 40px;
+  color: #e5e7eb;
 }
 
-/* ===== المشجعين ===== */
-
-.top-fans h2 {
-  margin-bottom: 15px;
+.clubs-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
 }
-
-.fans-row {
-  display: flex;
-  justify-content: space-between;
+.club-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* أهم شي */
+  opacity: 0.25;
 }
-
-.fan-card {
-  background: #161b22;
-  border-radius: 16px;
-  width: 30%;
+.club-card {
+  background: linear-gradient(
+    50deg,
+    rgba(255, 255, 255, 0.08),
+    rgba(255, 255, 255, 0.03)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  overflow: hidden;
   text-align: center;
-  padding: 15px 10px;
+  padding-bottom: 18px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
-.fan-card img {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  margin-bottom: 10px;
-}
-
-.fan-card span {
-  color: #1d9bf0;
-  font-weight: bold;
-}
-
-/* ===== البوستات ===== */
-
-.posts {
-  margin-top: 30px;
-}
-
-.post-card {
-  background: #161b22;
-  padding: 15px;
-  border-radius: 16px;
-  margin-bottom: 15px;
-}
-
-.post-header {
+.club-top {
+  height: 170px;
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  color: #aaa;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.club-logo {
+  width: 95px;
+  height: 95px;
+  object-fit: contain;
+}
+
+.club-name {
+  font-size: 28px;
+  font-weight: 800;
+  margin: 18px 0 14px;
+}
+
+.club-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.club-votes {
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.club-button {
+  background: linear-gradient(180deg, #103b10, #20d620);
+  color: #ffffff;
+  border: none;
+  border-radius: 5px;
+  padding: 10px 22px;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.club-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 18px;
+  color: #ffffff;
+}
+
+.fire {
+  font-size: 22px;
+}
+
+@media (max-width: 1100px) {
+  .clubs-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .fans-page {
+    padding: 20px;
+  }
+
+  .club-top {
+    height: 60px;
+  }
+
+  .club-logo {
+    width: 40px;
+    height: 40px;
+  }
+
+  .club-name {
+    font-size: 14px;
+    margin: 8px 0 6px;
+  }
+
+  .club-actions {
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .club-votes {
+    font-size: 13px;
+  }
+
+  .club-button {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .club-stats {
+    font-size: 10px;
+    gap: 4px;
+  }
+
+  .fire {
+    font-size: 12px;
+  }
 }
