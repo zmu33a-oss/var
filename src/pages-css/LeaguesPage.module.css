@@ -72,6 +72,18 @@ body {
   gap: 10px;
 }
 
+.league-badge {
+  min-width: 48px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(214, 239, 122, 0.18);
+  border: 1px solid rgba(214, 239, 122, 0.38);
+  color: #d6ef7a;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
 .league-title-row h2 {
   margin: 0;
   font-size: var(--title-size);
@@ -105,7 +117,7 @@ body {
 }
 
 .team-block {
-  width: var(--team-width);        
+  width: var(--team-width);
   text-align: center;
 }
 
@@ -167,6 +179,15 @@ body {
   flex-wrap: wrap;
 }
 
+.meta-item {
+  white-space: nowrap;
+}
+
+.meta-divider {
+  width: 1px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
 /* tweet */
 .tweet-box {
   width: calc(100% - 20px);
@@ -204,6 +225,20 @@ body {
   background: #0c5b4c;
   color: #9ac615;
   font-weight: 900;
+}
+
+.tweet-user-info {
+  min-width: 0;
+}
+
+.verify-badge {
+  color: #d6ef7a;
+  font-weight: 700;
+}
+
+.tweet-menu {
+  color: var(--text-muted);
+  font-size: 18px;
 }
 
 .tweet-name-row strong {

@@ -1,14 +1,18 @@
-import ThemeSwitch from "../ThemeSwitch";
 import { useState } from "react";
-import TikTokPage from "./TikTokPage";
-import LoginPage from "../login";
-import BottomNav, { type TabType } from "../BottomNav";
-import XPage from "./XPage";
-import FansPage from "../FansPage";
-import LeaguesPage from "../LeaguesPage";
+import BottomNav, { type TabType } from "./components/BottomNav";
+import ThemeSwitch from "./ThemeSwitch";
+import FansPage from "./pages/FansPage";
+import LeaguesPage from "./pages/LeaguesPage";
+import LoginPage from "./pages/login";
+import ProfilePage from "./pages/ProfilePage";
+import TikTokPage from "./pages/TikTokPage";
+import XPage from "./pages/XPage";
+
+type HomeMode = "tiktok" | "x";
+
 export default function App() {
   const [tab, setTab] = useState<TabType>("home");
-  const [mode, setMode] = useState<"tiktok" | "x">("tiktok");
+  const [mode, setMode] = useState<HomeMode>("tiktok");
 
   return (
     <div style={{ paddingBottom: "90px" }}>
@@ -16,7 +20,9 @@ export default function App() {
         <ThemeSwitch
           currentTab={mode === "tiktok" ? "home" : "x"}
           setTab={(value) => {
-            setMode(value === "x" ? "x" : "tiktok");
+            if (value === "home" || value === "x") {
+              setMode(value === "x" ? "x" : "tiktok");
+            }
           }}
         />
       )}
@@ -25,6 +31,7 @@ export default function App() {
       {tab === "home" && mode === "x" && <XPage />}
       {tab === "fans" && <FansPage />}
       {tab === "leagues" && <LeaguesPage />}
+      {tab === "profile" && <ProfilePage />}
       {tab === "account" && <LoginPage />}
 
       <BottomNav current={tab} setTab={setTab} />

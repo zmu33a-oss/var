@@ -1,0 +1,55 @@
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%; /* عرض كامل */
+  height: 46px; /* ارتفاع الناف */
+  background: #000000;
+  border-top: none;
+  display: flex;
+  justify-content: space-between; /* توزيع بدون فراغات زائدة */
+  align-items: center;
+  padding: 4px 0 calc(4px + env(safe-area-inset-bottom)); /* حشوة علوية/سفلية خفيفة */
+  box-sizing: border-box;
+  z-index: 1000;
+}
+
+.bottom-nav-item {
+  flex: 1;
+  height: 100%;
+  background: #000000;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px; /* مسافة بسيطة بين الأيقونة والنص */
+  cursor: pointer;
+  min-width: 0;
+  padding: 0 2px; /* تقليل الفراغ الجانبي */
+}
+
+.bottom-nav-item span {
+  font-size: 9px; /* حجم النص */
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.nav-icon {
+  width: 20px; /* عرض الأيقونة */
+  height: 20px; /* ارتفاع الأيقونة */
+}
+
+.active {
+  color: #fff;
+}
+
+.bottom-nav-item:focus,
+.bottom-nav-item:active {
+  outline: none;
+  box-shadow: none;
+}
