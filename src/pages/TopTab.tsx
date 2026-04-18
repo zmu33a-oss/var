@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Send, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { Send, ChevronUp, Users } from "lucide-react";
 import styles from "../pages-css/TopTab.module.css";
 
 interface Chat {
