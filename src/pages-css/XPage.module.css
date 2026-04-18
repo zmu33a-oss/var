@@ -1,51 +1,195 @@
-.page {
-  background: #000;
-  color: #fff;
-  min-height: 100vh;
-  padding: 76px 16px 96px;
-  max-width: 640px;
-  margin: 0 auto;
+:root {
+  --x-blue: #171d21;
+  --x-black: #000000;
+  --x-dark-gray: #16181c;
+  --x-border: #2f3336;
+  --x-text-gray: #71767b;
+  --x-white: #ffffff;
 }
 
-.header {
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  position: relative;
+  background-color: var(--x-black);
+  color: var(--x-white);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  direction: rtl;
+}
+
+.timeline {
+  flex: 1;
+  overflow-y: auto;
+  padding-top: 60px;
+  padding-bottom: 70px;
+}
+
+.main-header {
+  position: sticky;
+  top: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--x-border);
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 12px 20px;
+  z-index: 10;
+  min-height: 60px;
+}
+.header-title {
+  font-size: 25px;
+  font-weight: bold;
+  color: white;
+  margin-left: auto;
+  text-shadow: 0 7px 15px rgba(255, 255, 255, 0.9);
+}
+.header-subtitle {
+  position: absolute;
+  top: 25px;
+  right: 80px;
+  left: 20px;
+  overflow: hidden;
+}
+
+.header-subtitle span {
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 18px;
+  color: #ffffff;
+  font-family: 'Digital-7 Mono', monospace;
+  letter-spacing: 3px;
+  text-shadow: 0 0 8px #ffffff;
+  animation: moveText 6s linear infinite;
+}
+
+@keyframes moveText {
+  100% { transform: translateX(100%); }
+  0% { transform: translateX(-100%); }
+}
+
+.timeline-tabs {
+  display: flex;
+  gap: 25px;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.inactive-tab {
+  color: var(--x-text-gray);
+}
+
+.active-tab {
+  border-bottom: 4px solid var(--x-blue);
+  padding-bottom: 8px;
+}
+
+.header-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #333;
+}
+
+.post {
+  display: flex;
+  flex-direction: row-reverse;
+  padding: 15px;
+  border-bottom: 1px solid var(--x-border);
+  gap: 12px;
+  text-align: right;
+}
+
+.post-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.post-content {
+  flex: 1;
+}
+
+.post-user-info {
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.post-user-info b {
+  color: white;
+}
+
+.post-user-info span {
+  color: var(--x-text-gray);
+  margin-right: 5px;
+}
+
+.post-text {
+  font-size: 15px;
+  line-height: 1.4;
+  margin-bottom: 10px;
+}
+
+.post-actions {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  color: var(--x-text-gray);
+  max-width: 350px;
+  flex-direction: row-reverse;
 }
 
-.switch {
-  background: transparent;
-  border: 1px solid #555;
-  color: #fff;
-  padding: 6px 14px;
-  border-radius: 20px;
+.action-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
   cursor: pointer;
 }
 
-.postText {
-  margin: 16px 0;
-  font-size: 18px;
-  line-height: 1.7;
-}
-
-.postCard {
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
   width: 100%;
-  height: 300px;
-  background: #0a0a0a;
-  border-radius: 16px;
-
-  border: 1px solid rgba(255, 255, 255, 0.2);
-
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.2),
-    0 0 10px rgba(255, 255, 255, 0.4),
-    0 0 20px rgba(255, 255, 255, 0.3);
-}
-
-.actions {
+  background: black;
+  border-top: 1px solid var(--x-border);
   display: flex;
   justify-content: space-around;
-  margin-top: 12px;
-  color: #aaa;
-  font-size: 14px;
+  padding: 12px 0;
+}
+
+.nav-icon {
+  color: var(--x-text-gray);
+  cursor: pointer;
+}
+
+.nav-icon.active {
+  color: white;
+}
+
+.fab {
+  position: fixed;
+  bottom: 80px;
+  left: 20px;
+  background: var(--x-blue);
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(29, 155, 240, 0.4);
+}
+
+.timeline::-webkit-scrollbar {
+  display: none;
 }

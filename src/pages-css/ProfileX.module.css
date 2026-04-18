@@ -1,0 +1,129 @@
+:root {
+  --menu-speed: 0.6s;
+  --menu-gap: 0.20s;
+}
+.profile-x {
+  position: fixed;
+  top: 0;
+  right: -320px;
+  width: 280px;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px);
+  border-left: none;
+  border-radius: 20px 0 0 20px;
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.6);
+  z-index: 2000;
+  transition: right 1.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-x.open {
+  right: 0;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  pointer-events: none;
+  transition: 0.3s;
+  z-index: 1500;
+}
+
+.overlay-open {
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+}
+
+.profile-header {
+  padding: 20px;
+  border-bottom: 1px solid #2f3336;
+}
+
+.avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #333;
+}
+
+.profile-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 14px;
+}
+
+.menu-item {
+  width: 100%;
+  text-align: right;
+  padding: 14px 16px;
+  background: #111;
+  border: 1px solid #2f3336;
+  color: white;
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 15px;
+  transform: translateX(60px);
+  opacity: 0;
+  transition:
+    transform var(--menu-speed) cubic-bezier(0.22, 1, 0.36, 1),
+    opacity var(--menu-speed) ease,
+    background 0.2s ease;
+}
+
+.menu-item:hover {
+  background: #171717;
+}
+
+.item-show {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.item-hide {
+  transform: translateX(60px);
+  opacity: 0;
+}
+
+.menu-item:nth-child(1) {
+  transition-delay: calc(var(--menu-gap) * 1);
+}
+
+.menu-item:nth-child(2) {
+  transition-delay: calc(var(--menu-gap) * 2);
+}
+
+.menu-item:nth-child(3) {
+  transition-delay: calc(var(--menu-gap) * 3);
+}
+
+.menu-item:nth-child(4) {
+  transition-delay: calc(var(--menu-gap) * 4);
+}
+
+.menu-item:nth-child(5) {
+  transition-delay: calc(var(--menu-gap) * 5);
+}
+
+.profile-x:not(.open) .menu-item:nth-child(1) {
+  transition-delay: calc(var(--menu-gap) * 5);
+}
+
+.profile-x:not(.open) .menu-item:nth-child(2) {
+  transition-delay: calc(var(--menu-gap) * 4);
+}
+
+.profile-x:not(.open) .menu-item:nth-child(3) {
+  transition-delay: calc(var(--menu-gap) * 3);
+}
+
+.profile-x:not(.open) .menu-item:nth-child(4) {
+  transition-delay: calc(var(--menu-gap) * 2);
+}
+
+.profile-x:not(.open) .menu-item:nth-child(5) {
+  transition-delay: calc(var(--menu-gap) * 1);
+}

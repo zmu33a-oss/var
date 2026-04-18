@@ -1,0 +1,162 @@
+.top-tab {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background-color: var(--x-blue);
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius:10px;
+  box-shadow: 0 7px 7px rgba(255, 255, 255, 0.3);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.closed {
+  height: 40px;
+  width: 40%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.open {
+  height: 380px;
+  width: 90%;
+  background-color: #171d21;
+}
+.top-tab-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.top-tab-trigger-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.top-tab-label {
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.top-tab-body {
+  height: 100%;
+}
+
+.tab-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 20px;
+}
+
+.tab-close-btn {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+}
+
+.tab-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab-content {
+  display: flex;
+  height: calc(100% - 60px);
+  padding: 15px;
+  gap: 15px;
+}
+
+.groups-list {
+  width: 40%;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
+.group-item {
+  padding: 10px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.group-item.active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.group-name {
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.group-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+}
+
+.group-unread {
+  background: #ff4b4b;
+  padding: 0 5px;
+  border-radius: 10px;
+}
+
+.chat-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.top-tab-chat-name {
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.top-tab-last-msg {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.last-message-box {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.last-message-title {
+  font-size: 10px;
+}
+
+.last-message-text {
+  font-size: 13px;
+}
+
+.quick-reply-form {
+  position: relative;
+}
+
+.quick-reply-input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 20px;
+  border: none;
+}
+
+.send-btn {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
