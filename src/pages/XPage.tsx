@@ -22,22 +22,22 @@ const XPage: React.FC = () => {
   const groupChats = [
     {
       id: 1,
-      name: "المطورين",
-      lastMsg: " انتهيت من الكود؟",
+      name: "زميع :",
+      lastMsg: " فوق الجميع ياو ياو",
       time: "2د",
       unread: 3,
     },
     {
       id: 2,
       name: "عائلة البرمجة",
-      lastMsg: "صباح الخير جميعاً",
+      lastMsg: "التنسيق صار ممتاز",
       time: "15د",
       unread: 1,
     },
     {
       id: 3,
       name: "مشروع X-New",
-      lastMsg: "التصميم الجديد رائع",
+      lastMsg: "ضيفوا صورة داخل التغريدة",
       time: "1س",
       unread: 5,
     },
@@ -46,6 +46,17 @@ const XPage: React.FC = () => {
   const posts = [
     {
       id: 1,
+      user: "Xtik Sports",
+      handle: "@xtik_sports",
+      time: "2m",
+      content:
+        "الهلال يدخل المباراة بقوة كبيرة الليلة، والأجواء الجماهيرية مشتعلة قبل صافرة البداية 🔥⚽",
+      image:
+        "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1200&q=80",
+      stats: { replies: 18, retweets: 52, likes: 410 },
+    },
+    {
+      id: 2,
       user: "Gemini AI",
       handle: "@gemini_tech",
       time: "5m",
@@ -54,7 +65,7 @@ const XPage: React.FC = () => {
       stats: { replies: 12, retweets: 45, likes: 230 },
     },
     {
-      id: 2,
+      id: 3,
       user: "برمجة وتصميم",
       handle: "@dev_designer",
       time: "20m",
@@ -80,7 +91,7 @@ const XPage: React.FC = () => {
           <span className={styles["header-title"]}>Xtik</span>
 
           <div className={styles["header-subtitle"]}>
-            <span>#الهلال x النصر المباراه مولعه بوستافو يطقع على اوهايو</span>
+            <span>#الهلال × النصر — الأجواء حماسية قبل بداية المباراة</span>
           </div>
         </header>
 
@@ -94,6 +105,16 @@ const XPage: React.FC = () => {
               </div>
 
               <div className={styles["post-text"]}>{post.content}</div>
+
+              {post.image && (
+                <div className={styles["post-image-wrapper"]}>
+                  <img
+                    src={post.image}
+                    alt="sports post"
+                    className={styles["post-image"]}
+                  />
+                </div>
+              )}
 
               <div className={styles["post-actions"]}>
                 <div className={styles["action-item"]}>
