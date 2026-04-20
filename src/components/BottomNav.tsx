@@ -1,7 +1,7 @@
 import { CircleUserRound, Home, Trophy, User, Users } from "lucide-react";
 import styles from "../pages-css/BottomNav.module.css";
 
-export type TabType = "home" | "fans" | "leagues" | "profile" | "account";
+export type TabType = "home" | "fans" | "leagues" | "profile" | "account" | "upload";
 
 type BottomNavProps = {
   current: TabType;

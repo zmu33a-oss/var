@@ -15,7 +15,9 @@ export default function App() {
   const [mode, setMode] = useState<HomeMode>("tiktok");
 
   return (
-    <div style={{ paddingBottom: "90px", background: "#000", minHeight: "100vh" }}>
+    <div
+      style={{ paddingBottom: "90px", background: "#000", minHeight: "100vh" }}
+    >
       {tab === "home" && (
         <ThemeSwitch
           currentTab={mode === "tiktok" ? "home" : "x"}
@@ -52,7 +54,7 @@ export default function App() {
           <XPage />
         </div>
       )}
-
+      
       {tab === "fans" && <FansPage />}
       {tab === "leagues" && <LeaguesPage />}
       {tab === "profile" && <ProfilePage />}
