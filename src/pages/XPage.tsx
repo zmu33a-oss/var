@@ -8,14 +8,17 @@ import {
   Repeat2,
   Heart,
   Share,
-  Feather,
 } from "lucide-react";
 
 import TopTab from "./TopTab";
 import ProfileX from "./ProfileX";
 import styles from "../pages-css/XPage.module.css";
 
-const XPage: React.FC = () => {
+type ChatTarget = "dm" | "group" | null;
+
+const XPage: React.FC<{ onOpenChat?: (target?: ChatTarget) => void }> = ({
+  onOpenChat,
+}) => {
   const [isTabOpen, setIsTabOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
@@ -81,6 +84,7 @@ const XPage: React.FC = () => {
         groupChats={groupChats}
         isTabOpen={isTabOpen}
         setIsTabOpen={setIsTabOpen}
+        onOpenChat={onOpenChat}
       />
 
       <div
@@ -144,22 +148,26 @@ const XPage: React.FC = () => {
       </div>
 
       <nav className={styles["bottom-nav"]}>
-        <Mail className={styles["nav-icon"]} />
+        <Mail
+          className={styles["nav-icon"]}
+          onClick={() => onOpenChat?.("dm")}
+        />
         <Bell className={styles["nav-icon"]} />
         <Search className={styles["nav-icon"]} />
         <Home className={`${styles["nav-icon"]} ${styles["active"]}`} />
       </nav>
 
-      <button
-        className={styles["fab"]}
-        onClick={() => setIsProfileOpen(true)}
-      >
-        <Feather />
+      <button className={styles["fab"]} onClick={() => setIsProfileOpen(true)}>
+        <span>ProfiLe</span>
       </button>
 
       <ProfileX
         isOpen={isProfileOpen}
         onClose={() => setIsProfileOpen(false)}
+        onOpenChat={(target) => {
+          setIsProfileOpen(false);
+          onOpenChat?.(target);
+        }}
       />
     </div>
   );

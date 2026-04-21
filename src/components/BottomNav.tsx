@@ -1,8 +1,13 @@
-import { CircleUserRound, Home, Trophy, User, Users } from "lucide-react";
+import { Home, Trophy, User, Users } from "lucide-react";
 import styles from "../pages-css/BottomNav.module.css";
 
-export type TabType = "home" | "fans" | "leagues" | "profile" | "account" | "upload";
-
+export type TabType =
+  | "home"
+  | "fans"
+  | "leagues"
+  | "profile"
+  | "account"
+  | "chat";
 type BottomNavProps = {
   current: TabType;
   setTab: (tab: TabType) => void;
@@ -36,15 +41,6 @@ export default function BottomNav({ current, setTab }: BottomNavProps) {
       >
         <Trophy className={styles["nav-icon"]} strokeWidth={2.2} />
         <span>الدوريات</span>
-      </button>
-
-      <button
-        type="button"
-        onClick={() => setTab("profile")}
-        className={`${styles["bottom-nav-item"]} ${current === "profile" ? styles.active : ""}`}
-      >
-        <CircleUserRound className={styles["nav-icon"]} strokeWidth={2.2} />
-        <span>الملف</span>
       </button>
 
       <button

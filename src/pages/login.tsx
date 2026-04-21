@@ -5,7 +5,19 @@ import { FaGoogle } from "react-icons/fa";
 import loginAudio from "../assets/login.mp3";
 import { supabase } from "./supabase";
 
-const LoginPage = () => {
+interface LoginPageProps {
+  onSuccess?: () => void;
+  isRecovery?: boolean;
+  onRecoveryDone?: () => void;
+  onGoToSignup?: () => void;
+}
+
+const LoginPage = ({
+  onSuccess,
+  isRecovery = false,
+  onRecoveryDone,
+  onGoToSignup,
+}: LoginPageProps) => {
   const phrases = [
     "نهكر الكوره ونهكر الملاعب .",
     "اذا متعصب لاتقرب .",
@@ -21,7 +33,6 @@ const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [isSignup, setIsSignup] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [displayedLines, setDisplayedLines] = useState<string[]>([
@@ -32,6 +43,8 @@ const LoginPage = () => {
     "",
   ]);
   const [isResetting, setIsResetting] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
     const t = setTimeout(() => setSplash(false), 3000);
@@ -85,28 +98,26 @@ const LoginPage = () => {
     setIsLoading(true);
     setAuthMessage("");
 
-    if (isSignup) {
-      const { error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-      });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
 
-      if (error) {
-        setAuthMessage(error.message);
+    if (error) {
+      if (error.message.toLowerCase().includes("email not confirmed")) {
+        setAuthMessage(
+          "يجب تفعيل البريد الإلكتروني أولاً. تفقد بريدك الواردة.",
+        );
+      } else if (
+        error.message.toLowerCase().includes("invalid login credentials")
+      ) {
+        setAuthMessage("الإيميل أو كلمة المرور غير صحيحة.");
       } else {
-        setAuthMessage("تم إنشاء الحساب، تأكد من رسالة التفعيل في الإيميل");
-      }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-
-      if (error) {
         setAuthMessage(error.message);
-      } else {
-        setAuthMessage("تم تسجيل الدخول بنجاح");
       }
+    } else if (data.user) {
+      setAuthMessage("✅ تم تسجيل الدخول بنجاح");
+      setTimeout(() => onSuccess?.(), 800);
     }
 
     setIsLoading(false);
@@ -117,12 +128,36 @@ const LoginPage = () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: window.location.origin + window.location.pathname,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
       },
     });
 
     if (error) {
       setAuthMessage(error.message);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (newPassword !== confirmPassword) {
+      setAuthMessage("كلمات المرور غير متطابقة");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setAuthMessage("كلمة المرور يجب أن تكون 6 أحرف على الأقل");
+      return;
+    }
+    setIsLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setIsLoading(false);
+    if (error) {
+      setAuthMessage(error.message);
+    } else {
+      setAuthMessage("✅ تم تحديث كلمة المرور بنجاح");
+      setTimeout(() => onRecoveryDone?.(), 1200);
     }
   };
 
@@ -178,6 +213,59 @@ const LoginPage = () => {
       return () => clearTimeout(timer);
     }
   }, [displayedLines, currentLineIndex, isResetting]);
+
+  // ── شاشة تعيين كلمة مرور جديدة (عند الوصول عبر رابط الاستعادة) ──────────
+  if (isRecovery) {
+    return (
+      <div className={loginStyle.container}>
+        <div className={loginStyle.overlay} />
+        <div className={loginStyle.inputBoxContainer}>
+          <p
+            className={loginStyle.authMessage}
+            style={{ marginBottom: 16, fontSize: 15 }}
+          >
+            أدخل كلمة مرور جديدة لحسابك
+          </p>
+          <div className={loginStyle.passwordWrap}>
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="كلمة المرور الجديدة"
+              className={loginStyle.inputField}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+            <button
+              type="button"
+              className={loginStyle.eyeBtn}
+              onClick={() => setShowPassword((p) => !p)}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
+          <div className={loginStyle.inputWrapper}>
+            <input
+              type="password"
+              placeholder="تأكيد كلمة المرور"
+              className={loginStyle.inputField}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handlePasswordReset()}
+            />
+          </div>
+          <button
+            className={loginStyle.loginBtn}
+            onClick={handlePasswordReset}
+            disabled={isLoading}
+          >
+            {isLoading ? "...جاري التحديث" : "تحديث كلمة المرور"}
+          </button>
+          {authMessage && (
+            <p className={loginStyle.authMessage}>{authMessage}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (splash) {
     return (
@@ -248,11 +336,7 @@ const LoginPage = () => {
           onClick={handleAuth}
           disabled={isLoading}
         >
-          {isLoading
-            ? "...جاري التنفيذ"
-            : isSignup
-              ? "Create Account"
-              : "Login"}
+          {isLoading ? "...جاري التنفيذ" : "Login"}
         </button>
 
         <button
@@ -272,9 +356,9 @@ const LoginPage = () => {
           <button
             type="button"
             className={loginStyle.linkBtn}
-            onClick={() => setIsSignup((prev) => !prev)}
+            onClick={onGoToSignup}
           >
-            {isSignup ? "عندي حساب بالفعل" : "حساب جديد"}
+            حساب جديد
           </button>
           <button
             type="button"

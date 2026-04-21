@@ -14,9 +14,15 @@ interface Props {
   groupChats: Chat[];
   isTabOpen: boolean;
   setIsTabOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  onOpenChat?: (target?: "dm" | "group" | null) => void;
 }
 
-const TopTab: React.FC<Props> = ({ groupChats, isTabOpen, setIsTabOpen }) => {
+const TopTab: React.FC<Props> = ({
+  groupChats,
+  isTabOpen,
+  setIsTabOpen,
+  onOpenChat,
+}) => {
   const [replyText, setReplyText] = useState("");
   const [activeChat, setActiveChat] = useState(0);
   const latestChat = groupChats[0];
@@ -55,7 +61,6 @@ const TopTab: React.FC<Props> = ({ groupChats, isTabOpen, setIsTabOpen }) => {
                 {latestChat.lastMsg}
               </span>
             </div>
-            
           </div>
         </div>
       ) : (
@@ -68,7 +73,11 @@ const TopTab: React.FC<Props> = ({ groupChats, isTabOpen, setIsTabOpen }) => {
               <ChevronUp />
             </button>
 
-            <h3 className={styles["tab-title"]}>
+            <h3
+              className={styles["tab-title"]}
+              style={{ cursor: onOpenChat ? "pointer" : "default" }}
+              onClick={() => onOpenChat?.("group")}
+            >
               دردشات المجموعات <Users />
             </h3>
           </div>
@@ -81,7 +90,10 @@ const TopTab: React.FC<Props> = ({ groupChats, isTabOpen, setIsTabOpen }) => {
                   className={`${styles["group-item"]} ${
                     activeChat === idx ? styles["active"] : ""
                   }`}
-                  onClick={() => setActiveChat(idx)}
+                  onClick={() => {
+                    setActiveChat(idx);
+                    onOpenChat?.("group");
+                  }}
                 >
                   <div className={styles["group-name"]}>{chat.name}</div>
 

@@ -34,13 +34,15 @@ export default function TikTokPage() {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [brokenVideoIds, setBrokenVideoIds] = useState<number[]>([]);
 
   const visibleVideos = videos
     .map((vid) => ({
       ...vid,
       video_url: normalizeVideoUrl(vid.video_url || ""),
     }))
-    .filter((vid) => Boolean(vid.video_url));
+    .filter((vid) => Boolean(vid.video_url))
+    .filter((vid) => !brokenVideoIds.includes(vid.id));
 
   const fetchVideos = async () => {
     setLoading(true);
@@ -57,6 +59,7 @@ export default function TikTokPage() {
     }
 
     setVideos(data || []);
+    setBrokenVideoIds([]);
     setLoading(false);
   };
 
@@ -65,8 +68,17 @@ export default function TikTokPage() {
   }, []);
 
   useEffect(() => {
-    setActiveIndex(0);
+    setActiveIndex((current) => {
+      if (visibleVideos.length === 0) return 0;
+      return Math.min(current, visibleVideos.length - 1);
+    });
   }, [visibleVideos.length]);
+
+  const handleVideoError = (videoId: number) => {
+    setBrokenVideoIds((prev) =>
+      prev.includes(videoId) ? prev : [...prev, videoId],
+    );
+  };
 
   const handleOpenFiles = () => {
     fileInputRef.current?.click();
@@ -138,10 +150,6 @@ export default function TikTokPage() {
         }
       }}
     >
-      <button className={styles.addButton} onClick={handleOpenFiles}>
-        +
-      </button>
-
       <input
         ref={fileInputRef}
         type="file"
@@ -161,6 +169,9 @@ export default function TikTokPage() {
             video_url={vid.video_url}
             caption={vid.caption}
             isActive={index === activeIndex}
+            shouldLoad={Math.abs(index - activeIndex) <= 1}
+            onVideoError={() => handleVideoError(vid.id)}
+            onAddVideo={handleOpenFiles}
           />
         ))
       )}

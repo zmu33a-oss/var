@@ -1,159 +1,277 @@
-import { Calendar, Mail, MapPin, Phone } from "lucide-react";
-import { useState } from "react";
-import ProfileHeader from "../components/ProfileHeader";
+﻿import { useState, useRef } from "react";
+import { Camera, Pencil, X, LogOut, MapPin, Calendar } from "lucide-react";
 import styles from "../pages-css/ProfilePage.module.css";
+import { useAuth } from "../lib/AuthContext";
+import { supabase } from "./supabase";
 
-const profileData = {
-  avatarUrl:
-    "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80",
-  displayName: "Ahmed Al-Xtik",
-  username: "@xtik",
-  bio: "Athlete · Football analyst · Passionate about the beautiful game and the numbers behind it.",
-  email: "xtik@webplus.app",
-  phone: "+966 5X XXX XXXX",
-  location: "Riyadh, Saudi Arabia",
-  joinDate: "April 2024",
-  stats: {
-    followers: "24.5K",
-    following: "312",
-    likes: "1.2M",
-  },
-};
-
-const galleryImages = [
-  "https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?auto=format&fit=crop&w=400&q=80",
-  "https://images.unsplash.com/photo-1518604666860-9ed391f76460?auto=format&fit=crop&w=400&q=80",
-  "https://images.unsplash.com/photo-1521412644187-c49fa049e84d?auto=format&fit=crop&w=400&q=80",
-  "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=400&q=80",
-  "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=400&q=80",
-  "https://images.unsplash.com/photo-1560272564-c83b66b1ad12?auto=format&fit=crop&w=400&q=80",
+const GALLERY = [
+  "https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=400&q=80",
+  "https://images.unsplash.com/photo-1518604666860-9ed391f76460?w=400&q=80",
+  "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=400&q=80",
+  "https://images.unsplash.com/photo-1560272564-c83b66b1ad12?w=400&q=80",
+  "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=400&q=80",
+  "https://images.unsplash.com/photo-1521412644187-c49fa049e84d?w=400&q=80",
 ];
 
-const savedItems = [
-  {
-    id: "s1",
-    icon: "⚽",
-    title: "الهلال vs النصر",
-    subtitle: "Saved Match",
-    tag: "Riyadh Derby",
-  },
-  {
-    id: "s2",
-    icon: "🏆",
-    title: "دوري روشن السعودي",
-    subtitle: "League",
-    tag: "Standings",
-  },
-  {
-    id: "s3",
-    icon: "📊",
-    title: "تحليل الجولة 28",
-    subtitle: "Analysis",
-    tag: "Stats",
-  },
-  {
-    id: "s4",
-    icon: "🎬",
-    title: "أفضل لحظات الموسم",
-    subtitle: "Highlights",
-    tag: "Video",
-  },
-];
+interface Props { onSignOut?: () => void; }
 
-export default function ProfilePage() {
-  const [activeTab, setActiveTab] = useState<"gallery" | "saved">("gallery");
+export default function ProfilePage({ onSignOut }: Props) {
+  const { user, profile, signOut, refreshProfile } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [showEdit, setShowEdit] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const [editName, setEditName] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+
+  const rawEmail = profile?.email ?? user?.email ?? "";
+  const displayName = profile?.full_name ?? rawEmail.split("@")[0] ?? "مستخدم";
+  const username = profile?.username ?? `@${rawEmail.split("@")[0] || "user"}`;
+  const bio = profile?.bio ?? "";
+  const location = profile?.location ?? "";
+  const avatarUrl = profile?.avatar_url ?? null;
+  const joinDate = profile?.created_at
+    ? new Date(profile.created_at).toLocaleDateString("ar", { year: "numeric", month: "long" })
+    : "";
+
+  const openEdit = () => {
+    setEditName(displayName);
+    setEditBio(bio);
+    setEditPhone(profile?.phone ?? "");
+    setEditLocation(location);
+    setMsg("");
+    setShowEdit(true);
+  };
+
+  const saveEdit = async () => {
+    if (!user) return;
+    setSaving(true);
+    const { error } = await supabase.from("users").upsert(
+      {
+        id: user.id,
+        full_name: editName.trim() || null,
+        bio: editBio.trim() || null,
+        phone: editPhone.trim() || null,
+        location: editLocation.trim() || null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" }
+    );
+    setSaving(false);
+    if (error) { setMsg("خطأ: " + error.message); return; }
+    await refreshProfile();
+    setShowEdit(false);
+  };
+
+  // Resize image client-side via canvas (no bucket needed)
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    if (file.size > 15 * 1024 * 1024) { setMsg("الصورة أكبر من 15MB"); return; }
+    setUploading(true);
+    setMsg("جاري معالجة الصورة...");
+    try {
+      const dataUrl = await resizeImage(file, 400, 0.85);
+      const { error } = await supabase.from("users").upsert(
+        { id: user.id, avatar_url: dataUrl, updated_at: new Date().toISOString() },
+        { onConflict: "id" }
+      );
+      if (error) { setMsg("فشل الحفظ: " + error.message); }
+      else {
+        await refreshProfile();
+        setMsg("تم تحديث الصورة ✅");
+        setTimeout(() => setMsg(""), 3000);
+      }
+    } catch {
+      setMsg("فشل معالجة الصورة");
+    }
+    setUploading(false);
+    e.target.value = "";
+  };
+
+  const handleSignOut = async () => { await signOut(); onSignOut?.(); };
 
   return (
     <main className={styles.page}>
-      <ProfileHeader
-        avatarUrl={profileData.avatarUrl}
-        displayName={profileData.displayName}
-        username={profileData.username}
-        bio={profileData.bio}
-      />
+      {/* Cover */}
+      <div className={styles.cover} />
 
-      {/* Stats Row */}
-      <div className={styles.statsRow}>
-        <div className={styles.stat}>
-          <strong>{profileData.stats.followers}</strong>
-          <span>Followers</span>
-        </div>
-        <div className={styles.statDivider} />
-        <div className={styles.stat}>
-          <strong>{profileData.stats.following}</strong>
-          <span>Following</span>
-        </div>
-        <div className={styles.statDivider} />
-        <div className={styles.stat}>
-          <strong>{profileData.stats.likes}</strong>
-          <span>Likes</span>
+      {/* Avatar + edit button row */}
+      <div className={styles.avatarRow}>
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="avatar" className={styles.avatarImg} />
+        ) : (
+          <div className={styles.avatarFallback}>{displayName[0]?.toUpperCase()}</div>
+        )}
+        <div style={{ flex: 1 }} />
+        <button type="button" className={styles.editBtn} onClick={openEdit}>
+          <Pencil size={14} /> تعديل
+        </button>
+      </div>
+
+      {/* Name + bio */}
+      <div className={styles.nameSection}>
+        <h2 className={styles.displayName}>{displayName}</h2>
+        <p className={styles.usernameText}>{username}</p>
+        {bio && <p className={styles.bioText}>{bio}</p>}
+        <div className={styles.metaRow}>
+          {location && <span className={styles.metaItem}><MapPin size={13} /> {location}</span>}
+          {joinDate && <span className={styles.metaItem}><Calendar size={13} /> {joinDate}</span>}
         </div>
       </div>
 
-      {/* Info Section */}
-      <section className={styles.infoSection}>
-        <div className={styles.infoRow}>
-          <Mail size={15} className={styles.infoIcon} />
-          <span>{profileData.email}</span>
-        </div>
-        <div className={styles.infoRow}>
-          <Phone size={15} className={styles.infoIcon} />
-          <span>{profileData.phone}</span>
-        </div>
-        <div className={styles.infoRow}>
-          <MapPin size={15} className={styles.infoIcon} />
-          <span>{profileData.location}</span>
-        </div>
-        <div className={styles.infoRow}>
-          <Calendar size={15} className={styles.infoIcon} />
-          <span>Joined {profileData.joinDate}</span>
-        </div>
-      </section>
+      {/* Stats */}
+      <div className={styles.statsRow}>
+        <div className={styles.stat}><strong>0</strong><span>متابع</span></div>
+        <div className={styles.statDiv} />
+        <div className={styles.stat}><strong>0</strong><span>يتابع</span></div>
+        <div className={styles.statDiv} />
+        <div className={styles.stat}><strong>0</strong><span>لايك</span></div>
+      </div>
 
-      {/* Content Section */}
-      <section className={styles.contentSection}>
-        <div className={styles.tabBar}>
-          <button
-            type="button"
-            className={`${styles.tabBtn} ${activeTab === "gallery" ? styles.tabActive : ""}`}
-            onClick={() => setActiveTab("gallery")}
-          >
-            Gallery
-          </button>
-          <button
-            type="button"
-            className={`${styles.tabBtn} ${activeTab === "saved" ? styles.tabActive : ""}`}
-            onClick={() => setActiveTab("saved")}
-          >
-            Saved
-          </button>
-        </div>
-
-        {activeTab === "gallery" && (
-          <div className={styles.galleryGrid}>
-            {galleryImages.map((url, i) => (
-              <div key={url} className={styles.galleryCell}>
-                <img src={url} alt={`gallery-${i + 1}`} />
-              </div>
-            ))}
+      {/* Gallery */}
+      <div className={styles.galleryGrid}>
+        {GALLERY.map((url, i) => (
+          <div key={i} className={styles.galleryCell}>
+            <img src={url} alt="" loading="lazy" />
           </div>
-        )}
+        ))}
+      </div>
 
-        {activeTab === "saved" && (
-          <ul className={styles.savedList}>
-            {savedItems.map((item) => (
-              <li key={item.id} className={styles.savedItem}>
-                <span className={styles.savedIcon}>{item.icon}</span>
-                <div className={styles.savedMeta}>
-                  <p>{item.title}</p>
-                  <span>{item.subtitle}</span>
+      {/* Sign out */}
+      <div style={{ padding: "0 16px 20px" }}>
+        <button type="button" onClick={handleSignOut} className={styles.signOutBtn}>
+          <LogOut size={15} /> تسجيل الخروج
+        </button>
+      </div>
+
+      {/* ── Edit Modal ── */}
+      {showEdit && (
+        <div className={styles.modalBackdrop} onClick={() => setShowEdit(false)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <button type="button" className={styles.closeBtn} onClick={() => setShowEdit(false)}>
+                <X size={18} />
+              </button>
+              <h3>تعديل الملف الشخصي</h3>
+              <button
+                type="button"
+                className={styles.saveBtnHeader}
+                onClick={saveEdit}
+                disabled={saving}
+              >
+                {saving ? "..." : "حفظ"}
+              </button>
+            </div>
+
+            {/* Avatar upload */}
+            <div className={styles.modalAvatarWrap}>
+              <button
+                type="button"
+                className={styles.modalAvatarBtn}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+              >
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="avatar" className={styles.modalAvatarImg} />
+                ) : (
+                  <div className={styles.modalAvatarFallback}>{displayName[0]?.toUpperCase()}</div>
+                )}
+                <div className={styles.modalCamOverlay}>
+                  {uploading ? <span className={styles.spinner} /> : <Camera size={22} />}
                 </div>
-                <span className={styles.savedTag}>{item.tag}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+              </button>
+              <p className={styles.changePhotoHint}>اضغط لتغيير الصورة</p>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={handleAvatarChange}
+            />
+
+            {msg && <p className={styles.modalMsg}>{msg}</p>}
+
+            {/* Fields */}
+            <div className={styles.fieldList}>
+              <label className={styles.fieldWrap}>
+                <span className={styles.fieldLabel}>الاسم</span>
+                <input
+                  className={styles.fieldInput}
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  maxLength={60}
+                  placeholder="اسمك الكامل"
+                />
+              </label>
+              <label className={styles.fieldWrap}>
+                <span className={styles.fieldLabel}>السيرة الذاتية</span>
+                <textarea
+                  className={styles.fieldInput}
+                  value={editBio}
+                  onChange={(e) => setEditBio(e.target.value)}
+                  rows={3}
+                  maxLength={160}
+                  placeholder="اكتب شيئاً عن نفسك..."
+                />
+              </label>
+              <label className={styles.fieldWrap}>
+                <span className={styles.fieldLabel}>الجوال</span>
+                <input
+                  className={styles.fieldInput}
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  type="tel"
+                  maxLength={20}
+                  placeholder="+966 5x xxx xxxx"
+                />
+              </label>
+              <label className={styles.fieldWrap}>
+                <span className={styles.fieldLabel}>الموقع</span>
+                <input
+                  className={styles.fieldInput}
+                  value={editLocation}
+                  onChange={(e) => setEditLocation(e.target.value)}
+                  maxLength={60}
+                  placeholder="المدينة، الدولة"
+                />
+              </label>
+              <label className={`${styles.fieldWrap} ${styles.fieldReadonly}`}>
+                <span className={styles.fieldLabel}>الإيميل</span>
+                <input className={styles.fieldInput} value={rawEmail} readOnly />
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
+}
+
+function resizeImage(file: File, maxSize: number, quality: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > h) { if (w > maxSize) { h = Math.round(h * maxSize / w); w = maxSize; } }
+        else { if (h > maxSize) { w = Math.round(w * maxSize / h); h = maxSize; } }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d")?.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = reject;
+      img.src = ev.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }

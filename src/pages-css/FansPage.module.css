@@ -8,10 +8,10 @@
   background:
     radial-gradient(
       circle at top center,
-      rgba(34, 91, 255, 0.14),
+      rgb(0, 0, 0),
       transparent 28%
     ),
-    linear-gradient(180deg, #050505 0%, #0d0d11 100%);
+    linear-gradient(180deg, #050505 0%, #2b2b36 100%);
   color: #fff;
   font-family: sans-serif;
 }
@@ -22,7 +22,7 @@
   background:
     radial-gradient(
       circle at 18% 20%,
-      rgba(43, 107, 255, 0.12),
+      rgb(11, 11, 13),
       transparent 22%
     ),
     radial-gradient(circle at 82% 10%, rgba(255, 112, 54, 0.1), transparent 20%);
