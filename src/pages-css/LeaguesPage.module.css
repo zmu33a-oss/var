@@ -5,14 +5,14 @@
   --text-muted: #7f8aa4;
   --border-main: rgba(159, 194, 255, 0.28);
   --border-soft: rgba(255, 255, 255, 0.2);
-  --radius-card: 30px;
+  --radius-card: 20px;
   --radius-pill: 999px;
-  --card-max: 510px;
-  --team-size: 112px;
-  --team-width: 150px;
-  --score-size: 70px;
-  --title-size: 30px;
-  --time-size: 20px;
+  --card-max: 430px;
+  --team-size: 64px;
+  --team-width: 84px;
+  --score-size: 42px;
+  --title-size: 20px;
+  --time-size: 14px;
 }
 
 @keyframes tickerIn {
@@ -35,48 +35,49 @@
     opacity: 0;
     transform: translateY(-14px);
   }
-}
+  padding: 12px;
 
-* {
-  box-sizing: border-box;
-}
+  * {
+    box-sizing: border-box;
+  }
 
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: var(--bg-main);
-}
+  body {
+    margin: 0;
+    font-size: 14px;
+    background: var(--bg-main);
+  }
 
-.league-card-wrapper {
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 9.5vh 14px 16px;
-  direction: rtl;
-  background:
-    radial-gradient(circle at 20% 0%, rgba(34, 72, 149, 0.34), transparent 38%),
-    radial-gradient(
-      circle at 90% 20%,
-      rgba(39, 93, 193, 0.24),
-      transparent 40%
-    ),
-    linear-gradient(180deg, #030916 0%, #01040b 100%);
-}
+  .league-card-wrapper {
+    min-height: 100dvh;
+    width: min(100%, 430px);
+    margin: 0 auto;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 8.5vh 8px 6px;
+    direction: rtl;
+    background:
+      radial-gradient(
+        circle at 20% 0%,
+        rgba(34, 72, 149, 0.34),
+        transparent 38%
+      ),
+      radial-gradient(
+        circle at 90% 20%,
+        rgba(39, 93, 193, 0.24),
+        transparent 40%
+      ),
+      linear-gradient(180deg, #030916 0%, #01040b 100%);
+  }
 
-.cards-stack {
-  width: 100%;
-  max-width: 560px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
+  .cards-stack {
+    width: 100%;
+    gap: 14px;
+  }
 
-.league-card {
-  width: 100%;
-  max-width: var(--card-max);
-  border-radius: var(--radius-card);
-  overflow: hidden;
+  .league-card {
+    width: 100%;
+  }
   border: 1px solid var(--border-main);
   background:
     linear-gradient(
@@ -85,11 +86,7 @@ body {
       rgba(7, 14, 31, 0.95) 42%,
       rgba(5, 8, 15, 0.98) 100%
     ),
-    radial-gradient(
-      circle at 50% 12%,
-      rgba(89, 141, 255, 0.26),
-      transparent 50%
-    );
+    radial-gradient(circle at 50% 12%, } transparent 50%);
   box-shadow:
     0 30px 80px rgba(1, 4, 10, 0.76),
     inset 0 1px 0 rgba(160, 193, 255, 0.25);
@@ -98,7 +95,7 @@ body {
 
 .league-header {
   text-align: center;
-  padding: 16px 20px 6px;
+  padding: 18px 12px 6px;
 }
 
 .league-title-row {
@@ -128,8 +125,9 @@ body {
 }
 
 .league-header p {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   color: var(--text-soft);
+  font-size: 12px;
 }
 
 .live-badge {
@@ -138,21 +136,23 @@ body {
   right: 16px;
   margin: 0;
   width: fit-content;
-  padding: 8px 14px;
+  padding: 7px 12px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border-soft);
   background: rgba(7, 18, 42, 0.88);
   color: #ff4f6f;
   font-weight: 800;
-  font-size: 13px;
+  font-size: 12px;
+  top: 10px;
+  right: 10px;
 }
 
 .match-main {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 20px 10px;
-  gap: 8px;
+  padding: 16px 12px 10px;
+  gap: 4px;
 }
 
 .team-block {
@@ -174,7 +174,7 @@ body {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 52px;
+  font-size: 30px;
   font-weight: 900;
   color: #f2f8ff;
   border: 2px solid rgba(157, 194, 255, 0.72);
@@ -185,9 +185,9 @@ body {
 }
 
 .team-block h3 {
-  margin: 8px 0 0;
+  margin: 5px 0 0;
   color: var(--text-main);
-  font-size: 28px;
+  font-size: 16px;
   font-weight: 800;
 }
 
@@ -214,9 +214,9 @@ body {
 }
 
 .time-pill {
-  margin-top: 10px;
+  margin-top: 8px;
   display: inline-block;
-  padding: 8px 20px;
+  padding: 5px 10px;
   border-radius: 16px;
   background: rgba(4, 12, 26, 0.88);
   border: 1px solid rgba(193, 215, 255, 0.23);
@@ -239,10 +239,10 @@ body {
 .match-meta {
   display: flex;
   justify-content: center;
-  gap: 14px;
-  padding: 12px 12px 14px;
+  gap: 10px;
+  padding: 10px 8px;
   color: #dbe7ff;
-  font-size: 14px;
+  font-size: 12px;
   flex-wrap: wrap;
 }
 
@@ -256,10 +256,10 @@ body {
 }
 
 .tweet-box {
-  width: calc(100% - 24px);
-  margin: 0 auto 8px;
-  padding: 9px 10px;
-  border-radius: 16px;
+  width: calc(100% - 10px);
+  margin: 0 auto 7px;
+  padding: 8px;
+  border-radius: 14px;
   background: rgba(0, 5, 14, 0.66);
   border: 1px solid rgba(180, 209, 255, 0.2);
 }
@@ -281,14 +281,15 @@ body {
 }
 
 .tweet-avatar {
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   background: linear-gradient(160deg, #1a3a76, #0f213f);
   color: #dcecff;
   font-weight: 900;
+  font-size: 13px;
 }
 
 .tweet-user-info {
@@ -306,13 +307,13 @@ body {
 
 .tweet-name-row strong {
   color: var(--text-main);
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .tweet-handle,
 .tweet-time {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 10px;
 }
 
 .ticker-row {
@@ -330,7 +331,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   color: #ecf5ff;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -347,8 +348,8 @@ body {
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.12);
   color: #f6fbff;
-  padding: 6px 10px;
-  font-size: 12px;
+  padding: 6px 8px;
+  font-size: 11px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -363,9 +364,9 @@ body {
 
 .engagement-rate {
   color: #d5e7ff;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  padding: 6px 10px;
+  padding: 5px 8px;
   border-radius: 999px;
   background: rgba(133, 169, 235, 0.16);
   border: 1px solid rgba(182, 211, 255, 0.23);
@@ -379,7 +380,7 @@ body {
 
 .live-hashtag {
   color: #9ac8ff;
-  font-size: 13px;
+  font-size: 12px;
   text-decoration: none;
   font-weight: 700;
 }
@@ -389,12 +390,12 @@ body {
   border-radius: 999px;
   background: linear-gradient(135deg, #4f76ff, #3f58d6);
   color: #fff;
-  padding: 7px 13px;
-  font-size: 12px;
+  padding: 6px 10px;
+  font-size: 11px;
   font-weight: 800;
   cursor: pointer;
   box-shadow: 0 8px 20px rgba(74, 101, 255, 0.36);
-  transform: translateX(12px);
+  transform: translateX(8px);
 }
 
 .tweet-indicator {
@@ -417,7 +418,7 @@ body {
 
 .detail-shell {
   width: 100%;
-  max-width: 560px;
+  max-width: 430px;
 }
 
 .back-btn {
@@ -432,7 +433,7 @@ body {
 }
 
 .detail-card {
-  border-radius: 24px;
+  border-radius: 18px;
   border: 1px solid rgba(167, 202, 255, 0.27);
   background: linear-gradient(
     180deg,
@@ -459,139 +460,23 @@ body {
   margin-bottom: 14px;
 }
 
-@media (max-width: 768px) {
-  .league-card-wrapper {
-    padding: 8.5vh 8px 6px;
-  }
-
-  .cards-stack {
-    gap: 14px;
-  }
-
-  .league-card {
-    border-radius: 20px;
-  }
-
-  .league-header {
-    padding: 18px 12px 6px;
-  }
-
-  .league-title-row h2 {
-    font-size: 20px;
-    line-height: 1.3;
-  }
-
-  .league-header p {
-    font-size: 12px;
-    margin-top: 6px;
-  }
-
-  .live-badge {
-    font-size: 12px;
-    padding: 7px 12px;
-    top: 10px;
-    right: 10px;
-  }
-
-  .match-main {
-    padding: 16px 12px 10px;
-    gap: 4px;
-  }
-
-  .team-block {
-    width: 84px;
-  }
-
-  .team-logo {
-    width: 64px;
-    height: 64px;
-  }
-
-  .team-logo-fallback {
-    width: 64px;
-    height: 64px;
-    font-size: 30px;
-  }
-
-  .team-block h3 {
-    font-size: 16px;
-    margin-top: 5px;
-  }
-
-  .score-block h1 {
-    font-size: 42px;
-    line-height: 1;
-  }
-
-  .score-line {
-    font-size: 42px;
+@media (max-width: 380px) {
+  .league-title-row {
     gap: 8px;
   }
 
-  .time-pill {
-    font-size: 14px;
-    padding: 5px 10px;
-    margin-top: 8px;
+  .league-badge {
+    min-width: 46px;
+    padding: 6px 9px;
+    font-size: 11px;
+  }
+
+  .score-line {
+    font-size: 36px;
+    gap: 6px;
   }
 
   .match-meta {
-    gap: 10px;
-    padding: 10px 8px;
-    font-size: 12px;
-  }
-
-  .tweet-box {
-    width: calc(100% - 10px);
-    margin: 0 auto 7px;
-    padding: 8px;
-    border-radius: 14px;
-  }
-
-  .tweet-avatar {
-    width: 36px;
-    height: 36px;
-    font-size: 13px;
-  }
-
-  .tweet-name-row strong {
-    font-size: 12px;
-  }
-
-  .tweet-handle,
-  .tweet-time {
-    font-size: 10px;
-  }
-
-  .ticker-text {
-    font-size: 12px;
-  }
-
-  .more-btn {
-    padding: 6px 8px;
-    font-size: 11px;
-  }
-
-  .hashtag-btn {
-    padding: 6px 10px;
-    font-size: 11px;
-    transform: translateX(8px);
-  }
-
-  .live-hashtag {
-    font-size: 12px;
-  }
-
-  .engagement-rate {
-    font-size: 11px;
-    padding: 5px 8px;
-  }
-
-  .detail-card {
-    border-radius: 18px;
-    padding: 12px;
-  }
-
-  .detail-text {
-    font-size: 14px;
+    gap: 8px;
   }
 }

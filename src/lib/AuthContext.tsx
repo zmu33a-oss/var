@@ -26,6 +26,48 @@ export interface UserProfile {
   created_at: string;
 }
 
+async function saveUserRecord(
+  userId: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const existing = await supabase
+    .from("users")
+    .select("id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (existing.data?.id) {
+    await supabase.from("users").update(payload).eq("id", userId);
+    return;
+  }
+
+  await supabase.from("users").insert({ id: userId, ...payload });
+}
+
+function normalizeProfile(
+  data: Partial<UserProfile> | null | undefined,
+  authUser?: User | null,
+): UserProfile | null {
+  if (!data?.id && !authUser?.id) return null;
+
+  return {
+    id: data?.id ?? authUser?.id ?? "",
+    email: data?.email ?? authUser?.email ?? null,
+    full_name:
+      data?.full_name ??
+      authUser?.user_metadata?.full_name ??
+      authUser?.user_metadata?.name ??
+      null,
+    avatar_url: data?.avatar_url ?? authUser?.user_metadata?.avatar_url ?? null,
+    username: data?.username ?? null,
+    bio: data?.bio ?? null,
+    phone: data?.phone ?? null,
+    location: data?.location ?? null,
+    created_at:
+      data?.created_at ?? authUser?.created_at ?? new Date().toISOString(),
+  };
+}
+
 interface AuthContextValue {
   user: User | null;
   session: Session | null;
@@ -59,27 +101,20 @@ export const useAuth = () => useContext(AuthContext);
  */
 async function upsertUser(authUser: User): Promise<void> {
   const meta = authUser.user_metadata ?? {};
-  await supabase.from("users").upsert(
-    {
-      id: authUser.id,
-      email: authUser.email ?? null,
-      full_name: meta.full_name ?? meta.name ?? null,
-      avatar_url: meta.avatar_url ?? null,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "id" },
-  );
+  await saveUserRecord(authUser.id, {
+    email: authUser.email ?? null,
+    full_name: meta.full_name ?? meta.name ?? null,
+  });
 }
 
-async function loadProfileFromDB(userId: string): Promise<UserProfile | null> {
+async function loadProfileFromDB(authUser: User): Promise<UserProfile | null> {
   const { data } = await supabase
     .from("users")
-    .select(
-      "id, email, full_name, avatar_url, username, bio, phone, location, created_at",
-    )
-    .eq("id", userId)
+    .select("id, email, full_name")
+    .eq("id", authUser.id)
     .single();
-  return (data as UserProfile) ?? null;
+
+  return normalizeProfile((data as Partial<UserProfile>) ?? null, authUser);
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
@@ -95,13 +130,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const syncUser = async (authUser: User) => {
     await upsertUser(authUser);
-    const p = await loadProfileFromDB(authUser.id);
+    const p = await loadProfileFromDB(authUser);
     setProfile(p);
   };
 
   const refreshProfile = async () => {
     if (!user) return;
-    const p = await loadProfileFromDB(user.id);
+    const p = await loadProfileFromDB(user);
     setProfile(p);
   };
 

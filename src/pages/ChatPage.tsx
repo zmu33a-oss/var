@@ -3,10 +3,8 @@ import {
   ArrowRight,
   Camera,
   Check,
-  ChevronDown,
-  MessageCirclePlus,
   Plus,
-  Send,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
@@ -18,7 +16,8 @@ type Group = {
   id: string;
   name: string;
   is_private: boolean;
-  created_at: string;
+  created_at?: string;
+  avatar_url?: string | null;
   last_message?: string;
   last_message_at?: string;
   unread?: number;
@@ -31,6 +30,8 @@ type Message = {
   content: string;
   created_at: string;
   sender_name?: string;
+  user_id?: string;
+  text?: string;
 };
 
 type AppUser = {
@@ -43,9 +44,11 @@ type AppUser = {
 export default function ChatPage({
   initialGroupId,
   initialComposer,
+  onClose,
 }: {
   initialGroupId?: string;
   initialComposer?: "dm" | "group" | null;
+  onClose?: () => void;
 }) {
   const [me, setMe] = useState<AppUser | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -65,11 +68,12 @@ export default function ChatPage({
 
   const [groupImage, setGroupImage] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState("");
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [groupSearch, setGroupSearch] = useState("");
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const realtimeRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const imageRef = useRef<HTMLInputElement>(null);
+  const chatRootRef = useRef<HTMLDivElement | null>(null);
 
   // ── fetch current user ──
   useEffect(() => {
@@ -101,64 +105,123 @@ export default function ChatPage({
     }
   }, [me, initialComposer]);
 
+  const mergeGroups = (items: Group[]) => {
+    const unique = new Map<string, Group>();
+    items.forEach((group) => {
+      if (group?.id) {
+        unique.set(group.id, group);
+      }
+    });
+
+    return Array.from(unique.values()).sort(
+      (left, right) =>
+        new Date(right.created_at ?? 0).getTime() -
+        new Date(left.created_at ?? 0).getTime(),
+    );
+  };
+
+  const normalizeMessage = (row: any): Message => ({
+    id: row.id,
+    group_id: row.group_id,
+    sender_id: row.sender_id ?? row.user_id,
+    content: row.content ?? row.text ?? "",
+    created_at: row.created_at,
+    sender_name: row.sender_name,
+    user_id: row.user_id,
+    text: row.text,
+  });
+
   const fetchGroups = async () => {
     setLoadingGroups(true);
     setError("");
 
-    const { data, error: err } = await supabase
+    let memberIds: string[] = [];
+    let memberErr: { message?: string } | null = null;
+    let ownedData: Group[] | null = null;
+    let ownedErr: { message?: string } | null = null;
+
+    const memberships = await supabase
       .from("group_members")
-      .select(
-        `
-        group_id,
-        groups (
-          id,
-          name,
-          is_private,
-          created_at
-        )
-      `,
-      )
+      .select("group_id")
       .eq("user_id", me!.id);
 
-    if (err) {
+    if (memberships.error) {
+      memberErr = memberships.error;
+    } else {
+      memberIds = (memberships.data ?? [])
+        .map((row) => row.group_id)
+        .filter(Boolean);
+    }
+
+    const ownedGroups = await supabase
+      .from("groups")
+      .select("id, name, is_private")
+      .eq("created_by", me!.id);
+
+    ownedData = ownedGroups.data as Group[] | null;
+    ownedErr = ownedGroups.error;
+
+    let memberGroups: Group[] = [];
+    if (memberIds.length > 0) {
+      const memberGroupsRes = await supabase
+        .from("groups")
+        .select("id, name, is_private")
+        .in("id", memberIds);
+
+      if (memberGroupsRes.error) {
+        memberErr = memberGroupsRes.error;
+      } else {
+        memberGroups = (memberGroupsRes.data ?? []) as Group[];
+      }
+    }
+
+    if (memberErr && ownedErr) {
       setError("تعذر جلب المجموعات");
       setLoadingGroups(false);
       return;
     }
 
-    const list: Group[] = (data ?? [])
-      .map((row: any) => row.groups)
-      .filter(Boolean);
+    const list = mergeGroups([
+      ...memberGroups,
+      ...((ownedData ?? []) as Group[]),
+    ]);
 
     setGroups(list);
     setLoadingGroups(false);
 
-    // open initialGroup if provided
     if (initialGroupId) {
-      const target = list.find((g) => g.id === initialGroupId);
+      const target = list.find((group) => group.id === initialGroupId);
       if (target) setActiveGroup(target);
     }
   };
 
-  // ── fetch messages for active group ──
-  useEffect(() => {
-    if (!activeGroup) return;
-    fetchMessages(activeGroup.id);
-    subscribeRealtime(activeGroup.id);
-
-    return () => {
-      realtimeRef.current?.unsubscribe();
-    };
-  }, [activeGroup?.id]);
-
   const fetchMessages = async (groupId: string) => {
     setLoadingMsgs(true);
-    const { data, error: err } = await supabase
+
+    let data: any[] | null = null;
+    let err: { message?: string } | null = null;
+
+    const primary = await supabase
       .from("messages")
-      .select("id, group_id, sender_id, content, created_at")
+      .select("id, group_id, user_id, text, created_at")
       .eq("group_id", groupId)
       .order("created_at", { ascending: true })
       .limit(200);
+
+    data = primary.data;
+    err = primary.error;
+
+    if (err) {
+      const fallback = await supabase
+        .from("messages")
+        .select("id, group_id, sender_id, content, created_at")
+        .eq("group_id", groupId)
+        .order("created_at", { ascending: true })
+        .limit(200);
+
+      data = fallback.data;
+      err = fallback.error;
+    }
 
     if (err) {
       setError("تعذر جلب الرسائل");
@@ -166,7 +229,7 @@ export default function ChatPage({
       return;
     }
 
-    setMessages(data ?? []);
+    setMessages((data ?? []).map(normalizeMessage));
     setLoadingMsgs(false);
     setTimeout(
       () => bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
@@ -188,9 +251,9 @@ export default function ChatPage({
           filter: `group_id=eq.${groupId}`,
         },
         (payload) => {
-          const newMsg = payload.new as Message;
+          const newMsg = normalizeMessage(payload.new);
           setMessages((prev) => {
-            if (prev.find((m) => m.id === newMsg.id)) return prev;
+            if (prev.find((message) => message.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
           setTimeout(
@@ -202,22 +265,75 @@ export default function ChatPage({
       .subscribe();
   };
 
-  // ── send message ──
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!msgText.trim() || !activeGroup || !me) return;
 
     const content = msgText.trim();
     setMsgText("");
+    setError("");
 
-    const { error: err } = await supabase.from("messages").insert({
-      group_id: activeGroup.id,
-      sender_id: me.id,
-      content,
-    });
+    let err: { message?: string } | null = null;
+    let savedRow: any = null;
 
-    if (err) setError("تعذر إرسال الرسالة");
+    const primary = await supabase
+      .from("messages")
+      .insert({
+        group_id: activeGroup.id,
+        user_id: me.id,
+        text: content,
+      })
+      .select("id, group_id, user_id, text, created_at")
+      .single();
+
+    err = primary.error;
+    savedRow = primary.data;
+
+    if (err) {
+      const fallback = await supabase
+        .from("messages")
+        .insert({
+          group_id: activeGroup.id,
+          sender_id: me.id,
+          content,
+        })
+        .select("id, group_id, sender_id, content, created_at")
+        .single();
+
+      err = fallback.error;
+      savedRow = fallback.data;
+    }
+
+    if (err) {
+      setError("تعذر إرسال الرسالة");
+      setMsgText(content);
+      return;
+    }
+
+    if (savedRow) {
+      const sentMessage = normalizeMessage(savedRow);
+      setMessages((prev) => {
+        if (prev.find((message) => message.id === sentMessage.id)) return prev;
+        return [...prev, sentMessage];
+      });
+      setTimeout(
+        () => bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
+        60,
+      );
+    } else {
+      fetchMessages(activeGroup.id);
+    }
   };
+
+  useEffect(() => {
+    if (!activeGroup) return;
+    fetchMessages(activeGroup.id);
+    subscribeRealtime(activeGroup.id);
+
+    return () => {
+      realtimeRef.current?.unsubscribe();
+    };
+  }, [activeGroup?.id]);
 
   // ── create group ──
   const createGroup = async () => {
@@ -263,22 +379,26 @@ export default function ChatPage({
       return;
     }
 
-    const createdGroup = grp;
+    const createdGroup: Group = {
+      ...grp,
+      avatar_url: groupImage ?? grp.avatar_url ?? null,
+    };
 
     const { error: memberErr } = await supabase
       .from("group_members")
       .insert({ group_id: createdGroup.id, user_id: me.id });
 
     if (memberErr) {
-      setError(memberErr.message || "تم إنشاء القروب لكن تعذر إضافتك إليه");
-      setCreating(false);
-      return;
+      setError(
+        memberErr.message || "تم إنشاء القروب لكن تعذر ربطه بعضويتك تلقائيًا",
+      );
     }
 
     setCreating(false);
     setSuccessMsg(`✅ تم إنشاء قروب "${createdGroup.name}" بنجاح!`);
     setNewGroupName("");
     setGroupImage(null);
+    setGroups((prev) => mergeGroups([createdGroup, ...prev]));
     await fetchGroups();
 
     setTimeout(() => {
@@ -300,6 +420,12 @@ export default function ChatPage({
       /* ignore */
     }
     e.target.value = "";
+  };
+
+  const closeChat = () => {
+    setShowNewDM(false);
+    setShowNewGroup(false);
+    onClose?.();
   };
 
   // ── create DM (private group of 2) ──
@@ -325,7 +451,7 @@ export default function ChatPage({
     // check if DM already exists
     const { data: existing } = await supabase
       .from("groups")
-      .select("id, name, is_private, created_at")
+      .select("id, name, is_private")
       .eq("name", dmName)
       .single();
 
@@ -370,6 +496,92 @@ export default function ChatPage({
     return parts.length >= 3 ? `دردشة خاصة` : g.name;
   };
 
+  const filteredGroups = groups.filter((group) =>
+    friendlyName(group)
+      .toLowerCase()
+      .includes(groupSearch.trim().toLowerCase()),
+  );
+
+  const showInlineEmptyState =
+    !activeGroup &&
+    !showNewGroup &&
+    !showNewDM &&
+    !loadingGroups &&
+    filteredGroups.length === 0;
+
+  useEffect(() => {
+    const root = chatRootRef.current;
+    if (!root) return;
+
+    const body = document.body;
+    const html = document.documentElement;
+    const scrollY = window.scrollY;
+
+    const prevBodyOverflow = body.style.overflow;
+    const prevBodyPosition = body.style.position;
+    const prevBodyTop = body.style.top;
+    const prevBodyLeft = body.style.left;
+    const prevBodyRight = body.style.right;
+    const prevBodyWidth = body.style.width;
+    const prevHtmlOverflow = html.style.overflow;
+
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    html.style.overflow = "hidden";
+
+    const viewport = window.visualViewport;
+    const baseHeight = viewport?.height ?? window.innerHeight;
+
+    const updateKeyboardOffset = () => {
+      const visibleHeight = viewport?.height ?? window.innerHeight;
+      const offsetTop = viewport?.offsetTop ?? 0;
+      const keyboardOffset = Math.max(
+        0,
+        baseHeight - (visibleHeight + offsetTop),
+      );
+
+      root.style.setProperty("--keyboard-offset", `${keyboardOffset}px`);
+    };
+
+    updateKeyboardOffset();
+
+    viewport?.addEventListener("resize", updateKeyboardOffset);
+    viewport?.addEventListener("scroll", updateKeyboardOffset);
+
+    return () => {
+      viewport?.removeEventListener("resize", updateKeyboardOffset);
+      viewport?.removeEventListener("scroll", updateKeyboardOffset);
+      root.style.setProperty("--keyboard-offset", "0px");
+
+      body.style.overflow = prevBodyOverflow;
+      body.style.position = prevBodyPosition;
+      body.style.top = prevBodyTop;
+      body.style.left = prevBodyLeft;
+      body.style.right = prevBodyRight;
+      body.style.width = prevBodyWidth;
+      html.style.overflow = prevHtmlOverflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
+  const renderGroupAvatar = (group: Group) => {
+    if (group.avatar_url) {
+      return (
+        <img
+          src={group.avatar_url}
+          alt={friendlyName(group)}
+          className={styles.groupAvatarImg}
+        />
+      );
+    }
+
+    return group.is_private ? "👤" : <Users size={16} />;
+  };
+
   // ────────────────────────────── Render ──────────────────────────────
   if (!me) {
     return (
@@ -380,162 +592,172 @@ export default function ChatPage({
   }
 
   return (
-    <div className={styles.chatRoot} dir="rtl">
-      {/* ── Sidebar ── */}
-      <aside
-        className={`${styles.sidebar} ${activeGroup ? styles.sidebarHidden : ""}`}
-      >
-        <header className={styles.sidebarHeader}>
-          <h2 className={styles.sidebarTitle}>الدردشة</h2>
-          <div className={styles.sidebarActions}>
-            <button
-              className={styles.iconBtn}
-              title="دردشة جديدة"
-              onClick={() => setShowNewDM(true)}
-            >
-              <MessageCirclePlus size={20} />
-            </button>
-            {/* Dropdown: إنشاء قروب / القروبات */}
-            <div className={styles.dropWrap}>
-              <button
-                className={styles.dropTrigger}
-                onClick={() => setShowDropdown((p) => !p)}
-              >
-                <Users size={16} />
-                <span>القروبات</span>
-                <ChevronDown size={13} />
-              </button>
-              {showDropdown && (
-                <>
-                  <div
-                    className={styles.dropOverlay}
-                    onClick={() => setShowDropdown(false)}
-                  />
-                  <div className={styles.dropMenu}>
-                    <button
-                      className={styles.dropItem}
-                      onClick={() => {
-                        setShowDropdown(false);
-                        setActiveGroup(null);
-                        setShowNewGroup(true);
-                      }}
-                    >
-                      <Plus size={15} /> إنشاء قروب
-                    </button>
-                    <button
-                      className={styles.dropItem}
-                      onClick={() => {
-                        setShowDropdown(false);
-                        setActiveGroup(null);
-                      }}
-                    >
-                      <Users size={15} /> القروبات
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </header>
-
-        {error && <p className={styles.errBanner}>{error}</p>}
-
-        {loadingGroups ? (
-          <p className={styles.loadingText}>جاري التحميل...</p>
-        ) : groups.length === 0 ? (
-          <p className={styles.emptyText}>لا توجد محادثات بعد</p>
-        ) : (
-          <ul className={styles.groupList}>
-            {groups.map((g) => (
-              <li
-                key={g.id}
-                className={`${styles.groupItem} ${activeGroup?.id === g.id ? styles.groupItemActive : ""}`}
-                onClick={() => setActiveGroup(g)}
-              >
-                <div className={styles.groupAvatar}>
-                  {g.is_private ? "👤" : <Users size={16} />}
-                </div>
-                <div className={styles.groupInfo}>
-                  <span className={styles.groupName}>{friendlyName(g)}</span>
-                  {g.last_message && (
-                    <span className={styles.groupLastMsg}>
-                      {g.last_message}
-                    </span>
-                  )}
-                </div>
-                {(g.unread ?? 0) > 0 && (
-                  <span className={styles.unreadBadge}>{g.unread}</span>
-                )}
-              </li>
-            ))}
-          </ul>
+    <div className={styles.chatOverlay} dir="rtl">
+      <div ref={chatRootRef} className={styles.chatRoot}>
+        {!activeGroup && (
+          <button className={styles.closeChatBtn} onClick={closeChat}>
+            <X size={18} />
+          </button>
         )}
-      </aside>
 
-      {/* ── Chat Window ── */}
-      {activeGroup && (
-        <section className={styles.chatWindow}>
-          <header className={styles.chatHeader}>
-            <button
-              className={styles.backBtn}
-              onClick={() => setActiveGroup(null)}
-            >
-              <ArrowRight size={20} />
-            </button>
-            <span className={styles.chatTitle}>
-              {friendlyName(activeGroup)}
-            </span>
+        {/* ── Sidebar ── */}
+        <aside className={styles.sidebar}>
+          <header className={styles.sidebarHeader}>
+            <h2 className={styles.sidebarTitle}>الدردشة</h2>
           </header>
 
-          <div className={styles.messages}>
-            {loadingMsgs ? (
-              <p className={styles.loadingText}>جاري تحميل الرسائل...</p>
-            ) : messages.length === 0 ? (
-              <p className={styles.emptyText}>لا توجد رسائل بعد، كن الأول!</p>
-            ) : (
-              messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`${styles.msgBubble} ${msg.sender_id === me.id ? styles.msgMine : styles.msgOther}`}
-                >
-                  {msg.sender_id !== me.id && (
-                    <span className={styles.msgSender}>
-                      {msg.sender_name ?? msg.sender_id.slice(0, 6)}
-                    </span>
-                  )}
-                  <p className={styles.msgContent}>{msg.content}</p>
-                  <span className={styles.msgTime}>
-                    {new Date(msg.created_at).toLocaleTimeString("ar", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                  {msg.sender_id === me.id && (
-                    <Check size={12} className={styles.msgCheck} />
-                  )}
-                </div>
-              ))
-            )}
-            <div ref={bottomRef} />
+          <div className={styles.searchRow}>
+            <input
+              className={styles.searchInput}
+              placeholder="بحث"
+              value={groupSearch}
+              onChange={(e) => setGroupSearch(e.target.value)}
+            />
           </div>
 
-          <form className={styles.inputRow} onSubmit={sendMessage}>
-            <input
-              className={styles.msgInput}
-              placeholder="اكتب رسالة..."
-              value={msgText}
-              onChange={(e) => setMsgText(e.target.value)}
-            />
-            <button
-              type="submit"
-              className={styles.sendBtn}
-              disabled={!msgText.trim()}
-            >
-              <Send size={18} />
-            </button>
-          </form>
-        </section>
-      )}
+          {error && <p className={styles.errBanner}>{error}</p>}
+
+          {loadingGroups ? (
+            <p className={styles.loadingText}>جاري التحميل...</p>
+          ) : filteredGroups.length === 0 ? (
+            <div className={styles.sidebarEmptyState}>
+              <button
+                type="button"
+                className={styles.createGroupBtn}
+                onClick={() => setShowNewGroup(true)}
+              >
+                <Plus size={18} />
+                <span>إنشاء قروب</span>
+              </button>
+              <p className={styles.emptyText}>
+                اختر قروبًا من القائمة أو أنشئ قروبًا جديدًا
+              </p>
+            </div>
+          ) : (
+            <ul className={styles.groupList}>
+              {filteredGroups.map((g) => (
+                <li
+                  key={g.id}
+                  className={`${styles.groupItem} ${activeGroup?.id === g.id ? styles.groupItemActive : ""}`}
+                  onClick={() => setActiveGroup(g)}
+                >
+                  <div className={styles.groupAvatar}>
+                    {renderGroupAvatar(g)}
+                  </div>
+                  <div className={styles.groupInfo}>
+                    <span className={styles.groupName}>{friendlyName(g)}</span>
+                    {g.last_message && (
+                      <span className={styles.groupLastMsg}>
+                        {g.last_message}
+                      </span>
+                    )}
+                  </div>
+                  {(g.unread ?? 0) > 0 && (
+                    <span className={styles.unreadBadge}>{g.unread}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {!showInlineEmptyState && (
+            <div className={styles.sidebarFooter}>Xtik</div>
+          )}
+        </aside>
+
+        {/* ── Chat Window ── */}
+        {activeGroup && (
+          <section className={styles.chatWindow}>
+            <header className={styles.chatHeader}>
+              <button
+                className={styles.backBtn}
+                onClick={() => setActiveGroup(null)}
+              >
+                <ArrowRight size={20} />
+              </button>
+              <div className={styles.chatIdentity}>
+                <div className={styles.chatGroupAvatar}>
+                  {renderGroupAvatar(activeGroup)}
+                </div>
+                <span className={styles.chatTitle}>
+                  {friendlyName(activeGroup)}
+                </span>
+              </div>
+              <div className={styles.chatHeaderActions}>
+                <button
+                  type="button"
+                  className={styles.iconBtn}
+                  title="إضافة عضو"
+                >
+                  <UserPlus size={18} />
+                </button>
+                <button
+                  type="button"
+                  className={styles.iconBtn}
+                  title="إغلاق الدردشة"
+                  onClick={closeChat}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </header>
+
+            <div className={styles.messages}>
+              {loadingMsgs ? (
+                <p className={styles.loadingText}>جاري تحميل الرسائل...</p>
+              ) : messages.length === 0 ? (
+                <p className={styles.emptyText}>لا توجد رسائل بعد، كن الأول!</p>
+              ) : (
+                messages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`${styles.msgBubble} ${msg.sender_id === me.id ? styles.msgMine : styles.msgOther}`}
+                  >
+                    {msg.sender_id !== me.id && (
+                      <span className={styles.msgSender}>
+                        {msg.sender_name ?? msg.sender_id.slice(0, 6)}
+                      </span>
+                    )}
+                    <p className={styles.msgContent}>{msg.content}</p>
+                    <span className={styles.msgTime}>
+                      {new Date(msg.created_at).toLocaleTimeString("ar", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    {msg.sender_id === me.id && (
+                      <Check size={12} className={styles.msgCheck} />
+                    )}
+                  </div>
+                ))
+              )}
+              <div ref={bottomRef} />
+            </div>
+
+            <form className={styles.inputRow} onSubmit={sendMessage}>
+              <div className={styles.msgComposer}>
+                <button type="button" className={styles.attachBtn}>
+                  <Plus size={18} />
+                </button>
+                <input
+                  className={styles.msgInput}
+                  placeholder="اكتب رسالة..."
+                  value={msgText}
+                  onChange={(e) => setMsgText(e.target.value)}
+                />
+              </div>
+              <button
+                type="submit"
+                className={styles.shootBtn}
+                disabled={!msgText.trim()}
+              >
+                <Camera size={17} />
+                <span>شوت</span>
+              </button>
+            </form>
+          </section>
+        )}
+      </div>
 
       {/* ── New Group Modal ── */}
       {showNewGroup && (
@@ -557,8 +779,7 @@ export default function ChatPage({
               </div>
             ) : (
               <>
-                <div className={styles.modalHeader}>
-                  <span>إنشاء قروب جديد</span>
+                <div className={styles.modalHeaderCentered}>
                   <button
                     className={styles.iconBtn}
                     onClick={() => {
@@ -569,43 +790,49 @@ export default function ChatPage({
                   >
                     <X size={18} />
                   </button>
+                  <span>انشاء قروب جديد</span>
+                  <span className={styles.modalGhostBtn} />
                 </div>
 
-                {/* Group image picker */}
-                <div className={styles.groupImgWrap}>
-                  <button
-                    type="button"
-                    className={styles.groupImgBtn}
-                    onClick={() => imageRef.current?.click()}
-                  >
-                    {groupImage ? (
-                      <img
-                        src={groupImage}
-                        alt="group"
-                        className={styles.groupImgPreview}
-                      />
-                    ) : (
-                      <Camera size={28} className={styles.groupImgIcon} />
-                    )}
-                  </button>
-                  <span className={styles.groupImgLabel}>اضافة صورة</span>
-                  <input
-                    ref={imageRef}
-                    type="file"
-                    accept="image/*"
-                    style={{ display: "none" }}
-                    onChange={handleGroupImageChange}
-                  />
+                <div className={styles.groupCreatorLayout}>
+                  <div className={styles.groupCreatorMain}>
+                    <input
+                      className={styles.modalInput}
+                      placeholder="اسم القروب"
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && createGroup()}
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className={styles.groupImgWrap}>
+                    <button
+                      type="button"
+                      className={styles.groupImgBtn}
+                      onClick={() => imageRef.current?.click()}
+                    >
+                      {groupImage ? (
+                        <img
+                          src={groupImage}
+                          alt="group"
+                          className={styles.groupImgPreview}
+                        />
+                      ) : (
+                        <Plus size={34} className={styles.groupImgIcon} />
+                      )}
+                    </button>
+                    <span className={styles.groupImgLabel}>اضافة صورة</span>
+                    <input
+                      ref={imageRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={handleGroupImageChange}
+                    />
+                  </div>
                 </div>
 
-                <input
-                  className={styles.modalInput}
-                  placeholder="اسم القروب"
-                  value={newGroupName}
-                  onChange={(e) => setNewGroupName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && createGroup()}
-                  autoFocus
-                />
                 <button
                   className={styles.modalBtn}
                   onClick={createGroup}

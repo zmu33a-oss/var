@@ -1,10 +1,11 @@
 ﻿/* ProfilePage */
 .page {
-  min-height: 100vh;
+  min-height: 100dvh;
   background: #000;
   color: #e7e9ea;
-  padding-bottom: 100px;
-  max-width: 600px;
+  padding-bottom: calc(100px + env(safe-area-inset-bottom));
+  width: min(100%, 430px);
+  max-width: 430px;
   margin: 0 auto;
   direction: rtl;
 }
@@ -62,14 +63,36 @@
   margin-bottom: 4px;
   transition: border-color 0.15s;
 }
-.editBtn:hover { border-color: #e7e9ea; }
+.editBtn:hover {
+  border-color: #e7e9ea;
+}
 
-.nameSection { padding: 4px 16px 14px; }
-.displayName { margin: 0 0 3px; font-size: 20px; font-weight: 800; color: #e7e9ea; }
-.usernameText { color: #71767b; font-size: 14px; margin: 0 0 10px; }
-.bioText { color: #e7e9ea; font-size: 15px; margin: 0 0 8px; line-height: 1.55; }
+.nameSection {
+  padding: 4px 16px 14px;
+}
+.displayName {
+  margin: 0 0 3px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #e7e9ea;
+}
+.usernameText {
+  color: #71767b;
+  font-size: 14px;
+  margin: 0 0 10px;
+}
+.bioText {
+  color: #e7e9ea;
+  font-size: 15px;
+  margin: 0 0 8px;
+  line-height: 1.55;
+}
 
-.metaRow { display: flex; gap: 14px; flex-wrap: wrap; }
+.metaRow {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
 .metaItem {
   display: inline-flex;
   align-items: center;
@@ -95,11 +118,25 @@
   justify-content: center;
   cursor: pointer;
 }
-.stat:hover strong { color: #1d9bf0; }
-.stat strong { font-size: 17px; font-weight: 800; color: #e7e9ea; transition: color 0.15s; }
-.stat span { font-size: 13px; color: #71767b; }
+.stat:hover strong {
+  color: #1d9bf0;
+}
+.stat strong {
+  font-size: 17px;
+  font-weight: 800;
+  color: #e7e9ea;
+  transition: color 0.15s;
+}
+.stat span {
+  font-size: 13px;
+  color: #71767b;
+}
 
-.statDiv { width: 1px; height: 28px; background: #1c1c1c; }
+.statDiv {
+  width: 1px;
+  height: 28px;
+  background: #1c1c1c;
+}
 
 .galleryGrid {
   display: grid;
@@ -120,7 +157,7 @@
   width: 100%;
   padding: 12px 16px;
   background: transparent;
-  border: 1px solid rgba(255,60,60,0.4);
+  border: 1px solid rgba(255, 60, 60, 0.4);
   color: #ff6b6b;
   border-radius: 12px;
   cursor: pointer;
@@ -128,15 +165,20 @@
   font-family: inherit;
   font-weight: 600;
   margin-top: 20px;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
-.signOutBtn:hover { border-color: #ff4444; background: rgba(255,60,60,0.07); }
+.signOutBtn:hover {
+  border-color: #ff4444;
+  background: rgba(255, 60, 60, 0.07);
+}
 
 /* ── Modal ── */
 .modalBackdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.75);
+  background: rgba(0, 0, 0, 0.75);
   z-index: 9000;
   display: flex;
   align-items: flex-end;
@@ -147,18 +189,26 @@
   background: #16181c;
   border-radius: 20px 20px 0 0;
   width: 100%;
-  max-width: 600px;
-  max-height: 92vh;
+  max-width: 430px;
+  max-height: 92dvh;
   overflow-y: auto;
   padding-bottom: 40px;
   direction: rtl;
-  animation: slideUp 0.3s cubic-bezier(0.22,1,0.36,1);
+  animation: slideUp 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.modal::-webkit-scrollbar { display: none; }
+.modal::-webkit-scrollbar {
+  display: none;
+}
 
 @keyframes slideUp {
-  from { transform: translateY(100%); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .modalHeader {
@@ -172,7 +222,12 @@
   background: #16181c;
   z-index: 1;
 }
-.modalHeader h3 { margin: 0; font-size: 17px; font-weight: 800; color: #e7e9ea; }
+.modalHeader h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: #e7e9ea;
+}
 
 .closeBtn {
   background: transparent;
@@ -187,7 +242,9 @@
   border-radius: 50%;
   transition: background 0.15s;
 }
-.closeBtn:hover { background: rgba(255,255,255,0.1); }
+.closeBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
 
 .saveBtnHeader {
   background: transparent;
@@ -201,8 +258,13 @@
   border-radius: 6px;
   transition: background 0.15s;
 }
-.saveBtnHeader:disabled { opacity: 0.5; cursor: not-allowed; }
-.saveBtnHeader:hover:not(:disabled) { background: rgba(29,155,240,0.1); }
+.saveBtnHeader:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.saveBtnHeader:hover:not(:disabled) {
+  background: rgba(29, 155, 240, 0.1);
+}
 
 .modalAvatarWrap {
   display: flex;
@@ -222,7 +284,9 @@
   background: transparent;
   overflow: hidden;
 }
-.modalAvatarBtn:disabled { cursor: not-allowed; }
+.modalAvatarBtn:disabled {
+  cursor: not-allowed;
+}
 
 .modalAvatarImg {
   width: 86px;
@@ -250,7 +314,7 @@
 .modalCamOverlay {
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -258,19 +322,27 @@
   border-radius: 50%;
 }
 
-.changePhotoHint { margin: 8px 0 0; font-size: 12px; color: #1d9bf0; }
+.changePhotoHint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #1d9bf0;
+}
 
 .modalMsg {
   margin: 0 16px 8px;
   padding: 9px 12px;
-  background: rgba(29,155,240,0.1);
+  background: rgba(29, 155, 240, 0.1);
   border-radius: 8px;
   color: #1d9bf0;
   font-size: 13px;
   text-align: center;
 }
 
-.fieldList { padding: 0 16px; display: flex; flex-direction: column; }
+.fieldList {
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+}
 
 .fieldWrap {
   display: flex;
@@ -281,9 +353,15 @@
   cursor: text;
 }
 
-.fieldReadonly { opacity: 0.45; }
+.fieldReadonly {
+  opacity: 0.45;
+}
 
-.fieldLabel { font-size: 12px; color: #71767b; font-weight: 600; }
+.fieldLabel {
+  font-size: 12px;
+  color: #71767b;
+  font-weight: 600;
+}
 
 .fieldInput {
   background: transparent;
@@ -297,15 +375,21 @@
   width: 100%;
   padding: 0;
 }
-.fieldInput::placeholder { color: #3d4144; }
+.fieldInput::placeholder {
+  color: #3d4144;
+}
 
 .spinner {
   width: 20px;
   height: 20px;
-  border: 2px solid rgba(255,255,255,0.3);
+  border: 2px solid rgba(255, 255, 255, 0.3);
   border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   display: block;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

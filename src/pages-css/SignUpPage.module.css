@@ -4,7 +4,9 @@
 
 .container {
   background: #000;
-  min-height: 100vh;
+  min-height: 100dvh;
+  width: min(100%, 430px);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -13,6 +15,8 @@
   color: #00ff2a;
   position: relative;
   overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
+  box-sizing: border-box;
 }
 
 /* خط المسح المتحرك */
@@ -142,7 +146,7 @@
 
 /* صندوق الإدخال */
 .form {
-  width: min(62%, 300px);
+  width: min(86vw, 300px);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -296,6 +300,7 @@
   display: flex;
   justify-content: center;
   gap: 28px;
+  flex-wrap: wrap;
 }
 
 .linkBtn {

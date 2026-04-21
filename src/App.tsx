@@ -18,6 +18,7 @@ type AuthMode = "login" | "signup";
 // ─── الجزء الداخلي للتطبيق — يستطيع استخدام useAuth ─────────────────────────
 function AppContent() {
   const [tab, setTab] = useState<TabType>("home");
+  const [chatBaseTab, setChatBaseTab] = useState<TabType>("home");
   const [mode, setMode] = useState<HomeMode>("tiktok");
   const [chatComposer, setChatComposer] = useState<ChatComposer>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
@@ -54,9 +55,12 @@ function AppContent() {
       setTab("account");
       return;
     }
+    setChatBaseTab(tab === "chat" ? chatBaseTab : tab);
     setChatComposer(composer);
     setTab("chat");
   };
+
+  const visibleTab = tab === "chat" ? chatBaseTab : tab;
 
   // شاشة تحميل خفيفة ريثما يُحدد وضع الجلسة
   if (loading) {
@@ -67,7 +71,7 @@ function AppContent() {
     <div
       style={{ paddingBottom: "90px", background: "#000", minHeight: "100vh" }}
     >
-      {tab === "home" && (
+      {visibleTab === "home" && (
         <ThemeSwitch
           currentTab={mode === "tiktok" ? "home" : "x"}
           setTab={(value) => {
@@ -78,13 +82,13 @@ function AppContent() {
         />
       )}
 
-      {tab === "home" && mode === "tiktok" && (
+      {visibleTab === "home" && mode === "tiktok" && (
         <div style={{ width: "100%", minHeight: "100vh", background: "#000" }}>
           <TikTokPage />
         </div>
       )}
 
-      {tab === "home" && mode === "x" && (
+      {visibleTab === "home" && mode === "x" && (
         <div
           style={{
             width: "100%",
@@ -98,10 +102,12 @@ function AppContent() {
         </div>
       )}
 
-      {tab === "fans" && <FansPage />}
-      {tab === "leagues" && <LeaguesPage />}
-      {tab === "profile" && <ProfilePage onSignOut={() => setTab("home")} />}
-      {tab === "account" && authMode === "login" && (
+      {visibleTab === "fans" && <FansPage />}
+      {visibleTab === "leagues" && <LeaguesPage />}
+      {visibleTab === "profile" && (
+        <ProfilePage onSignOut={() => setTab("home")} />
+      )}
+      {visibleTab === "account" && authMode === "login" && (
         <LoginPage
           isRecovery={isRecovery}
           onSuccess={() => {
@@ -115,7 +121,7 @@ function AppContent() {
           onGoToSignup={() => setAuthMode("signup")}
         />
       )}
-      {tab === "account" && authMode === "signup" && (
+      {visibleTab === "account" && authMode === "signup" && (
         <SignUpPage
           onGoToLogin={() => setAuthMode("login")}
           onSuccess={() => {
@@ -123,10 +129,18 @@ function AppContent() {
           }}
         />
       )}
-      {tab === "chat" && <ChatPage initialComposer={chatComposer} />}
+      {tab === "chat" && (
+        <ChatPage
+          initialComposer={chatComposer}
+          onClose={() => {
+            setChatComposer(null);
+            setTab(chatBaseTab);
+          }}
+        />
+      )}
 
       <BottomNav
-        current={tab === "profile" ? "account" : tab}
+        current={visibleTab === "profile" ? "account" : visibleTab}
         setTab={(nextTab) => {
           // لو مسجّل دخول وضغط الحساب → روّح للبروفايل مباشرة
           if (nextTab === "account" && user) {
@@ -139,6 +153,7 @@ function AppContent() {
             return;
           }
           if (nextTab !== "chat") setChatComposer(null);
+          if (nextTab !== "chat") setChatBaseTab(nextTab);
           setTab(nextTab);
         }}
       />

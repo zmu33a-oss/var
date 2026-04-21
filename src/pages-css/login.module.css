@@ -1,6 +1,8 @@
 ﻿.splashScreen {
   background: #000;
-  min-height: 100vh;
+  min-height: 100dvh;
+  width: min(100%, 430px);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -53,7 +55,9 @@
 
 .container {
   background: #000;
-  min-height: 100vh;
+  min-height: 100dvh;
+  width: min(100%, 430px);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -62,6 +66,8 @@
   color: #00ff2a;
   position: relative;
   overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
+  box-sizing: border-box;
 }
 
 .audioBtn {
@@ -135,7 +141,7 @@
 
 /* صندوق الانبتات */
 .inputBoxContainer {
-  width: min(62%, 280px);
+  width: min(86vw, 280px);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -291,6 +297,7 @@
   justify-content: center;
   gap: 24px;
   z-index: 3;
+  flex-wrap: wrap;
 }
 
 .linkBtn {

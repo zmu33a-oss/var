@@ -1,8 +1,9 @@
 .bottom-nav {
   position: fixed;
   bottom: 0;
-  left: 0;
-  width: 100%; /* عرض كامل */
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100%, 430px);
   height: 46px; /* ارتفاع الناف */
   background: #000000;
   border-top: none;

@@ -13,7 +13,26 @@ const GALLERY = [
   "https://images.unsplash.com/photo-1521412644187-c49fa049e84d?w=400&q=80",
 ];
 
-interface Props { onSignOut?: () => void; }
+interface Props {
+  onSignOut?: () => void;
+}
+
+async function saveUserProfileFields(
+  userId: string,
+  payload: Record<string, unknown>,
+) {
+  const existing = await supabase
+    .from("users")
+    .select("id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (existing.data?.id) {
+    return supabase.from("users").update(payload).eq("id", userId);
+  }
+
+  return supabase.from("users").insert({ id: userId, ...payload });
+}
 
 export default function ProfilePage({ onSignOut }: Props) {
   const { user, profile, signOut, refreshProfile } = useAuth();
@@ -36,7 +55,10 @@ export default function ProfilePage({ onSignOut }: Props) {
   const location = profile?.location ?? "";
   const avatarUrl = profile?.avatar_url ?? null;
   const joinDate = profile?.created_at
-    ? new Date(profile.created_at).toLocaleDateString("ar", { year: "numeric", month: "long" })
+    ? new Date(profile.created_at).toLocaleDateString("ar", {
+        year: "numeric",
+        month: "long",
+      })
     : "";
 
   const openEdit = () => {
@@ -51,19 +73,17 @@ export default function ProfilePage({ onSignOut }: Props) {
   const saveEdit = async () => {
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase.from("users").upsert(
-      {
-        id: user.id,
-        full_name: editName.trim() || null,
-        bio: editBio.trim() || null,
-        phone: editPhone.trim() || null,
-        location: editLocation.trim() || null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" }
-    );
+    const { error } = await saveUserProfileFields(user.id, {
+      full_name: editName.trim() || null,
+      bio: editBio.trim() || null,
+      phone: editPhone.trim() || null,
+      location: editLocation.trim() || null,
+    });
     setSaving(false);
-    if (error) { setMsg("خطأ: " + error.message); return; }
+    if (error) {
+      setMsg("خطأ: " + error.message);
+      return;
+    }
     await refreshProfile();
     setShowEdit(false);
   };
@@ -72,17 +92,20 @@ export default function ProfilePage({ onSignOut }: Props) {
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-    if (file.size > 15 * 1024 * 1024) { setMsg("الصورة أكبر من 15MB"); return; }
+    if (file.size > 15 * 1024 * 1024) {
+      setMsg("الصورة أكبر من 15MB");
+      return;
+    }
     setUploading(true);
     setMsg("جاري معالجة الصورة...");
     try {
       const dataUrl = await resizeImage(file, 400, 0.85);
-      const { error } = await supabase.from("users").upsert(
-        { id: user.id, avatar_url: dataUrl, updated_at: new Date().toISOString() },
-        { onConflict: "id" }
-      );
-      if (error) { setMsg("فشل الحفظ: " + error.message); }
-      else {
+      const { error } = await saveUserProfileFields(user.id, {
+        avatar_url: dataUrl,
+      });
+      if (error) {
+        setMsg("فشل الحفظ: " + error.message);
+      } else {
         await refreshProfile();
         setMsg("تم تحديث الصورة ✅");
         setTimeout(() => setMsg(""), 3000);
@@ -94,7 +117,10 @@ export default function ProfilePage({ onSignOut }: Props) {
     e.target.value = "";
   };
 
-  const handleSignOut = async () => { await signOut(); onSignOut?.(); };
+  const handleSignOut = async () => {
+    await signOut();
+    onSignOut?.();
+  };
 
   return (
     <main className={styles.page}>
@@ -106,7 +132,9 @@ export default function ProfilePage({ onSignOut }: Props) {
         {avatarUrl ? (
           <img src={avatarUrl} alt="avatar" className={styles.avatarImg} />
         ) : (
-          <div className={styles.avatarFallback}>{displayName[0]?.toUpperCase()}</div>
+          <div className={styles.avatarFallback}>
+            {displayName[0]?.toUpperCase()}
+          </div>
         )}
         <div style={{ flex: 1 }} />
         <button type="button" className={styles.editBtn} onClick={openEdit}>
@@ -120,18 +148,35 @@ export default function ProfilePage({ onSignOut }: Props) {
         <p className={styles.usernameText}>{username}</p>
         {bio && <p className={styles.bioText}>{bio}</p>}
         <div className={styles.metaRow}>
-          {location && <span className={styles.metaItem}><MapPin size={13} /> {location}</span>}
-          {joinDate && <span className={styles.metaItem}><Calendar size={13} /> {joinDate}</span>}
+          {location && (
+            <span className={styles.metaItem}>
+              <MapPin size={13} /> {location}
+            </span>
+          )}
+          {joinDate && (
+            <span className={styles.metaItem}>
+              <Calendar size={13} /> {joinDate}
+            </span>
+          )}
         </div>
       </div>
 
       {/* Stats */}
       <div className={styles.statsRow}>
-        <div className={styles.stat}><strong>0</strong><span>متابع</span></div>
+        <div className={styles.stat}>
+          <strong>0</strong>
+          <span>متابع</span>
+        </div>
         <div className={styles.statDiv} />
-        <div className={styles.stat}><strong>0</strong><span>يتابع</span></div>
+        <div className={styles.stat}>
+          <strong>0</strong>
+          <span>يتابع</span>
+        </div>
         <div className={styles.statDiv} />
-        <div className={styles.stat}><strong>0</strong><span>لايك</span></div>
+        <div className={styles.stat}>
+          <strong>0</strong>
+          <span>لايك</span>
+        </div>
       </div>
 
       {/* Gallery */}
@@ -145,17 +190,28 @@ export default function ProfilePage({ onSignOut }: Props) {
 
       {/* Sign out */}
       <div style={{ padding: "0 16px 20px" }}>
-        <button type="button" onClick={handleSignOut} className={styles.signOutBtn}>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className={styles.signOutBtn}
+        >
           <LogOut size={15} /> تسجيل الخروج
         </button>
       </div>
 
       {/* ── Edit Modal ── */}
       {showEdit && (
-        <div className={styles.modalBackdrop} onClick={() => setShowEdit(false)}>
+        <div
+          className={styles.modalBackdrop}
+          onClick={() => setShowEdit(false)}
+        >
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <button type="button" className={styles.closeBtn} onClick={() => setShowEdit(false)}>
+              <button
+                type="button"
+                className={styles.closeBtn}
+                onClick={() => setShowEdit(false)}
+              >
                 <X size={18} />
               </button>
               <h3>تعديل الملف الشخصي</h3>
@@ -178,12 +234,22 @@ export default function ProfilePage({ onSignOut }: Props) {
                 disabled={uploading}
               >
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt="avatar" className={styles.modalAvatarImg} />
+                  <img
+                    src={avatarUrl}
+                    alt="avatar"
+                    className={styles.modalAvatarImg}
+                  />
                 ) : (
-                  <div className={styles.modalAvatarFallback}>{displayName[0]?.toUpperCase()}</div>
+                  <div className={styles.modalAvatarFallback}>
+                    {displayName[0]?.toUpperCase()}
+                  </div>
                 )}
                 <div className={styles.modalCamOverlay}>
-                  {uploading ? <span className={styles.spinner} /> : <Camera size={22} />}
+                  {uploading ? (
+                    <span className={styles.spinner} />
+                  ) : (
+                    <Camera size={22} />
+                  )}
                 </div>
               </button>
               <p className={styles.changePhotoHint}>اضغط لتغيير الصورة</p>
@@ -244,7 +310,11 @@ export default function ProfilePage({ onSignOut }: Props) {
               </label>
               <label className={`${styles.fieldWrap} ${styles.fieldReadonly}`}>
                 <span className={styles.fieldLabel}>الإيميل</span>
-                <input className={styles.fieldInput} value={rawEmail} readOnly />
+                <input
+                  className={styles.fieldInput}
+                  value={rawEmail}
+                  readOnly
+                />
               </label>
             </div>
           </div>
@@ -254,17 +324,32 @@ export default function ProfilePage({ onSignOut }: Props) {
   );
 }
 
-function resizeImage(file: File, maxSize: number, quality: number): Promise<string> {
+function resizeImage(
+  file: File,
+  maxSize: number,
+  quality: number,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const img = new Image();
       img.onload = () => {
-        let w = img.width, h = img.height;
-        if (w > h) { if (w > maxSize) { h = Math.round(h * maxSize / w); w = maxSize; } }
-        else { if (h > maxSize) { w = Math.round(w * maxSize / h); h = maxSize; } }
+        let w = img.width,
+          h = img.height;
+        if (w > h) {
+          if (w > maxSize) {
+            h = Math.round((h * maxSize) / w);
+            w = maxSize;
+          }
+        } else {
+          if (h > maxSize) {
+            w = Math.round((w * maxSize) / h);
+            h = maxSize;
+          }
+        }
         const canvas = document.createElement("canvas");
-        canvas.width = w; canvas.height = h;
+        canvas.width = w;
+        canvas.height = h;
         canvas.getContext("2d")?.drawImage(img, 0, 0, w, h);
         resolve(canvas.toDataURL("image/jpeg", quality));
       };

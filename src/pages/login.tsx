@@ -12,6 +12,29 @@ interface LoginPageProps {
   onGoToSignup?: () => void;
 }
 
+function getAuthErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const lower = message.toLowerCase();
+
+  if (lower.includes("email not confirmed")) {
+    return "يجب تفعيل البريد الإلكتروني أولاً. تفقد بريدك الواردة.";
+  }
+
+  if (lower.includes("invalid login credentials")) {
+    return "الإيميل أو كلمة المرور غير صحيحة.";
+  }
+
+  if (
+    lower.includes("failed to fetch") ||
+    lower.includes("timed out") ||
+    lower.includes("networkerror")
+  ) {
+    return "تعذر الاتصال بخادم تسجيل الدخول. تحقق من الشبكة ثم أعد المحاولة.";
+  }
+
+  return message || "حدث خطأ غير متوقع، حاول مرة أخرى.";
+}
+
 const LoginPage = ({
   onSuccess,
   isRecovery = false,
@@ -98,26 +121,20 @@ const LoginPage = ({
     setIsLoading(true);
     setAuthMessage("");
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-    if (error) {
-      if (error.message.toLowerCase().includes("email not confirmed")) {
-        setAuthMessage(
-          "يجب تفعيل البريد الإلكتروني أولاً. تفقد بريدك الواردة.",
-        );
-      } else if (
-        error.message.toLowerCase().includes("invalid login credentials")
-      ) {
-        setAuthMessage("الإيميل أو كلمة المرور غير صحيحة.");
-      } else {
-        setAuthMessage(error.message);
+      if (error) {
+        setAuthMessage(getAuthErrorMessage(error));
+      } else if (data.user) {
+        setAuthMessage("✅ تم تسجيل الدخول بنجاح");
+        setTimeout(() => onSuccess?.(), 800);
       }
-    } else if (data.user) {
-      setAuthMessage("✅ تم تسجيل الدخول بنجاح");
-      setTimeout(() => onSuccess?.(), 800);
+    } catch (error) {
+      setAuthMessage(getAuthErrorMessage(error));
     }
 
     setIsLoading(false);
@@ -125,19 +142,23 @@ const LoginPage = ({
 
   const signInWithGoogle = async () => {
     setAuthMessage("");
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin + window.location.pathname,
-        queryParams: {
-          access_type: "offline",
-          prompt: "consent",
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin + window.location.pathname,
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
         },
-      },
-    });
+      });
 
-    if (error) {
-      setAuthMessage(error.message);
+      if (error) {
+        setAuthMessage(getAuthErrorMessage(error));
+      }
+    } catch (error) {
+      setAuthMessage(getAuthErrorMessage(error));
     }
   };
 
@@ -151,10 +172,18 @@ const LoginPage = ({
       return;
     }
     setIsLoading(true);
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    let error = null;
+    try {
+      const result = await supabase.auth.updateUser({ password: newPassword });
+      error = result.error;
+    } catch (caughtError) {
+      setIsLoading(false);
+      setAuthMessage(getAuthErrorMessage(caughtError));
+      return;
+    }
     setIsLoading(false);
     if (error) {
-      setAuthMessage(error.message);
+      setAuthMessage(getAuthErrorMessage(error));
     } else {
       setAuthMessage("✅ تم تحديث كلمة المرور بنجاح");
       setTimeout(() => onRecoveryDone?.(), 1200);
@@ -168,14 +197,21 @@ const LoginPage = ({
     }
 
     setAuthMessage("");
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: window.location.origin,
-    });
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        email.trim(),
+        {
+          redirectTo: window.location.origin,
+        },
+      );
 
-    if (error) {
-      setAuthMessage(error.message);
-    } else {
-      setAuthMessage("تم إرسال رابط استعادة كلمة المرور إلى الإيميل");
+      if (error) {
+        setAuthMessage(getAuthErrorMessage(error));
+      } else {
+        setAuthMessage("تم إرسال رابط استعادة كلمة المرور إلى الإيميل");
+      }
+    } catch (error) {
+      setAuthMessage(getAuthErrorMessage(error));
     }
   };
 

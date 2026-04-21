@@ -3,19 +3,22 @@
   top: 0;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1000;
+  z-index: 24;
   background-color: var(--x-blue);
   border-bottom-left-radius: 10px;
-  border-bottom-right-radius:10px;
+  border-bottom-right-radius: 10px;
   box-shadow: 0 7px 7px rgba(255, 255, 255, 0.3);
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.2);
+  width: min(100%, 430px);
+  box-sizing: border-box;
 }
 
 .closed {
   height: 40px;
-  width: 60%;
+  width: calc(100% - 20px);
+  max-width: 390px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -24,20 +27,25 @@
 
 .open {
   height: 380px;
-  width: 90%;
+  width: calc(100% - 20px);
+  max-width: 390px;
   background-color: #171d21;
 }
+
 .top-tab-trigger {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
+  padding: 0 10px;
 }
 
 .top-tab-trigger-inner {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
 }
 
 .top-tab-label {
@@ -52,7 +60,7 @@
 .tab-header {
   display: flex;
   justify-content: space-between;
-  padding: 10px 20px;
+  padding: 12px 14px;
 }
 
 .tab-close-btn {
@@ -66,13 +74,14 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 0.95rem;
 }
 
 .tab-content {
   display: flex;
   height: calc(100% - 60px);
-  padding: 15px;
-  gap: 15px;
+  padding: 12px;
+  gap: 12px;
 }
 
 .groups-list {
@@ -80,6 +89,7 @@
   border-right: 1px solid rgba(255, 255, 255, 0.2);
   overflow-y: auto;
   padding-right: 5px;
+  min-width: 120px;
 }
 
 .group-item {
@@ -115,15 +125,23 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  min-width: 0;
 }
+
 .top-tab-chat-name {
   font-size: 13px;
   font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .top-tab-last-msg {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .last-message-box {
@@ -149,6 +167,7 @@
   padding: 10px;
   border-radius: 20px;
   border: none;
+  box-sizing: border-box;
 }
 
 .send-btn {
@@ -159,4 +178,24 @@
   background: none;
   border: none;
   cursor: pointer;
+}
+
+@media (max-width: 380px) {
+  .open {
+    height: 350px;
+  }
+
+  .tab-content {
+    flex-direction: column;
+  }
+
+  .groups-list {
+    width: 100%;
+    min-width: 0;
+    max-height: 132px;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding-right: 0;
+    padding-bottom: 8px;
+  }
 }

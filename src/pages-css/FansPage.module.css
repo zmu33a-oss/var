@@ -1,30 +1,24 @@
 .fansPage {
   position: relative;
-  min-height: 100vh;
-  width: 100%;
+  min-height: 100dvh;
+  width: min(100%, 430px);
+  margin: 0 auto;
   overflow-x: hidden;
   overflow-y: auto;
-  padding-right: clamp(52px, 5vw, 86px);
+  padding-right: clamp(46px, 12vw, 58px);
   background:
-    radial-gradient(
-      circle at top center,
-      rgb(0, 0, 0),
-      transparent 28%
-    ),
+    radial-gradient(circle at top center, rgb(0, 0, 0), transparent 28%),
     linear-gradient(180deg, #050505 0%, #2b2b36 100%);
   color: #fff;
   font-family: sans-serif;
+  box-sizing: border-box;
 }
 
 .backdropGlow {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(
-      circle at 18% 20%,
-      rgb(11, 11, 13),
-      transparent 22%
-    ),
+    radial-gradient(circle at 18% 20%, rgb(11, 11, 13), transparent 22%),
     radial-gradient(circle at 82% 10%, rgba(255, 112, 54, 0.1), transparent 20%);
   pointer-events: none;
 }
@@ -41,11 +35,11 @@
   gap: 10px;
   background: #f7f7f8;
   color: #131313;
-  min-width: min(72vw, 340px);
+  min-width: min(82vw, 320px);
   justify-content: center;
-  padding: 14px 28px;
+  padding: 12px 20px;
   border-radius: 999px;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 900;
   border: none;
   cursor: pointer;
@@ -83,9 +77,9 @@
   top: 0;
   left: 50%;
   transform: translate(-50%, -100%);
-  width: min(92%, 760px);
+  width: min(calc(100% - 8px), 430px);
   background: linear-gradient(180deg, #f8f8fa 0%, #ebebee 100%);
-  border-radius: 0 0 38px 38px;
+  border-radius: 0 0 30px 30px;
   z-index: 40;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -124,7 +118,7 @@
 .sheetTitle {
   margin: 0;
   color: #111318;
-  font-size: 22px;
+  font-size: 19px;
   font-weight: 900;
 }
 
@@ -138,10 +132,10 @@
   width: 100%;
   border: 0;
   border-radius: 22px;
-  padding: 16px 18px;
+  padding: 14px 16px;
   background: #111318;
   color: #fff;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   cursor: pointer;
   transition:
@@ -169,21 +163,21 @@
 .contentShell {
   position: relative;
   z-index: 1;
-  width: min(74%, 940px);
+  width: calc(100% - 14px);
   margin: 80px auto 0;
   padding: 0 0 130px;
 }
 
 .sideRail {
   position: fixed;
-  right: 0;
-  top: 130px;
-  width: clamp(52px, 5vw, 86px);
+  right: max(0px, calc(50% - 215px));
+  top: 118px;
+  width: clamp(46px, 12vw, 58px);
   z-index: 45;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .railItemWrap {
@@ -194,8 +188,8 @@
 }
 
 .railButton {
-  width: clamp(38px, 3.1vw, 52px);
-  height: clamp(38px, 3.1vw, 52px);
+  width: 38px;
+  height: 38px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(16, 18, 26, 0.82);
@@ -231,7 +225,7 @@
   right: calc(100% + 10px);
   top: 50%;
   transform: translateY(-50%);
-  width: min(56vw, 228px);
+  width: min(62vw, 200px);
   border-radius: 16px;
   background: rgba(11, 13, 18, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -276,7 +270,7 @@
 
 .sectionTitle {
   margin: 0;
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 900;
 }
 
@@ -289,14 +283,14 @@
 .topFansGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 22px;
+  gap: 10px;
   margin-bottom: 26px;
 }
 
 .fanCard {
-  min-height: 178px;
-  padding: 26px 22px 24px;
-  border-radius: 30px;
+  min-height: 150px;
+  padding: 20px 10px 18px;
+  border-radius: 24px;
   background: rgba(10, 10, 14, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.34);
@@ -312,27 +306,27 @@
 }
 
 .avatarWrap {
-  width: 96px;
-  height: 96px;
+  width: 68px;
+  height: 68px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 54px;
+  font-size: 36px;
   background: radial-gradient(circle at 30% 30%, #3d3d44, #202025 70%);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .fanName {
   margin: 0 0 6px;
-  font-size: 19px;
+  font-size: 14px;
   font-weight: 900;
 }
 
 .fanPoints {
   margin: 0;
   color: #5ea0ff;
-  font-size: 17px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -346,7 +340,7 @@
   border-radius: 28px;
   background: rgba(12, 12, 16, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 22px 22px 18px;
+  padding: 18px;
   box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28);
 }
 
@@ -401,84 +395,18 @@
   font-weight: 700;
 }
 
-@media (max-width: 768px) {
-  .fansPage {
-    padding-right: clamp(46px, 12vw, 58px);
-  }
-
-  .contentShell {
-    width: calc(100% - 14px);
-    margin-top: 80px;
-  }
-
-  .sideRail {
-    width: clamp(46px, 12vw, 58px);
-    top: 118px;
-    gap: 10px;
-  }
-
-  .railButton {
-    width: 38px;
-    height: 38px;
-    border-radius: 12px;
-  }
-
+@media (max-width: 380px) {
   .railDropdown {
-    width: min(62vw, 200px);
     right: calc(100% + 8px);
   }
 
-  .topFansGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+  .postTopRow {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .topSheet {
-    width: calc(100% - 8px);
-    border-radius: 0 0 30px 30px;
-  }
-
-  .trigger {
-    font-size: 16px;
-    min-width: min(82vw, 320px);
-    padding: 12px 20px;
-  }
-
-  .fanCard {
-    min-height: 150px;
-    padding: 20px 10px 18px;
-    border-radius: 24px;
-  }
-
-  .avatarWrap {
-    width: 68px;
-    height: 68px;
-    font-size: 36px;
-    margin-bottom: 12px;
-  }
-
-  .fanName {
-    font-size: 14px;
-  }
-
-  .fanPoints {
-    font-size: 13px;
-  }
-
-  .sectionTitle {
-    font-size: 17px;
-  }
-
-  .postCard {
-    padding: 18px;
-  }
-
-  .sheetTitle {
-    font-size: 19px;
-  }
-
-  .menuBtn {
-    padding: 14px 16px;
-    font-size: 14px;
+  .postMeta {
+    gap: 12px;
+    flex-wrap: wrap;
   }
 }
