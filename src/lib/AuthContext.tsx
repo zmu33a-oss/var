@@ -19,6 +19,7 @@ export interface UserProfile {
   email: string | null;
   full_name: string | null;
   avatar_url: string | null;
+  avatar_frame_enabled: boolean;
   username: string | null;
   bio: string | null;
   phone: string | null;
@@ -59,6 +60,9 @@ function normalizeProfile(
       authUser?.user_metadata?.name ??
       null,
     avatar_url: data?.avatar_url ?? authUser?.user_metadata?.avatar_url ?? null,
+    avatar_frame_enabled:
+      Boolean(data?.avatar_frame_enabled) ||
+      Boolean(authUser?.user_metadata?.avatar_frame_enabled),
     username: data?.username ?? null,
     bio: data?.bio ?? null,
     phone: data?.phone ?? null,
@@ -110,9 +114,9 @@ async function upsertUser(authUser: User): Promise<void> {
 async function loadProfileFromDB(authUser: User): Promise<UserProfile | null> {
   const { data } = await supabase
     .from("users")
-    .select("id, email, full_name")
+    .select("*")
     .eq("id", authUser.id)
-    .single();
+    .maybeSingle();
 
   return normalizeProfile((data as Partial<UserProfile>) ?? null, authUser);
 }
@@ -135,22 +139,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshProfile = async () => {
-    if (!user) return;
-    const p = await loadProfileFromDB(user);
+    const { data } = await supabase.auth.getUser();
+    const currentUser = data.user ?? user;
+    if (!currentUser) return;
+
+    setUser(currentUser);
+    const p = await loadProfileFromDB(currentUser);
     setProfile(p);
   };
 
   useEffect(() => {
     // تحميل الجلسة الموجودة عند بدء التطبيق
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        syncUser(s.user).finally(() => setLoading(false));
-      } else {
+    supabase.auth
+      .getSession()
+      .then(({ data: { session: s } }) => {
+        setSession(s);
+        setUser(s?.user ?? null);
         setLoading(false);
-      }
-    });
+
+        if (s?.user) {
+          void syncUser(s.user).catch(() => {
+            setProfile(normalizeProfile(null, s.user));
+          });
+        }
+      })
+      .catch(() => {
+        setLoading(false);
+      });
 
     // الاستماع لكل تغييرات حالة المصادقة
     const {
@@ -158,21 +173,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
+      setLoading(false);
 
       if (event === "PASSWORD_RECOVERY") {
         // المستخدم وصل عبر رابط إعادة تعيين كلمة المرور
         setIsRecovery(true);
-        setLoading(false);
         return;
       }
 
       if (s?.user) {
-        await syncUser(s.user);
+        try {
+          await syncUser(s.user);
+        } catch {
+          setProfile(normalizeProfile(null, s.user));
+        }
       } else {
         setProfile(null);
       }
-
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();

@@ -10,9 +10,16 @@ import TikTokPage from "./pages/TikTokPage";
 import XPage from "./pages/XPage";
 import ChatPage from "./pages/ChatPage";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
+import { supabase } from "./pages/supabase";
+import {
+  loadXPosts,
+  normalizeXPosts,
+  saveXPosts,
+  type XPost,
+} from "./lib/xPosts";
 
 type HomeMode = "tiktok" | "x";
-type ChatComposer = "dm" | "group" | null;
+type ChatComposer = "dm" | "group" | "post" | null;
 type AuthMode = "login" | "signup";
 
 // ─── الجزء الداخلي للتطبيق — يستطيع استخدام useAuth ─────────────────────────
@@ -22,7 +29,40 @@ function AppContent() {
   const [mode, setMode] = useState<HomeMode>("tiktok");
   const [chatComposer, setChatComposer] = useState<ChatComposer>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [xPosts, setXPosts] = useState<XPost[]>(() => loadXPosts());
   const { user, isRecovery, clearRecovery, loading } = useAuth();
+  const syncedXPostsRef = useRef("");
+  const xPostsRef = useRef<XPost[]>(xPosts);
+
+  const persistXPosts = (nextPosts: XPost[]) => {
+    saveXPosts(nextPosts);
+
+    if (!loading && user) {
+      const serializedPosts = JSON.stringify(nextPosts);
+      syncedXPostsRef.current = serializedPosts;
+
+      void supabase.auth
+        .updateUser({
+          data: {
+            ...user.user_metadata,
+            x_posts: nextPosts,
+          },
+        })
+        .catch(() => {
+          syncedXPostsRef.current = "";
+        });
+      return;
+    }
+
+    syncedXPostsRef.current = JSON.stringify(nextPosts);
+  };
+
+  const updateXPosts = (updater: (currentPosts: XPost[]) => XPost[]) => {
+    const nextPosts = updater(xPostsRef.current);
+    xPostsRef.current = nextPosts;
+    setXPosts(nextPosts);
+    persistXPosts(nextPosts);
+  };
 
   // كشف OAuth redirect — نقرأ URL قبل أن يُنظّفه Supabase
   const isOAuthRedirect = useRef(
@@ -50,13 +90,51 @@ function AppContent() {
     }
   }, [user, tab]);
 
+  useEffect(() => {
+    xPostsRef.current = xPosts;
+  }, [xPosts]);
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user) {
+      const localPosts = loadXPosts();
+      xPostsRef.current = localPosts;
+      syncedXPostsRef.current = JSON.stringify(localPosts);
+      setXPosts(localPosts);
+      return;
+    }
+
+    const remotePosts = normalizeXPosts(user.user_metadata?.x_posts);
+    if (remotePosts?.length) {
+      xPostsRef.current = remotePosts;
+      syncedXPostsRef.current = JSON.stringify(remotePosts);
+      setXPosts(remotePosts);
+      saveXPosts(remotePosts);
+      return;
+    }
+
+    const localPosts = loadXPosts();
+    xPostsRef.current = localPosts;
+    syncedXPostsRef.current = "";
+    setXPosts(localPosts);
+  }, [user?.id, loading]);
+
   const openChat = (composer: ChatComposer = null) => {
     if (!user) {
       setTab("account");
       return;
     }
+
     setChatBaseTab(tab === "chat" ? chatBaseTab : tab);
     setChatComposer(composer);
+
+    // Opening a new X post should stay above the current surface instead of
+    // routing the whole app into the chat page.
+    if (composer === "post") {
+      return;
+    }
+
     setTab("chat");
   };
 
@@ -64,7 +142,22 @@ function AppContent() {
 
   // شاشة تحميل خفيفة ريثما يُحدد وضع الجلسة
   if (loading) {
-    return <div style={{ background: "#000", minHeight: "100vh" }} />;
+    return (
+      <div
+        style={{
+          background: "#000",
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fff",
+          fontSize: "15px",
+          fontWeight: 700,
+        }}
+      >
+        جاري تحميل التطبيق...
+      </div>
+    );
   }
 
   return (
@@ -98,7 +191,17 @@ function AppContent() {
             justifyContent: "center",
           }}
         >
-          <XPage onOpenChat={openChat} />
+          <XPage
+            posts={xPosts}
+            onOpenChat={openChat}
+            onUpdatePost={(postId, updatePost) => {
+              updateXPosts((prev) =>
+                prev.map((post) =>
+                  post.id === postId ? updatePost(post) : post,
+                ),
+              );
+            }}
+          />
         </div>
       )}
 
@@ -129,9 +232,14 @@ function AppContent() {
           }}
         />
       )}
-      {tab === "chat" && (
+      {(tab === "chat" || chatComposer === "post") && (
         <ChatPage
           initialComposer={chatComposer}
+          onCreatePost={(post) => {
+            updateXPosts((prev) => [post, ...prev]);
+            setChatComposer(null);
+            setTab(chatBaseTab);
+          }}
           onClose={() => {
             setChatComposer(null);
             setTab(chatBaseTab);

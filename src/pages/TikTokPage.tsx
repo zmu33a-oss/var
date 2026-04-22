@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import TikTokVideoCard from "../components/TikTokVideoCard";
 import styles from "../pages-css/TikTokPage.module.css";
+import { useAuth } from "../lib/AuthContext";
+import { buildXHandle } from "../lib/xPosts";
 import { supabase } from "./supabase";
 
 type VideoItem = {
@@ -29,12 +31,32 @@ const normalizeVideoUrl = (rawUrl: string) => {
 };
 
 export default function TikTokPage() {
+  const { profile, user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [brokenVideoIds, setBrokenVideoIds] = useState<number[]>([]);
+
+  const rawEmail = profile?.email ?? user?.email ?? "";
+  const displayName =
+    profile?.full_name?.trim() ??
+    user?.user_metadata?.full_name?.trim() ??
+    user?.user_metadata?.name?.trim() ??
+    rawEmail.split("@")[0]?.trim() ??
+    "Xtik";
+  const handle = profile?.username?.trim()
+    ? profile.username.trim().startsWith("@")
+      ? profile.username.trim()
+      : `@${profile.username.trim()}`
+    : buildXHandle(displayName);
+  const avatarUrl =
+    profile?.avatar_url ?? user?.user_metadata?.avatar_url ?? null;
+  const avatarFrameEnabled = Boolean(
+    profile?.avatar_frame_enabled ?? user?.user_metadata?.avatar_frame_enabled,
+  );
 
   const visibleVideos = videos
     .map((vid) => ({
@@ -46,6 +68,7 @@ export default function TikTokPage() {
 
   const fetchVideos = async () => {
     setLoading(true);
+    setLoadError("");
 
     const { data, error } = await supabase
       .from("videos")
@@ -54,6 +77,7 @@ export default function TikTokPage() {
 
     if (error) {
       console.log("خطأ جلب الفيديوهات:", error);
+      setLoadError("تعذر تحميل الفيديوهات الآن");
       setLoading(false);
       return;
     }
@@ -64,7 +88,7 @@ export default function TikTokPage() {
   };
 
   useEffect(() => {
-    fetchVideos();
+    void fetchVideos();
   }, []);
 
   useEffect(() => {
@@ -159,15 +183,37 @@ export default function TikTokPage() {
       />
 
       {loading ? (
-        <p>جاري تحميل الفيديوهات...</p>
+        <div className={styles.statusState}>
+          <span className={styles.statusSpinner} />
+          <p className={styles.statusMessage}>جاري تحميل الفيديوهات...</p>
+        </div>
+      ) : loadError ? (
+        <div className={styles.statusState}>
+          <p className={styles.statusMessage}>{loadError}</p>
+          <button
+            type="button"
+            className={styles.statusRetryBtn}
+            onClick={() => {
+              void fetchVideos();
+            }}
+          >
+            إعادة المحاولة
+          </button>
+        </div>
       ) : visibleVideos.length === 0 ? (
-        <p>لا يوجد فيديوهات حالياً</p>
+        <div className={styles.statusState}>
+          <p className={styles.statusMessage}>لا يوجد فيديوهات حالياً</p>
+        </div>
       ) : (
         visibleVideos.map((vid, index) => (
           <TikTokVideoCard
             key={vid.id}
             video_url={vid.video_url}
             caption={vid.caption}
+            creatorName={displayName}
+            creatorHandle={handle}
+            creatorAvatarUrl={avatarUrl}
+            creatorAvatarFrameEnabled={avatarFrameEnabled}
             isActive={index === activeIndex}
             shouldLoad={Math.abs(index - activeIndex) <= 1}
             onVideoError={() => handleVideoError(vid.id)}

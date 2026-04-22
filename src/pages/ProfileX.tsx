@@ -2,25 +2,38 @@ import React, { useState } from "react";
 import { Heart, Share2, MessageSquare } from "lucide-react";
 import styles from "../pages-css/ProfileX.module.css";
 import { useAuth } from "../lib/AuthContext";
+import { buildXHandle } from "../lib/xPosts";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onOpenChat?: (target?: "dm" | "group" | null) => void;
+  onOpenChat?: (target?: "dm" | "group" | "post" | null) => void;
 }
 
 const ProfileX: React.FC<Props> = ({ isOpen, onClose, onOpenChat }) => {
   const { profile, user } = useAuth();
   const [showGroupDrop, setShowGroupDrop] = useState(false);
+  const rawEmail = profile?.email ?? user?.email ?? "";
 
   const displayName =
     profile?.full_name ??
     user?.user_metadata?.full_name ??
-    user?.email?.split("@")[0] ??
+    user?.user_metadata?.name ??
+    rawEmail.split("@")[0] ??
     "زميع";
+  const username = profile?.username?.trim()
+    ? profile.username.trim().startsWith("@")
+      ? profile.username.trim()
+      : `@${profile.username.trim()}`
+    : buildXHandle(displayName);
+  const bio = profile?.bio?.trim() ?? "";
+  const location = profile?.location?.trim() ?? "";
 
   const avatarUrl =
     profile?.avatar_url ?? user?.user_metadata?.avatar_url ?? null;
+  const avatarFrameEnabled = Boolean(
+    profile?.avatar_frame_enabled ?? user?.user_metadata?.avatar_frame_enabled,
+  );
 
   const animClass = (i: number) =>
     `${styles["menu-item"]} ${isOpen ? styles["item-show"] : styles["item-hide"]} ${styles[`delay-${i}`]}`;
@@ -37,20 +50,36 @@ const ProfileX: React.FC<Props> = ({ isOpen, onClose, onOpenChat }) => {
         <div className={`${styles["user-card"]} ${animClass(0)}`}>
           <div className={styles["user-info"]}>
             <span className={styles["user-name"]}>{displayName}</span>
-            <span className={styles["user-badge"]}>متحمس</span>
+            <span className={styles["user-handle"]}>{username}</span>
+            {bio && <p className={styles["user-bio"]}>{bio}</p>}
+            <div className={styles["user-meta"]}>
+              <span className={styles["user-badge"]}>
+                {location || "متحمس"}
+              </span>
+            </div>
           </div>
           <div className={styles["avatar-wrap"]}>
-            {avatarUrl ? (
+            {avatarFrameEnabled && (
               <img
-                src={avatarUrl}
-                alt="avatar"
-                className={styles["avatar-img"]}
+                src="/profile-frame-rsl.svg"
+                alt=""
+                aria-hidden="true"
+                className={styles["avatar-frame"]}
               />
-            ) : (
-              <div className={styles["avatar-fallback"]}>
-                {displayName[0]?.toUpperCase()}
-              </div>
             )}
+            <div className={styles["avatar-face"]}>
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt="avatar"
+                  className={styles["avatar-img"]}
+                />
+              ) : (
+                <div className={styles["avatar-fallback"]}>
+                  {displayName[0]?.toUpperCase()}
+                </div>
+              )}
+            </div>
             <span className={styles["avatar-badge"]}>🏅</span>
           </div>
         </div>
@@ -62,7 +91,7 @@ const ProfileX: React.FC<Props> = ({ isOpen, onClose, onOpenChat }) => {
             <button
               className={styles["action-btn"]}
               onClick={() => {
-                onOpenChat?.("dm");
+                onOpenChat?.("post");
                 onClose();
               }}
             >

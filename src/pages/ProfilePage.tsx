@@ -2,6 +2,7 @@
 import { Camera, Pencil, X, LogOut, MapPin, Calendar } from "lucide-react";
 import styles from "../pages-css/ProfilePage.module.css";
 import { useAuth } from "../lib/AuthContext";
+import { buildXHandle } from "../lib/xPosts";
 import { supabase } from "./supabase";
 
 const GALLERY = [
@@ -34,6 +35,23 @@ async function saveUserProfileFields(
   return supabase.from("users").insert({ id: userId, ...payload });
 }
 
+function normalizeHandle(value: string | null | undefined) {
+  if (!value?.trim()) return null;
+
+  const trimmedValue = value.trim();
+  return trimmedValue.startsWith("@") ? trimmedValue : `@${trimmedValue}`;
+}
+
+function uniqueNonEmptyStrings(values: Array<string | null | undefined>) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+}
+
 export default function ProfilePage({ onSignOut }: Props) {
   const { user, profile, signOut, refreshProfile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -47,13 +65,23 @@ export default function ProfilePage({ onSignOut }: Props) {
   const [editBio, setEditBio] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editLocation, setEditLocation] = useState("");
+  const [editAvatarFrameEnabled, setEditAvatarFrameEnabled] = useState(false);
 
   const rawEmail = profile?.email ?? user?.email ?? "";
-  const displayName = profile?.full_name ?? rawEmail.split("@")[0] ?? "مستخدم";
+  const displayName =
+    profile?.full_name ??
+    user?.user_metadata?.full_name ??
+    user?.user_metadata?.name ??
+    rawEmail.split("@")[0] ??
+    "مستخدم";
   const username = profile?.username ?? `@${rawEmail.split("@")[0] || "user"}`;
   const bio = profile?.bio ?? "";
   const location = profile?.location ?? "";
-  const avatarUrl = profile?.avatar_url ?? null;
+  const avatarUrl =
+    profile?.avatar_url ?? user?.user_metadata?.avatar_url ?? null;
+  const avatarFrameEnabled = Boolean(
+    profile?.avatar_frame_enabled ?? user?.user_metadata?.avatar_frame_enabled,
+  );
   const joinDate = profile?.created_at
     ? new Date(profile.created_at).toLocaleDateString("ar", {
         year: "numeric",
@@ -66,24 +94,71 @@ export default function ProfilePage({ onSignOut }: Props) {
     setEditBio(bio);
     setEditPhone(profile?.phone ?? "");
     setEditLocation(location);
+    setEditAvatarFrameEnabled(avatarFrameEnabled);
     setMsg("");
     setShowEdit(true);
   };
 
   const saveEdit = async () => {
     if (!user) return;
+    const nextDisplayName = editName.trim() || displayName;
+    const currentProfileHandle =
+      normalizeHandle(profile?.username) ?? buildXHandle(displayName);
+    const nextProfileHandle =
+      normalizeHandle(profile?.username) ?? buildXHandle(nextDisplayName);
+    const existingDisplayNameAliases = Array.isArray(
+      user.user_metadata?.x_display_name_aliases,
+    )
+      ? user.user_metadata.x_display_name_aliases.filter(
+          (value: unknown): value is string => typeof value === "string",
+        )
+      : [];
+    const existingHandleAliases = Array.isArray(
+      user.user_metadata?.x_handle_aliases,
+    )
+      ? user.user_metadata.x_handle_aliases.filter(
+          (value: unknown): value is string => typeof value === "string",
+        )
+      : [];
+
     setSaving(true);
     const { error } = await saveUserProfileFields(user.id, {
-      full_name: editName.trim() || null,
+      full_name: nextDisplayName || null,
       bio: editBio.trim() || null,
       phone: editPhone.trim() || null,
       location: editLocation.trim() || null,
     });
-    setSaving(false);
     if (error) {
+      setSaving(false);
       setMsg("خطأ: " + error.message);
       return;
     }
+
+    const { error: authError } = await supabase.auth.updateUser({
+      data: {
+        ...user.user_metadata,
+        full_name: nextDisplayName,
+        name: nextDisplayName,
+        avatar_frame_enabled: editAvatarFrameEnabled,
+        x_display_name_aliases: uniqueNonEmptyStrings([
+          displayName,
+          nextDisplayName,
+          ...existingDisplayNameAliases,
+        ]),
+        x_handle_aliases: uniqueNonEmptyStrings([
+          currentProfileHandle,
+          nextProfileHandle,
+          ...existingHandleAliases,
+        ]),
+      },
+    });
+
+    setSaving(false);
+    if (authError) {
+      setMsg("خطأ: " + authError.message);
+      return;
+    }
+
     await refreshProfile();
     setShowEdit(false);
   };
@@ -100,8 +175,11 @@ export default function ProfilePage({ onSignOut }: Props) {
     setMsg("جاري معالجة الصورة...");
     try {
       const dataUrl = await resizeImage(file, 400, 0.85);
-      const { error } = await saveUserProfileFields(user.id, {
-        avatar_url: dataUrl,
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          ...user.user_metadata,
+          avatar_url: dataUrl,
+        },
       });
       if (error) {
         setMsg("فشل الحفظ: " + error.message);
@@ -129,13 +207,23 @@ export default function ProfilePage({ onSignOut }: Props) {
 
       {/* Avatar + edit button row */}
       <div className={styles.avatarRow}>
-        {avatarUrl ? (
-          <img src={avatarUrl} alt="avatar" className={styles.avatarImg} />
-        ) : (
-          <div className={styles.avatarFallback}>
-            {displayName[0]?.toUpperCase()}
-          </div>
-        )}
+        <div className={styles.avatarMedia}>
+          {avatarFrameEnabled && (
+            <img
+              src="/profile-frame-rsl.svg"
+              alt=""
+              aria-hidden="true"
+              className={styles.avatarFrame}
+            />
+          )}
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="avatar" className={styles.avatarImg} />
+          ) : (
+            <div className={styles.avatarFallback}>
+              {displayName[0]?.toUpperCase()}
+            </div>
+          )}
+        </div>
         <div style={{ flex: 1 }} />
         <button type="button" className={styles.editBtn} onClick={openEdit}>
           <Pencil size={14} /> تعديل
@@ -227,31 +315,52 @@ export default function ProfilePage({ onSignOut }: Props) {
 
             {/* Avatar upload */}
             <div className={styles.modalAvatarWrap}>
-              <button
-                type="button"
-                className={styles.modalAvatarBtn}
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-              >
-                {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt="avatar"
-                    className={styles.modalAvatarImg}
-                  />
-                ) : (
-                  <div className={styles.modalAvatarFallback}>
-                    {displayName[0]?.toUpperCase()}
+              <div className={styles.modalAvatarRow}>
+                <button
+                  type="button"
+                  className={styles.modalAvatarBtn}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                >
+                  <div className={styles.modalAvatarMedia}>
+                    {editAvatarFrameEnabled && (
+                      <img
+                        src="/profile-frame-rsl.svg"
+                        alt=""
+                        aria-hidden="true"
+                        className={styles.avatarFrame}
+                      />
+                    )}
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt="avatar"
+                        className={styles.modalAvatarImg}
+                      />
+                    ) : (
+                      <div className={styles.modalAvatarFallback}>
+                        {displayName[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    <div className={styles.modalCamOverlay}>
+                      {uploading ? (
+                        <span className={styles.spinner} />
+                      ) : (
+                        <Camera size={22} />
+                      )}
+                    </div>
                   </div>
-                )}
-                <div className={styles.modalCamOverlay}>
-                  {uploading ? (
-                    <span className={styles.spinner} />
-                  ) : (
-                    <Camera size={22} />
-                  )}
-                </div>
-              </button>
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.frameToggleBtn} ${editAvatarFrameEnabled ? styles.frameToggleBtnActive : ""}`}
+                  onClick={() =>
+                    setEditAvatarFrameEnabled((current) => !current)
+                  }
+                >
+                  ايطار
+                </button>
+              </div>
               <p className={styles.changePhotoHint}>اضغط لتغيير الصورة</p>
             </div>
             <input

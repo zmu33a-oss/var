@@ -30,6 +30,11 @@
   background: rgba(0, 0, 0, 0.48);
   backdrop-filter: blur(5px);
 }
+.chatOverlayComposerMode {
+  background: transparent;
+  backdrop-filter: none;
+  padding: 0;
+}
 
 /* ────────────── Sidebar ────────────── */
 .sidebar {
@@ -207,6 +212,99 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+.chatRootComposerMode {
+  width: 0;
+  height: 0;
+  min-height: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.chatTitleBtn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: right;
+}
+
+.chatTitleMeta {
+  display: block;
+  font-size: 0.72rem;
+  color: #7f8790;
+  margin-top: 2px;
+}
+
+.drawerBackdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  background: rgba(0, 0, 0, 0.44);
+  z-index: 14;
+}
+
+.groupDrawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(74%, 286px);
+  background: #0b0b0b;
+  border-right: 1px solid #1f1f1f;
+  box-shadow: 18px 0 44px rgba(0, 0, 0, 0.5);
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+}
+
+.groupDrawerHandle {
+  position: absolute;
+  left: 0;
+  top: 46%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 88px;
+  border: none;
+  border-radius: 0 16px 16px 0;
+  background: linear-gradient(180deg, #1d7fe8, #1459c0);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 6px 0 18px rgba(0, 0, 0, 0.32);
+  z-index: 13;
+  cursor: pointer;
+}
+
+.groupDrawerHandle:hover {
+  filter: brightness(1.06);
+}
+
+.groupDrawerHeader {
+  display: grid;
+  grid-template-columns: 34px 1fr 34px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid #1e1e1e;
+  background: #111;
+}
+
+.groupDrawerTitle {
+  text-align: center;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
 }
 
 .chatIdentity {
@@ -419,6 +517,234 @@
   flex-direction: column;
   gap: 14px;
 }
+.dmComposeOverlay {
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(6px);
+  align-items: center;
+  justify-content: center;
+  padding: 20dvh 10px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.dmComposeModal {
+  width: min(100%, 392px);
+  max-width: calc(100% - 20px);
+  height: min(60dvh, 520px);
+  max-height: min(60dvh, 520px);
+  min-height: 0;
+  padding: 10px 12px 12px;
+  gap: 0;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(22, 24, 28, 0.98), rgba(0, 0, 0, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  backdrop-filter: blur(18px);
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.dmComposeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.dmComposeSubmit {
+  position: relative;
+  overflow: hidden;
+  min-width: 94px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: linear-gradient(135deg, #f8fafc 0%, #dfe7ef 48%, #ffffff 100%);
+  color: #0f1419;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow:
+    0 12px 26px rgba(255, 255, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.dmComposeSubmit::before {
+  content: "";
+  position: absolute;
+  inset: 1px auto 1px -34%;
+  width: 42%;
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.05) 18%,
+    rgba(255, 255, 255, 0.82) 50%,
+    rgba(255, 255, 255, 0.08) 82%,
+    transparent 100%
+  );
+  transform: skewX(-22deg);
+  pointer-events: none;
+}
+
+.dmComposeSubmit:disabled {
+  opacity: 0.42;
+  cursor: default;
+  box-shadow: none;
+}
+
+.dmComposeBody {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 8px 6px 0;
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.dmComposerAvatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #736f61;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.9rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.dmComposerAvatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.dmComposeFields {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dmRecipientInput {
+  height: 44px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f5f5;
+  padding: 0 14px;
+}
+
+.dmRecipientInput::placeholder {
+  color: rgba(255, 255, 255, 0.56);
+}
+
+.dmComposeTextarea {
+  min-height: clamp(120px, 16dvh, 180px);
+  flex: 1 1 auto;
+  border: none;
+  background: transparent;
+  color: #f7f7f7;
+  font-size: clamp(2rem, 6vw, 3rem);
+  line-height: 1.35;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+  direction: rtl;
+}
+
+.dmComposeTextarea::placeholder {
+  color: rgba(255, 255, 255, 0.34);
+}
+
+.dmComposeMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.dmComposeToolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 6px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.dmComposeToolBtn {
+  width: 42px;
+  height: 42px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.dmComposeToolBtn:hover {
+  color: #fff;
+}
+
+@media (max-width: 480px) {
+  .dmComposeOverlay {
+    padding: 20dvh 10px;
+  }
+
+  .dmComposeModal {
+    max-width: calc(100% - 20px);
+    border-radius: 24px;
+  }
+}
+
+.postImagePreviewWrap {
+  position: relative;
+  margin-top: 4px;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.postImagePreview {
+  width: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  display: block;
+}
+
+.postImageRemoveBtn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
 
 .modalHeaderCentered {
   display: grid;
@@ -479,6 +805,127 @@
 }
 
 .modalBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.groupDetailsModal {
+  max-height: min(78dvh, 560px);
+  overflow: hidden;
+}
+
+.groupDetailsHint {
+  margin: -2px 0 0;
+  color: #8a8a8a;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  text-align: right;
+}
+
+.memberList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(48dvh, 320px);
+  overflow-y: auto;
+  padding-left: 2px;
+}
+
+.memberRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #2a2a2a;
+  background: #101010;
+}
+
+.memberMeta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.memberName {
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.memberEmail {
+  color: #8a8a8a;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: ltr;
+  text-align: right;
+}
+
+.memberActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.memberBadge {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(86, 116, 242, 0.18);
+  color: #93a8ff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.memberDeleteBtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(220, 60, 60, 0.14);
+  color: #ff8181;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.memberDeleteBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.groupOwnerNote {
+  margin: 0;
+  color: #7f8790;
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.deleteGroupBtn {
+  height: 46px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 109, 109, 0.4);
+  background: rgba(196, 44, 44, 0.16);
+  color: #ff8b8b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.96rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.deleteGroupBtn:disabled {
   opacity: 0.45;
   cursor: default;
 }
@@ -699,6 +1146,15 @@
     box-shadow: none;
   }
 
+  .groupDrawer {
+    width: min(70vw, 300px);
+  }
+
+  .groupDrawerHandle {
+    width: 22px;
+    height: 82px;
+  }
+
   .sidebarHidden {
     display: none;
   }
@@ -719,7 +1175,50 @@
 
   .msgInput,
   .searchInput,
-  .modalInput {
+  .modalInput,
+  .dmComposeTextarea {
     font-size: 16px;
+  }
+
+  .chatOverlayComposerMode {
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: transparent;
+    backdrop-filter: none;
+  }
+
+  .chatRootComposerMode {
+    width: 0;
+    height: 0;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .dmComposeOverlay {
+    align-items: center;
+    justify-content: center;
+    padding: 20dvh 10px;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(6px);
+  }
+
+  .dmComposeModal {
+    width: min(100%, 392px);
+    max-width: calc(100% - 20px);
+    height: min(60dvh, 520px);
+    max-height: min(60dvh, 520px);
+    min-height: 0;
+    border-radius: 28px;
+    padding: 10px 12px 12px;
+  }
+
+  .dmComposeTextarea {
+    min-height: clamp(120px, 16dvh, 180px);
+    font-size: 2.15rem;
   }
 }

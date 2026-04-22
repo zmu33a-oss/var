@@ -15,6 +15,10 @@ import {
 type TikTokVideoCardProps = {
   video_url: string;
   caption: string;
+  creatorName: string;
+  creatorHandle: string;
+  creatorAvatarUrl: string | null;
+  creatorAvatarFrameEnabled?: boolean;
   isActive: boolean;
   shouldLoad?: boolean;
   onVideoError?: () => void;
@@ -24,6 +28,10 @@ type TikTokVideoCardProps = {
 export default function TikTokVideoCard({
   video_url,
   caption,
+  creatorName,
+  creatorHandle,
+  creatorAvatarUrl,
+  creatorAvatarFrameEnabled = false,
   isActive,
   shouldLoad = true,
   onVideoError,
@@ -36,6 +44,9 @@ export default function TikTokVideoCard({
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const safeCreatorName = creatorName?.trim() || "Xtik";
+  const safeCreatorHandle = creatorHandle?.trim() || "@xtik";
+  const creatorInitial = safeCreatorName.charAt(0).toUpperCase() || "X";
 
   const playActiveVideo = async () => {
     const video = videoRef.current;
@@ -283,7 +294,35 @@ export default function TikTokVideoCard({
 
       <div className={styles.overlay}>
         <div className={styles.text}>
-          <h3>@SportPlus</h3>
+          <div className={styles.creatorRow}>
+            <div className={styles.creatorAvatarWrap}>
+              {creatorAvatarFrameEnabled && (
+                <img
+                  src="/profile-frame-rsl.svg"
+                  alt=""
+                  aria-hidden="true"
+                  className={styles.creatorAvatarFrame}
+                />
+              )}
+              <div className={styles.creatorAvatarFace}>
+                {creatorAvatarUrl ? (
+                  <img
+                    src={creatorAvatarUrl}
+                    alt={`${safeCreatorName} avatar`}
+                    className={styles.creatorAvatarImg}
+                  />
+                ) : (
+                  <div className={styles.creatorAvatarFallback}>
+                    {creatorInitial}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className={styles.creatorMeta}>
+              <h3>{safeCreatorHandle}</h3>
+              <span className={styles.creatorName}>{safeCreatorName}</span>
+            </div>
+          </div>
           <div className={styles.transparentHeader}></div>
           {caption && <p>{caption}</p>}
         </div>

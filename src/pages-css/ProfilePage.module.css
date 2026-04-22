@@ -23,6 +23,24 @@
   gap: 12px;
 }
 
+.avatarMedia {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  flex-shrink: 0;
+}
+
+.avatarFrame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 132%;
+  height: 132%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
 .avatarImg {
   width: 88px;
   height: 88px;
@@ -30,6 +48,8 @@
   object-fit: cover;
   border: 3px solid #000;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .avatarFallback {
@@ -45,6 +65,8 @@
   font-weight: 800;
   color: #fff;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .editBtn {
@@ -273,6 +295,13 @@
   padding: 22px 16px 12px;
 }
 
+.modalAvatarRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
 .modalAvatarBtn {
   position: relative;
   width: 86px;
@@ -282,10 +311,16 @@
   padding: 0;
   cursor: pointer;
   background: transparent;
-  overflow: hidden;
+  overflow: visible;
 }
 .modalAvatarBtn:disabled {
   cursor: not-allowed;
+}
+
+.modalAvatarMedia {
+  position: relative;
+  width: 86px;
+  height: 86px;
 }
 
 .modalAvatarImg {
@@ -295,6 +330,8 @@
   object-fit: cover;
   border: 3px solid #1d9bf0;
   display: block;
+  position: relative;
+  z-index: 1;
 }
 
 .modalAvatarFallback {
@@ -309,6 +346,8 @@
   font-size: 30px;
   font-weight: 800;
   color: #fff;
+  position: relative;
+  z-index: 1;
 }
 
 .modalCamOverlay {
@@ -320,6 +359,41 @@
   justify-content: center;
   color: #fff;
   border-radius: 50%;
+  z-index: 2;
+}
+
+.frameToggleBtn {
+  border: 1px solid rgba(182, 141, 75, 0.55);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f2dfb6;
+  border-radius: 999px;
+  min-width: 88px;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    background 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.frameToggleBtn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(219, 179, 106, 0.8);
+}
+
+.frameToggleBtnActive {
+  background: linear-gradient(
+    135deg,
+    rgba(160, 114, 48, 0.88),
+    rgba(234, 196, 124, 0.28)
+  );
+  border-color: rgba(241, 211, 157, 0.95);
+  color: #fff6de;
+  box-shadow: 0 10px 22px rgba(120, 83, 25, 0.35);
 }
 
 .changePhotoHint {
