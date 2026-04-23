@@ -3,6 +3,8 @@ import { Heart, Share2, MessageSquare } from "lucide-react";
 import styles from "../pages-css/ProfileX.module.css";
 import { useAuth } from "../lib/AuthContext";
 import { buildXHandle } from "../lib/xPosts";
+import VerificationBadge from "../components/VerificationBadge";
+import { useVerificationRegistry } from "../lib/verification";
 
 interface Props {
   isOpen: boolean;
@@ -12,6 +14,7 @@ interface Props {
 
 const ProfileX: React.FC<Props> = ({ isOpen, onClose, onOpenChat }) => {
   const { profile, user } = useAuth();
+  const { getVerification } = useVerificationRegistry();
   const [showGroupDrop, setShowGroupDrop] = useState(false);
   const rawEmail = profile?.email ?? user?.email ?? "";
 
@@ -34,6 +37,7 @@ const ProfileX: React.FC<Props> = ({ isOpen, onClose, onOpenChat }) => {
   const avatarFrameEnabled = Boolean(
     profile?.avatar_frame_enabled ?? user?.user_metadata?.avatar_frame_enabled,
   );
+  const currentUserVerificationBadge = getVerification(user?.id)?.badge ?? null;
 
   const animClass = (i: number) =>
     `${styles["menu-item"]} ${isOpen ? styles["item-show"] : styles["item-hide"]} ${styles[`delay-${i}`]}`;
@@ -49,7 +53,15 @@ const ProfileX: React.FC<Props> = ({ isOpen, onClose, onOpenChat }) => {
         {/* ── بطاقة المستخدم ── */}
         <div className={`${styles["user-card"]} ${animClass(0)}`}>
           <div className={styles["user-info"]}>
-            <span className={styles["user-name"]}>{displayName}</span>
+            <div className={styles["user-name-row"]}>
+              <span className={styles["user-name"]}>{displayName}</span>
+              {currentUserVerificationBadge && (
+                <VerificationBadge
+                  size="sm"
+                  variant={currentUserVerificationBadge}
+                />
+              )}
+            </div>
             <span className={styles["user-handle"]}>{username}</span>
             {bio && <p className={styles["user-bio"]}>{bio}</p>}
             <div className={styles["user-meta"]}>
@@ -80,7 +92,13 @@ const ProfileX: React.FC<Props> = ({ isOpen, onClose, onOpenChat }) => {
                 </div>
               )}
             </div>
-            <span className={styles["avatar-badge"]}>🏅</span>
+            {currentUserVerificationBadge && (
+              <VerificationBadge
+                size="sm"
+                variant={currentUserVerificationBadge}
+                className={styles["avatar-badge"]}
+              />
+            )}
           </div>
         </div>
 

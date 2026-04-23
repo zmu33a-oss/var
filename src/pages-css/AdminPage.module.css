@@ -1,0 +1,635 @@
+.page {
+  min-height: 100dvh;
+  width: min(100%, 1180px);
+  margin: 0 auto;
+  padding: 20px 18px 120px;
+  color: #f3f5f7;
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(25, 92, 162, 0.22),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at top left,
+      rgba(13, 45, 84, 0.28),
+      transparent 30%
+    ),
+    linear-gradient(180deg, #05080d 0%, #070b10 40%, #040608 100%);
+}
+
+.hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  background: rgba(11, 17, 24, 0.9);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
+}
+
+.eyebrow {
+  display: inline-block;
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #8dbdf2;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(26px, 4vw, 40px);
+  font-weight: 900;
+}
+
+.subtitle {
+  margin: 10px 0 0;
+  max-width: 720px;
+  line-height: 1.75;
+  color: rgba(243, 245, 247, 0.74);
+}
+
+.heroActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.roleBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 118px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #1c76d2, #11395f);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.closeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.sidebar,
+.contentCard {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 26px;
+  background: rgba(10, 15, 21, 0.9);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+}
+
+.sidebar {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebarItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.02);
+  color: #f3f5f7;
+  text-align: right;
+  cursor: pointer;
+}
+
+.sidebarItem span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebarItem strong {
+  font-size: 14px;
+}
+
+.sidebarItem small {
+  color: rgba(243, 245, 247, 0.58);
+  font-size: 12px;
+}
+
+.sidebarItemActive {
+  border-color: rgba(92, 160, 231, 0.42);
+  background: linear-gradient(
+    135deg,
+    rgba(22, 68, 117, 0.68),
+    rgba(10, 17, 23, 0.86)
+  );
+}
+
+.contentCard {
+  padding: 22px;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.sectionHeader p {
+  margin: 10px 0 0;
+  color: rgba(243, 245, 247, 0.72);
+  line-height: 1.7;
+}
+
+.toolbar {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.searchWrap {
+  flex: 1;
+}
+
+.searchInput {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: #f3f5f7;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font: inherit;
+}
+
+.refreshBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.feedback,
+.errorBanner {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+}
+
+.quickActionCard {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 214, 87, 0.2);
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(255, 221, 112, 0.18),
+      transparent 44%
+    ),
+    linear-gradient(180deg, rgba(79, 54, 10, 0.34), rgba(26, 20, 9, 0.5));
+}
+
+.quickActionCard strong {
+  display: block;
+  font-size: 16px;
+}
+
+.quickActionCard p {
+  margin: 8px 0 0;
+  color: rgba(243, 245, 247, 0.78);
+  line-height: 1.7;
+}
+
+.quickActionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 156px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 224, 134, 0.34);
+  background: rgba(255, 215, 102, 0.12);
+  color: #ffe39d;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.quickActionBtn:hover {
+  background: rgba(255, 215, 102, 0.18);
+}
+
+.feedback {
+  background: rgba(36, 120, 68, 0.18);
+  border: 1px solid rgba(83, 181, 116, 0.3);
+}
+
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(161, 49, 49, 0.18);
+  border: 1px solid rgba(212, 97, 97, 0.3);
+}
+
+.metricGrid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metricCard,
+.panelCard,
+.listCard,
+.rowCard,
+.postCard,
+.reportCard {
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04),
+    rgba(255, 255, 255, 0.02)
+  );
+}
+
+.metricCard span {
+  display: block;
+  font-size: 12px;
+  color: #8dbdf2;
+  margin-bottom: 10px;
+}
+
+.metricCard strong {
+  display: block;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.metricCard p {
+  margin: 10px 0 0;
+  color: rgba(243, 245, 247, 0.68);
+  line-height: 1.65;
+}
+
+.dualGrid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.panelCard h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.simpleRow,
+.rowCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.simpleRow + .simpleRow,
+.rowCard + .rowCard,
+.postCard + .postCard,
+.reportCard + .reportCard {
+  margin-top: 10px;
+}
+
+.simpleRow strong,
+.rowCard strong,
+.postHeader strong,
+.reportHeader strong {
+  display: block;
+  font-size: 15px;
+}
+
+.simpleRow small,
+.rowCard small,
+.postHeader small,
+.reportHeader small {
+  display: block;
+  margin-top: 4px;
+  color: rgba(243, 245, 247, 0.62);
+  line-height: 1.55;
+}
+
+.emptyState {
+  margin: 16px 0 0;
+  color: rgba(243, 245, 247, 0.6);
+  text-align: center;
+}
+
+.callout {
+  margin-bottom: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(29, 118, 210, 0.12);
+  border: 1px solid rgba(98, 170, 237, 0.22);
+  color: rgba(243, 245, 247, 0.82);
+  line-height: 1.75;
+}
+
+.userRowMain {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.userNameRow,
+.userMetaRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.userNameRow {
+  margin-bottom: 4px;
+}
+
+.userMetaRow {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.verifiedChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 74px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.verifiedChipInactive {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(243, 245, 247, 0.68);
+}
+
+.verifiedChipYellow {
+  background: rgba(255, 214, 87, 0.14);
+  border: 1px solid rgba(255, 219, 113, 0.28);
+  color: #ffe08b;
+}
+
+.verifiedChipBlue {
+  background: rgba(76, 167, 225, 0.14);
+  border: 1px solid rgba(122, 211, 255, 0.28);
+  color: #a8e0ff;
+}
+
+.idPill,
+.auditTime {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(243, 245, 247, 0.72);
+  font-size: 12px;
+}
+
+.deleteBtn,
+.statusBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.verifyBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 108px;
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f3f5f7;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.verifyActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.verifyBtnYellow {
+  border-color: rgba(255, 221, 128, 0.24);
+  background: rgba(255, 215, 102, 0.08);
+  color: #ffe39d;
+}
+
+.verifyBtnBlue {
+  border-color: rgba(117, 207, 255, 0.24);
+  background: rgba(73, 159, 215, 0.12);
+  color: #b9e9ff;
+}
+
+.verifyBtnSelected {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
+  transform: translateY(-1px);
+}
+
+.verifyBtnRemove {
+  border-color: rgba(255, 115, 115, 0.28);
+  background: rgba(171, 46, 46, 0.12);
+  color: #ffc2c2;
+}
+
+.deleteBtn {
+  border: 1px solid rgba(255, 115, 115, 0.28);
+  background: rgba(171, 46, 46, 0.12);
+  color: #ffc2c2;
+}
+
+.postCard p,
+.reportCard p {
+  margin: 12px 0 0;
+  color: rgba(243, 245, 247, 0.78);
+  line-height: 1.75;
+}
+
+.postHeader,
+.postFooter,
+.reportHeader,
+.statusActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.postFooter,
+.statusActions {
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 94px;
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.status-new {
+  background: rgba(255, 200, 82, 0.15);
+  color: #ffd777;
+}
+
+.status-reviewing {
+  background: rgba(71, 145, 255, 0.16);
+  color: #90beff;
+}
+
+.status-resolved {
+  background: rgba(76, 190, 109, 0.16);
+  color: #95efaf;
+}
+
+.status-dismissed {
+  background: rgba(190, 190, 190, 0.12);
+  color: #d0d6db;
+}
+
+.statusBtn {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f3f5f7;
+}
+
+.statusBtnActive {
+  background: rgba(29, 118, 210, 0.22);
+  border-color: rgba(100, 173, 241, 0.32);
+}
+
+.spin {
+  animation: adminSpin 0.9s linear infinite;
+}
+
+@keyframes adminSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metricGrid,
+  .dualGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding-inline: 12px;
+  }
+
+  .hero {
+    flex-direction: column;
+  }
+
+  .heroActions {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .roleBadge,
+  .closeBtn {
+    width: 100%;
+  }
+
+  .toolbar,
+  .postHeader,
+  .postFooter,
+  .reportHeader,
+  .rowCard,
+  .userRowMain,
+  .quickActionCard {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .userMetaRow {
+    justify-content: flex-start;
+  }
+
+  .verifyActions,
+  .verifyBtn {
+    width: 100%;
+  }
+
+  .quickActionBtn {
+    width: 100%;
+  }
+}

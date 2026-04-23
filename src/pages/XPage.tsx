@@ -20,6 +20,9 @@ import TopTab from "./TopTab";
 import ProfileX from "./ProfileX";
 import styles from "../pages-css/XPage.module.css";
 import { useAuth } from "../lib/AuthContext";
+import { createAdminReport } from "../lib/adminStore";
+import VerificationBadge from "../components/VerificationBadge";
+import { useVerificationRegistry } from "../lib/verification";
 import {
   buildXHandle,
   defaultXPosts,
@@ -35,6 +38,7 @@ const XPage: React.FC<{
   onUpdatePost?: (postId: number, updatePost: (post: XPost) => XPost) => void;
 }> = ({ posts = defaultXPosts, onOpenChat, onUpdatePost }) => {
   const { profile, user } = useAuth();
+  const { getVerification } = useVerificationRegistry();
   const [isTabOpen, setIsTabOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
@@ -164,6 +168,14 @@ const XPage: React.FC<{
     isCurrentUserPost(post)
       ? (currentProfileHandle ?? post.handle)
       : post.handle;
+
+  const getPostVerificationBadge = (post: XPost) =>
+    post.authorId ? (getVerification(post.authorId)?.badge ?? null) : null;
+
+  const getCommentVerificationBadge = (comment: XComment) =>
+    comment.authorId
+      ? (getVerification(comment.authorId)?.badge ?? null)
+      : null;
 
   const renderAvatar = (
     avatarUrl: string | null,
@@ -528,10 +540,22 @@ const XPage: React.FC<{
     );
   };
 
-  const reportPost = (postId: number) => {
+  const reportPost = async (post: XPost) => {
     setMenuPostId(null);
-    setActionToast("تم إرسال البلاغ على التغريدة");
-    if (selectedPostId === postId) {
+    try {
+      await createAdminReport({
+        targetType: "x_post",
+        targetId: String(post.id),
+        source: "x",
+        summary: post.content,
+        reason: "بلاغ من واجهة X",
+        reporterLabel: currentProfileHandle ?? commentAuthorHandle,
+      });
+      setActionToast("تم إرسال البلاغ على التغريدة");
+    } catch {
+      setActionToast("تعذر إرسال البلاغ الآن");
+    }
+    if (selectedPostId === post.id) {
       setFocusReplyComposer(false);
     }
   };
@@ -581,6 +605,7 @@ const XPage: React.FC<{
             currentAvatarFrameEnabled && isCurrentUserPost(post);
           const postDisplayName = getPostDisplayName(post);
           const postDisplayHandle = getPostDisplayHandle(post);
+          const postVerificationBadge = getPostVerificationBadge(post);
 
           return (
             <article
@@ -609,7 +634,15 @@ const XPage: React.FC<{
                         </button>
 
                         <div className={styles["post-user-info"]}>
-                          <b>{postDisplayName}</b>
+                          <span className={styles["verifiedName"]}>
+                            <b>{postDisplayName}</b>
+                            {postVerificationBadge && (
+                              <VerificationBadge
+                                size="sm"
+                                variant={postVerificationBadge}
+                              />
+                            )}
+                          </span>
                           <span>{postDisplayHandle}</span>
                           <span>• {post.time}</span>
                         </div>
@@ -623,7 +656,7 @@ const XPage: React.FC<{
                           <button
                             type="button"
                             className={styles["post-menu-item"]}
-                            onClick={() => reportPost(post.id)}
+                            onClick={() => void reportPost(post)}
                           >
                             <Flag size={16} />
                             <span>تبليغ على التغريدة</span>
@@ -814,6 +847,8 @@ const XPage: React.FC<{
                   getPostDisplayName(selectedPost);
                 const selectedPostDisplayHandle =
                   getPostDisplayHandle(selectedPost);
+                const selectedPostVerificationBadge =
+                  getPostVerificationBadge(selectedPost);
 
                 return (
                   <div className={styles["detail-thread"]}>
@@ -828,7 +863,15 @@ const XPage: React.FC<{
 
                     <div className={styles["detail-main"]}>
                       <div className={styles["detail-post-head"]}>
-                        <b>{selectedPostDisplayName}</b>
+                        <span className={styles["verifiedName"]}>
+                          <b>{selectedPostDisplayName}</b>
+                          {selectedPostVerificationBadge && (
+                            <VerificationBadge
+                              size="sm"
+                              variant={selectedPostVerificationBadge}
+                            />
+                          )}
+                        </span>
                         <span>{selectedPostDisplayHandle}</span>
                         <span>• {selectedPost.time}</span>
                       </div>
@@ -857,85 +900,104 @@ const XPage: React.FC<{
 
               <div className={styles["detail-comments"]}>
                 {selectedPost.comments?.length ? (
-                  selectedPost.comments.map((comment, index) => (
-                    <div
-                      key={comment.id || `${selectedPost.id}-comment-${index}`}
-                      className={styles["comment-item"]}
-                    >
-                      <span className={styles["comment-author"]}>
-                        {comment.authorName} {comment.authorHandle}
-                      </span>
-                      {editingCommentId === comment.id ? (
-                        <div className={styles["comment-edit-wrap"]}>
-                          <input
-                            type="text"
-                            className={styles["comment-edit-input"]}
-                            value={editCommentDrafts[comment.id] ?? ""}
-                            onChange={(e) =>
-                              handleEditCommentDraftChange(
-                                comment.id,
-                                e.target.value,
-                              )
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                saveEditedComment(selectedPost.id, comment.id);
+                  selectedPost.comments.map((comment, index) => {
+                    const commentVerificationBadge =
+                      getCommentVerificationBadge(comment);
+
+                    return (
+                      <div
+                        key={
+                          comment.id || `${selectedPost.id}-comment-${index}`
+                        }
+                        className={styles["comment-item"]}
+                      >
+                        <span className={styles["comment-author"]}>
+                          <span className={styles["verifiedName"]}>
+                            <span>{comment.authorName}</span>
+                            {commentVerificationBadge && (
+                              <VerificationBadge
+                                size="sm"
+                                variant={commentVerificationBadge}
+                              />
+                            )}
+                          </span>
+                          <span>{comment.authorHandle}</span>
+                        </span>
+                        {editingCommentId === comment.id ? (
+                          <div className={styles["comment-edit-wrap"]}>
+                            <input
+                              type="text"
+                              className={styles["comment-edit-input"]}
+                              value={editCommentDrafts[comment.id] ?? ""}
+                              onChange={(e) =>
+                                handleEditCommentDraftChange(
+                                  comment.id,
+                                  e.target.value,
+                                )
                               }
-                            }}
-                            autoFocus
-                          />
-                          <div className={styles["comment-actions"]}>
-                            <button
-                              type="button"
-                              className={styles["comment-action-btn"]}
-                              onClick={() =>
-                                saveEditedComment(selectedPost.id, comment.id)
-                              }
-                              disabled={
-                                !(editCommentDrafts[comment.id] ?? "").trim()
-                              }
-                            >
-                              حفظ
-                            </button>
-                            <button
-                              type="button"
-                              className={styles["comment-action-btn"]}
-                              onClick={() => cancelEditingComment(comment.id)}
-                            >
-                              إلغاء
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <p className={styles["comment-text"]}>
-                            {comment.text}
-                          </p>
-                          {comment.authorId === user?.id && (
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  saveEditedComment(
+                                    selectedPost.id,
+                                    comment.id,
+                                  );
+                                }
+                              }}
+                              autoFocus
+                            />
                             <div className={styles["comment-actions"]}>
                               <button
                                 type="button"
                                 className={styles["comment-action-btn"]}
-                                onClick={() => startEditingComment(comment)}
+                                onClick={() =>
+                                  saveEditedComment(selectedPost.id, comment.id)
+                                }
+                                disabled={
+                                  !(editCommentDrafts[comment.id] ?? "").trim()
+                                }
                               >
-                                تعديل
+                                حفظ
                               </button>
                               <button
                                 type="button"
                                 className={styles["comment-action-btn"]}
-                                onClick={() =>
-                                  deleteComment(selectedPost.id, comment.id)
-                                }
+                                onClick={() => cancelEditingComment(comment.id)}
                               >
-                                حذف
+                                إلغاء
                               </button>
                             </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  ))
+                          </div>
+                        ) : (
+                          <>
+                            <p className={styles["comment-text"]}>
+                              {comment.text}
+                            </p>
+                            {comment.authorId === user?.id && (
+                              <div className={styles["comment-actions"]}>
+                                <button
+                                  type="button"
+                                  className={styles["comment-action-btn"]}
+                                  onClick={() => startEditingComment(comment)}
+                                >
+                                  تعديل
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles["comment-action-btn"]}
+                                  onClick={() =>
+                                    deleteComment(selectedPost.id, comment.id)
+                                  }
+                                >
+                                  حذف
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })
                 ) : (
                   <p className={styles["comments-empty"]}>
                     ما فيه تعليقات إلى الآن

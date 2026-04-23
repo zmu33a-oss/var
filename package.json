@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "admin:server": "node src/server.cjs",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"

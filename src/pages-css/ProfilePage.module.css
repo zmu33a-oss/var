@@ -92,12 +92,28 @@
 .nameSection {
   padding: 4px 16px 14px;
 }
+
+.displayNameRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .displayName {
   margin: 0 0 3px;
   font-size: 20px;
   font-weight: 800;
   color: #e7e9ea;
 }
+
+.verifiedHint {
+  margin: 0 0 10px;
+  color: #f5d16c;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .usernameText {
   color: #71767b;
   font-size: 14px;
@@ -191,6 +207,38 @@
     border-color 0.15s,
     background 0.15s;
 }
+
+.adminBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 12px 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(19, 70, 125, 0.92),
+    rgba(9, 28, 49, 0.92)
+  );
+  border: 1px solid rgba(117, 182, 243, 0.42);
+  color: #f7fbff;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 800;
+  margin-top: 20px;
+  transition:
+    border-color 0.15s,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.adminBtn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(168, 211, 249, 0.66);
+  box-shadow: 0 12px 24px rgba(7, 18, 31, 0.32);
+}
+
 .signOutBtn:hover {
   border-color: #ff4444;
   background: rgba(255, 60, 60, 0.07);

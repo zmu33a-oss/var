@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Camera,
   Check,
+  Flag,
   ImageIcon,
   List,
   MapPin,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabase";
 import styles from "../pages-css/ChatPage.module.css";
+import { createAdminReport } from "../lib/adminStore";
 import { buildXHandle, type XPost } from "../lib/xPosts";
 import { useAuth } from "../lib/AuthContext";
 
@@ -940,6 +942,8 @@ export default function ChatPage({
   ).toUpperCase();
   const composerAvatarUrl =
     profile?.avatar_url ?? authUser?.user_metadata?.avatar_url ?? null;
+  const reportActorLabel =
+    me?.full_name?.trim() || me?.email?.trim() || authUser?.email || "user";
 
   useEffect(() => {
     const root = chatRootRef.current;
@@ -1012,6 +1016,42 @@ export default function ChatPage({
     }
 
     return group.is_private ? "👤" : <Users size={16} />;
+  };
+
+  const reportActiveGroup = async () => {
+    if (!activeGroup) return;
+
+    try {
+      await createAdminReport({
+        targetType: "group",
+        targetId: activeGroup.id,
+        source: "chat",
+        summary: friendlyName(activeGroup),
+        reason: "بلاغ على قروب من واجهة الدردشة",
+        reporterLabel: reportActorLabel,
+      });
+      window.alert("تم إرسال البلاغ على القروب");
+    } catch {
+      window.alert("تعذر إرسال البلاغ الآن");
+    }
+  };
+
+  const reportMessage = async (message: Message) => {
+    if (!activeGroup) return;
+
+    try {
+      await createAdminReport({
+        targetType: "message",
+        targetId: message.id,
+        source: "chat",
+        summary: message.content,
+        reason: `بلاغ على رسالة من قروب ${friendlyName(activeGroup)}`,
+        reporterLabel: reportActorLabel,
+      });
+      window.alert("تم إرسال البلاغ على الرسالة");
+    } catch {
+      window.alert("تعذر إرسال البلاغ الآن");
+    }
   };
 
   // ────────────────────────────── Render ──────────────────────────────
@@ -1108,85 +1148,90 @@ export default function ChatPage({
         {/* ── Chat Window ── */}
         {activeGroup && (
           <section className={styles.chatWindow}>
-            {!showGroupDrawer && (
+            <button
+              type="button"
+              className={`${styles.drawerBackdrop} ${showGroupDrawer ? styles.drawerBackdropVisible : styles.drawerBackdropHidden}`}
+              aria-label="إغلاق قائمة القروبات"
+              onClick={() => setShowGroupDrawer(false)}
+            />
+
+            <aside
+              className={`${styles.groupDrawer} ${showGroupDrawer ? styles.groupDrawerOpen : styles.groupDrawerClosed}`}
+            >
               <button
                 type="button"
                 className={styles.groupDrawerHandle}
-                onClick={() => setShowGroupDrawer(true)}
-                title="فتح قائمة القروبات"
+                onClick={() => setShowGroupDrawer((current) => !current)}
+                title={
+                  showGroupDrawer
+                    ? "إغلاق قائمة القروبات"
+                    : "فتح قائمة القروبات"
+                }
+                aria-label={
+                  showGroupDrawer
+                    ? "إغلاق قائمة القروبات"
+                    : "فتح قائمة القروبات"
+                }
               >
                 <Users size={16} />
               </button>
-            )}
 
-            {showGroupDrawer && (
-              <>
+              <header className={styles.groupDrawerHeader}>
                 <button
                   type="button"
-                  className={styles.drawerBackdrop}
-                  aria-label="إغلاق قائمة القروبات"
+                  className={styles.iconBtn}
                   onClick={() => setShowGroupDrawer(false)}
+                  title="إغلاق القائمة"
+                >
+                  <ArrowRight size={18} />
+                </button>
+                <span className={styles.groupDrawerTitle}>القروبات</span>
+                <span className={styles.modalGhostBtn} />
+              </header>
+
+              <div className={styles.searchRow}>
+                <input
+                  className={styles.searchInput}
+                  placeholder="بحث"
+                  value={groupSearch}
+                  onChange={(e) => setGroupSearch(e.target.value)}
                 />
+              </div>
 
-                <aside className={styles.groupDrawer}>
-                  <header className={styles.groupDrawerHeader}>
-                    <button
-                      type="button"
-                      className={styles.iconBtn}
-                      onClick={() => setShowGroupDrawer(false)}
-                      title="إغلاق القائمة"
+              {error && <p className={styles.errBanner}>{error}</p>}
+
+              {loadingGroups ? (
+                <p className={styles.loadingText}>جاري التحميل...</p>
+              ) : filteredGroups.length === 0 ? (
+                <p className={styles.emptyText}>لا توجد قروبات مطابقة</p>
+              ) : (
+                <ul className={styles.groupList}>
+                  {filteredGroups.map((group) => (
+                    <li
+                      key={group.id}
+                      className={`${styles.groupItem} ${activeGroup.id === group.id ? styles.groupItemActive : ""}`}
+                      onClick={() => handleSelectGroup(group)}
                     >
-                      <ArrowRight size={18} />
-                    </button>
-                    <span className={styles.groupDrawerTitle}>القروبات</span>
-                    <span className={styles.modalGhostBtn} />
-                  </header>
+                      <div className={styles.groupAvatar}>
+                        {renderGroupAvatar(group)}
+                      </div>
+                      <div className={styles.groupInfo}>
+                        <span className={styles.groupName}>
+                          {friendlyName(group)}
+                        </span>
+                        {group.last_message && (
+                          <span className={styles.groupLastMsg}>
+                            {group.last_message}
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
-                  <div className={styles.searchRow}>
-                    <input
-                      className={styles.searchInput}
-                      placeholder="بحث"
-                      value={groupSearch}
-                      onChange={(e) => setGroupSearch(e.target.value)}
-                    />
-                  </div>
-
-                  {error && <p className={styles.errBanner}>{error}</p>}
-
-                  {loadingGroups ? (
-                    <p className={styles.loadingText}>جاري التحميل...</p>
-                  ) : filteredGroups.length === 0 ? (
-                    <p className={styles.emptyText}>لا توجد قروبات مطابقة</p>
-                  ) : (
-                    <ul className={styles.groupList}>
-                      {filteredGroups.map((group) => (
-                        <li
-                          key={group.id}
-                          className={`${styles.groupItem} ${activeGroup.id === group.id ? styles.groupItemActive : ""}`}
-                          onClick={() => handleSelectGroup(group)}
-                        >
-                          <div className={styles.groupAvatar}>
-                            {renderGroupAvatar(group)}
-                          </div>
-                          <div className={styles.groupInfo}>
-                            <span className={styles.groupName}>
-                              {friendlyName(group)}
-                            </span>
-                            {group.last_message && (
-                              <span className={styles.groupLastMsg}>
-                                {group.last_message}
-                              </span>
-                            )}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  <div className={styles.sidebarFooter}>Xtik</div>
-                </aside>
-              </>
-            )}
+              <div className={styles.sidebarFooter}>Xtik</div>
+            </aside>
 
             <header className={styles.chatHeader}>
               <button
@@ -1219,6 +1264,14 @@ export default function ChatPage({
                 <button
                   type="button"
                   className={styles.iconBtn}
+                  title="تبليغ على القروب"
+                  onClick={() => void reportActiveGroup()}
+                >
+                  <Flag size={17} />
+                </button>
+                <button
+                  type="button"
+                  className={styles.iconBtn}
                   title="إغلاق الدردشة"
                   onClick={closeChat}
                 >
@@ -1244,12 +1297,25 @@ export default function ChatPage({
                       </span>
                     )}
                     <p className={styles.msgContent}>{msg.content}</p>
-                    <span className={styles.msgTime}>
-                      {new Date(msg.created_at).toLocaleTimeString("ar", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
+                    <div className={styles.msgMetaRow}>
+                      <span className={styles.msgTime}>
+                        {new Date(msg.created_at).toLocaleTimeString("ar", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                      {msg.sender_id !== me.id && (
+                        <button
+                          type="button"
+                          className={styles.msgReportBtn}
+                          title="تبليغ على الرسالة"
+                          onClick={() => void reportMessage(msg)}
+                        >
+                          <Flag size={12} />
+                          <span>بلاغ</span>
+                        </button>
+                      )}
+                    </div>
                     {msg.sender_id === me.id && (
                       <Check size={12} className={styles.msgCheck} />
                     )}

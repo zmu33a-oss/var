@@ -2,7 +2,10 @@
 import { Camera, Pencil, X, LogOut, MapPin, Calendar } from "lucide-react";
 import styles from "../pages-css/ProfilePage.module.css";
 import { useAuth } from "../lib/AuthContext";
-import { buildXHandle } from "../lib/xPosts";
+import { buildXHandle, normalizeXPosts, saveXPosts } from "../lib/xPosts";
+import VerificationBadge from "../components/VerificationBadge";
+import { useVerificationRegistry } from "../lib/verification";
+import { getVerificationBadgeAccentLabel } from "../lib/verificationBadges";
 import { supabase } from "./supabase";
 
 const GALLERY = [
@@ -16,6 +19,8 @@ const GALLERY = [
 
 interface Props {
   onSignOut?: () => void;
+  onOpenAdmin?: () => void;
+  canOpenAdmin?: boolean;
 }
 
 async function saveUserProfileFields(
@@ -52,8 +57,13 @@ function uniqueNonEmptyStrings(values: Array<string | null | undefined>) {
   );
 }
 
-export default function ProfilePage({ onSignOut }: Props) {
+export default function ProfilePage({
+  onSignOut,
+  onOpenAdmin,
+  canOpenAdmin = false,
+}: Props) {
   const { user, profile, signOut, refreshProfile } = useAuth();
+  const { getVerification } = useVerificationRegistry();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showEdit, setShowEdit] = useState(false);
@@ -74,8 +84,10 @@ export default function ProfilePage({ onSignOut }: Props) {
     user?.user_metadata?.name ??
     rawEmail.split("@")[0] ??
     "مستخدم";
-  const username = profile?.username ?? `@${rawEmail.split("@")[0] || "user"}`;
-  const bio = profile?.bio ?? "";
+  const username =
+    normalizeHandle(profile?.username ?? user?.user_metadata?.username) ??
+    buildXHandle(displayName);
+  const bio = profile?.bio ?? user?.user_metadata?.bio ?? "";
   const location = profile?.location ?? "";
   const avatarUrl =
     profile?.avatar_url ?? user?.user_metadata?.avatar_url ?? null;
@@ -88,6 +100,8 @@ export default function ProfilePage({ onSignOut }: Props) {
         month: "long",
       })
     : "";
+  const currentUserVerification = getVerification(user?.id);
+  const currentUserVerificationBadge = currentUserVerification?.badge ?? null;
 
   const openEdit = () => {
     setEditName(displayName);
@@ -103,9 +117,16 @@ export default function ProfilePage({ onSignOut }: Props) {
     if (!user) return;
     const nextDisplayName = editName.trim() || displayName;
     const currentProfileHandle =
-      normalizeHandle(profile?.username) ?? buildXHandle(displayName);
+      normalizeHandle(profile?.username ?? user.user_metadata?.username) ??
+      buildXHandle(displayName);
     const nextProfileHandle =
-      normalizeHandle(profile?.username) ?? buildXHandle(nextDisplayName);
+      normalizeHandle(profile?.username ?? user.user_metadata?.username) ??
+      buildXHandle(nextDisplayName);
+    const currentEmailName = rawEmail.split("@")[0]?.trim() || null;
+    const currentEmailHandle = currentEmailName ? `@${currentEmailName}` : null;
+    const currentEmailGeneratedHandle = currentEmailName
+      ? buildXHandle(currentEmailName)
+      : null;
     const existingDisplayNameAliases = Array.isArray(
       user.user_metadata?.x_display_name_aliases,
     )
@@ -120,36 +141,70 @@ export default function ProfilePage({ onSignOut }: Props) {
           (value: unknown): value is string => typeof value === "string",
         )
       : [];
+    const nextDisplayNameAliases = uniqueNonEmptyStrings([
+      displayName,
+      nextDisplayName,
+      ...existingDisplayNameAliases,
+    ]);
+    const nextHandleAliases = uniqueNonEmptyStrings([
+      currentProfileHandle,
+      nextProfileHandle,
+      currentEmailHandle,
+      currentEmailGeneratedHandle,
+      ...existingHandleAliases,
+    ]);
+    const nextXPosts = (normalizeXPosts(user.user_metadata?.x_posts) ?? []).map(
+      (post) => {
+        const trimmedUser = post.user.trim();
+        const trimmedHandle = post.handle.trim();
+        const isCurrentUsersPost =
+          post.authorId === user.id ||
+          nextDisplayNameAliases.includes(trimmedUser) ||
+          nextHandleAliases.includes(trimmedHandle);
+
+        if (!isCurrentUsersPost) return post;
+
+        return {
+          ...post,
+          user: nextDisplayName,
+          handle: nextProfileHandle,
+          authorId: user.id,
+          comments: post.comments?.map((comment) =>
+            comment.authorId === user.id
+              ? {
+                  ...comment,
+                  authorName: nextDisplayName,
+                  authorHandle: nextProfileHandle,
+                }
+              : comment,
+          ),
+        };
+      },
+    );
 
     setSaving(true);
-    const { error } = await saveUserProfileFields(user.id, {
+    const { error: profileSaveError } = await saveUserProfileFields(user.id, {
       full_name: nextDisplayName || null,
       bio: editBio.trim() || null,
       phone: editPhone.trim() || null,
       location: editLocation.trim() || null,
+      username: nextProfileHandle,
     });
-    if (error) {
-      setSaving(false);
-      setMsg("خطأ: " + error.message);
-      return;
-    }
 
     const { error: authError } = await supabase.auth.updateUser({
       data: {
         ...user.user_metadata,
         full_name: nextDisplayName,
         name: nextDisplayName,
+        username: nextProfileHandle,
+        handle: nextProfileHandle,
+        bio: editBio.trim() || null,
+        phone: editPhone.trim() || null,
+        location: editLocation.trim() || null,
         avatar_frame_enabled: editAvatarFrameEnabled,
-        x_display_name_aliases: uniqueNonEmptyStrings([
-          displayName,
-          nextDisplayName,
-          ...existingDisplayNameAliases,
-        ]),
-        x_handle_aliases: uniqueNonEmptyStrings([
-          currentProfileHandle,
-          nextProfileHandle,
-          ...existingHandleAliases,
-        ]),
+        x_display_name_aliases: nextDisplayNameAliases,
+        x_handle_aliases: nextHandleAliases,
+        x_posts: nextXPosts,
       },
     });
 
@@ -157,6 +212,15 @@ export default function ProfilePage({ onSignOut }: Props) {
     if (authError) {
       setMsg("خطأ: " + authError.message);
       return;
+    }
+
+    saveXPosts(nextXPosts);
+
+    if (profileSaveError) {
+      console.warn(
+        "Profile DB save failed; auth metadata save succeeded",
+        profileSaveError,
+      );
     }
 
     await refreshProfile();
@@ -232,8 +296,23 @@ export default function ProfilePage({ onSignOut }: Props) {
 
       {/* Name + bio */}
       <div className={styles.nameSection}>
-        <h2 className={styles.displayName}>{displayName}</h2>
+        <div className={styles.displayNameRow}>
+          <h2 className={styles.displayName}>{displayName}</h2>
+          {currentUserVerificationBadge && (
+            <VerificationBadge
+              size="md"
+              variant={currentUserVerificationBadge}
+            />
+          )}
+        </div>
         <p className={styles.usernameText}>{username}</p>
+        {currentUserVerificationBadge && (
+          <p className={styles.verifiedHint}>
+            موثق بالشارة{" "}
+            {getVerificationBadgeAccentLabel(currentUserVerificationBadge)} من
+            الأدمن
+          </p>
+        )}
         {bio && <p className={styles.bioText}>{bio}</p>}
         <div className={styles.metaRow}>
           {location && (
@@ -278,6 +357,15 @@ export default function ProfilePage({ onSignOut }: Props) {
 
       {/* Sign out */}
       <div style={{ padding: "0 16px 20px" }}>
+        {canOpenAdmin && onOpenAdmin && (
+          <button
+            type="button"
+            onClick={onOpenAdmin}
+            className={styles.adminBtn}
+          >
+            لوحة الأدمن
+          </button>
+        )}
         <button
           type="button"
           onClick={handleSignOut}

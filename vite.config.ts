@@ -55,6 +55,11 @@ export default defineConfig({
           }
         },
       },
+
+      "/api/admin": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+      },
     },
   },
   css: {

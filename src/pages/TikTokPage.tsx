@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import TikTokVideoCard from "../components/TikTokVideoCard";
 import styles from "../pages-css/TikTokPage.module.css";
 import { useAuth } from "../lib/AuthContext";
+import { createAdminReport } from "../lib/adminStore";
 import { buildXHandle } from "../lib/xPosts";
+import { useVerificationRegistry } from "../lib/verification";
 import { supabase } from "./supabase";
 
 type VideoItem = {
@@ -10,6 +12,47 @@ type VideoItem = {
   video_url: string;
   caption: string;
 };
+
+const TIKTOK_VIDEOS_CACHE_KEY = "webplus:tiktok-videos";
+const FETCH_VIDEOS_TIMEOUT_MS = 10000;
+
+function isVideoItem(value: unknown): value is VideoItem {
+  if (!value || typeof value !== "object") return false;
+
+  const video = value as Partial<VideoItem>;
+  return (
+    typeof video.id === "number" &&
+    typeof video.video_url === "string" &&
+    typeof video.caption === "string"
+  );
+}
+
+function loadCachedVideos(): VideoItem[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(TIKTOK_VIDEOS_CACHE_KEY);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(isVideoItem) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCachedVideos(videos: VideoItem[]) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      TIKTOK_VIDEOS_CACHE_KEY,
+      JSON.stringify(videos),
+    );
+  } catch {
+    // Ignore cache write failures.
+  }
+}
 
 const normalizeVideoUrl = (rawUrl: string) => {
   const cleaned = rawUrl.trim().replace(/^[^a-zA-Z]+/, "");
@@ -32,13 +75,15 @@ const normalizeVideoUrl = (rawUrl: string) => {
 
 export default function TikTokPage() {
   const { profile, user } = useAuth();
+  const { getVerification } = useVerificationRegistry();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [videos, setVideos] = useState<VideoItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [videos, setVideos] = useState<VideoItem[]>(() => loadCachedVideos());
+  const [loading, setLoading] = useState(() => loadCachedVideos().length === 0);
   const [loadError, setLoadError] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [brokenVideoIds, setBrokenVideoIds] = useState<number[]>([]);
+  const fetchRequestIdRef = useRef(0);
 
   const rawEmail = profile?.email ?? user?.email ?? "";
   const displayName =
@@ -57,6 +102,7 @@ export default function TikTokPage() {
   const avatarFrameEnabled = Boolean(
     profile?.avatar_frame_enabled ?? user?.user_metadata?.avatar_frame_enabled,
   );
+  const currentUserVerificationBadge = getVerification(user?.id)?.badge ?? null;
 
   const visibleVideos = videos
     .map((vid) => ({
@@ -66,30 +112,79 @@ export default function TikTokPage() {
     .filter((vid) => Boolean(vid.video_url))
     .filter((vid) => !brokenVideoIds.includes(vid.id));
 
+  const hasPlayableVideos = visibleVideos.length > 0;
+  const statusMessage = loadError
+    ? loadError
+    : videos.length > 0
+      ? "تعذر تشغيل الفيديوهات الحالية"
+      : "لا يوجد فيديوهات حالياً";
+
   const fetchVideos = async () => {
-    setLoading(true);
+    const requestId = ++fetchRequestIdRef.current;
+    const hasExistingVideos = videos.length > 0;
+
+    if (!hasExistingVideos) {
+      setLoading(true);
+    }
     setLoadError("");
 
-    const { data, error } = await supabase
-      .from("videos")
-      .select("*")
-      .order("id", { ascending: false });
+    try {
+      const queryPromise = supabase
+        .from("videos")
+        .select("*")
+        .order("id", { ascending: false });
 
-    if (error) {
-      console.log("خطأ جلب الفيديوهات:", error);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        window.setTimeout(() => {
+          reject(new Error("FETCH_VIDEOS_TIMEOUT"));
+        }, FETCH_VIDEOS_TIMEOUT_MS);
+      });
+
+      const { data, error } = await Promise.race([
+        queryPromise,
+        timeoutPromise,
+      ]);
+
+      if (requestId !== fetchRequestIdRef.current) return;
+
+      if (error) {
+        console.log("خطأ جلب الفيديوهات:", error);
+        setLoadError("تعذر تحميل الفيديوهات الآن");
+        return;
+      }
+
+      const nextVideos = (data ?? []).filter(isVideoItem);
+      setVideos(nextVideos);
+      saveCachedVideos(nextVideos);
+      setBrokenVideoIds([]);
+    } catch (error) {
+      if (requestId !== fetchRequestIdRef.current) return;
+
+      console.log("فشل جلب فيديوهات تيك توك:", error);
       setLoadError("تعذر تحميل الفيديوهات الآن");
-      setLoading(false);
-      return;
+    } finally {
+      if (requestId === fetchRequestIdRef.current) {
+        setLoading(false);
+      }
     }
-
-    setVideos(data || []);
-    setBrokenVideoIds([]);
-    setLoading(false);
   };
 
   useEffect(() => {
     void fetchVideos();
   }, []);
+
+  useEffect(() => {
+    if (!loading) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setLoadError("تعذر تحميل الفيديوهات الآن");
+      setLoading(false);
+    }, FETCH_VIDEOS_TIMEOUT_MS + 1000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [loading]);
 
   useEffect(() => {
     setActiveIndex((current) => {
@@ -106,6 +201,22 @@ export default function TikTokPage() {
 
   const handleOpenFiles = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleReportVideo = async (video: VideoItem) => {
+    try {
+      await createAdminReport({
+        targetType: "video",
+        targetId: String(video.id),
+        source: "tiktok",
+        summary: video.caption || `Video #${video.id}`,
+        reason: "بلاغ من واجهة TikTok",
+        reporterLabel: handle,
+      });
+      window.alert("تم إرسال البلاغ على الفيديو");
+    } catch {
+      window.alert("تعذر إرسال البلاغ الآن");
+    }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -200,24 +311,37 @@ export default function TikTokPage() {
             إعادة المحاولة
           </button>
         </div>
-      ) : visibleVideos.length === 0 ? (
+      ) : !hasPlayableVideos ? (
         <div className={styles.statusState}>
-          <p className={styles.statusMessage}>لا يوجد فيديوهات حالياً</p>
+          <p className={styles.statusMessage}>{statusMessage}</p>
+          <button
+            type="button"
+            className={styles.statusRetryBtn}
+            onClick={() => {
+              setBrokenVideoIds([]);
+              void fetchVideos();
+            }}
+          >
+            تحديث الصفحة
+          </button>
         </div>
       ) : (
         visibleVideos.map((vid, index) => (
           <TikTokVideoCard
             key={vid.id}
+            videoId={vid.id}
             video_url={vid.video_url}
             caption={vid.caption}
             creatorName={displayName}
             creatorHandle={handle}
             creatorAvatarUrl={avatarUrl}
             creatorAvatarFrameEnabled={avatarFrameEnabled}
+            creatorVerificationBadge={currentUserVerificationBadge}
             isActive={index === activeIndex}
             shouldLoad={Math.abs(index - activeIndex) <= 1}
             onVideoError={() => handleVideoError(vid.id)}
             onAddVideo={handleOpenFiles}
+            onReport={() => void handleReportVideo(vid)}
           />
         ))
       )}

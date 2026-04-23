@@ -63,10 +63,14 @@ function normalizeProfile(
     avatar_frame_enabled:
       Boolean(data?.avatar_frame_enabled) ||
       Boolean(authUser?.user_metadata?.avatar_frame_enabled),
-    username: data?.username ?? null,
-    bio: data?.bio ?? null,
-    phone: data?.phone ?? null,
-    location: data?.location ?? null,
+    username:
+      data?.username ??
+      authUser?.user_metadata?.username ??
+      authUser?.user_metadata?.handle ??
+      null,
+    bio: data?.bio ?? authUser?.user_metadata?.bio ?? null,
+    phone: data?.phone ?? authUser?.user_metadata?.phone ?? null,
+    location: data?.location ?? authUser?.user_metadata?.location ?? null,
     created_at:
       data?.created_at ?? authUser?.created_at ?? new Date().toISOString(),
   };
@@ -132,6 +136,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const clearRecovery = () => setIsRecovery(false);
 
+  const clearAuthState = () => {
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    setIsRecovery(false);
+    setLoading(false);
+  };
+
   const syncUser = async (authUser: User) => {
     await upsertUser(authUser);
     const p = await loadProfileFromDB(authUser);
@@ -170,7 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // الاستماع لكل تغييرات حالة المصادقة
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, s) => {
+    } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
       setLoading(false);
@@ -182,11 +194,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (s?.user) {
-        try {
-          await syncUser(s.user);
-        } catch {
-          setProfile(normalizeProfile(null, s.user));
-        }
+        void Promise.resolve()
+          .then(() => syncUser(s.user))
+          .catch(() => {
+            setProfile(normalizeProfile(null, s.user));
+          });
       } else {
         setProfile(null);
       }
@@ -196,9 +208,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setProfile(null);
-    setIsRecovery(false);
+    clearAuthState();
+
+    try {
+      const { error } = await supabase.auth.signOut({ scope: "global" });
+
+      if (error) {
+        const fallback = await supabase.auth.signOut({ scope: "local" });
+
+        if (fallback.error) {
+          console.warn("Supabase sign-out fallback failed", fallback.error);
+        }
+      }
+    } catch (error) {
+      console.warn("Supabase sign-out failed", error);
+      await supabase.auth.signOut({ scope: "local" }).catch(() => {
+        // Local auth state is already cleared above.
+      });
+    }
   };
 
   return (

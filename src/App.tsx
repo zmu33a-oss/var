@@ -9,7 +9,9 @@ import ProfilePage from "./pages/ProfilePage";
 import TikTokPage from "./pages/TikTokPage";
 import XPage from "./pages/XPage";
 import ChatPage from "./pages/ChatPage";
+import AdminPage from "./pages/AdminPage";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
+import { canAccessAdmin, getAdminRole } from "./lib/admin";
 import { supabase } from "./pages/supabase";
 import {
   loadXPosts,
@@ -21,16 +23,19 @@ import {
 type HomeMode = "tiktok" | "x";
 type ChatComposer = "dm" | "group" | "post" | null;
 type AuthMode = "login" | "signup";
+type AppTab = TabType | "admin";
 
 // ─── الجزء الداخلي للتطبيق — يستطيع استخدام useAuth ─────────────────────────
 function AppContent() {
-  const [tab, setTab] = useState<TabType>("home");
-  const [chatBaseTab, setChatBaseTab] = useState<TabType>("home");
+  const [tab, setTab] = useState<AppTab>("home");
+  const [chatBaseTab, setChatBaseTab] = useState<AppTab>("home");
   const [mode, setMode] = useState<HomeMode>("tiktok");
   const [chatComposer, setChatComposer] = useState<ChatComposer>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [xPosts, setXPosts] = useState<XPost[]>(() => loadXPosts());
   const { user, isRecovery, clearRecovery, loading } = useAuth();
+  const adminRole = getAdminRole(user);
+  const isAdminAllowed = canAccessAdmin(user);
   const syncedXPostsRef = useRef("");
   const xPostsRef = useRef<XPost[]>(xPosts);
 
@@ -85,10 +90,16 @@ function AppContent() {
 
   // طرد المستخدم غير المسجل من الصفحات المحمية
   useEffect(() => {
-    if (!user && (tab === "chat" || tab === "profile")) {
+    if (!user && (tab === "chat" || tab === "profile" || tab === "admin")) {
       setTab("account");
     }
   }, [user, tab]);
+
+  useEffect(() => {
+    if (tab === "admin" && !isAdminAllowed) {
+      setTab(user ? "profile" : "account");
+    }
+  }, [isAdminAllowed, tab, user]);
 
   useEffect(() => {
     xPostsRef.current = xPosts;
@@ -208,7 +219,27 @@ function AppContent() {
       {visibleTab === "fans" && <FansPage />}
       {visibleTab === "leagues" && <LeaguesPage />}
       {visibleTab === "profile" && (
-        <ProfilePage onSignOut={() => setTab("home")} />
+        <ProfilePage
+          onSignOut={() => setTab("home")}
+          onOpenAdmin={() => setTab("admin")}
+          canOpenAdmin={isAdminAllowed}
+        />
+      )}
+      {visibleTab === "admin" && adminRole && (
+        <AdminPage
+          role={adminRole}
+          posts={xPosts}
+          onDeletePost={(postId) => {
+            updateXPosts((prev) => prev.filter((post) => post.id !== postId));
+          }}
+          actorLabel={
+            user?.user_metadata?.full_name?.trim() ||
+            user?.user_metadata?.name?.trim() ||
+            user?.email ||
+            "admin"
+          }
+          onClose={() => setTab("profile")}
+        />
       )}
       {visibleTab === "account" && authMode === "login" && (
         <LoginPage
@@ -248,7 +279,11 @@ function AppContent() {
       )}
 
       <BottomNav
-        current={visibleTab === "profile" ? "account" : visibleTab}
+        current={
+          visibleTab === "profile" || visibleTab === "admin"
+            ? "account"
+            : visibleTab
+        }
         setTab={(nextTab) => {
           // لو مسجّل دخول وضغط الحساب → روّح للبروفايل مباشرة
           if (nextTab === "account" && user) {

@@ -1,39 +1,701 @@
 const express = require("express");
-const { Pool } = require("pg");
 const cors = require("cors");
-const bcrypt = require("bcrypt");
+const http = require("http");
+const path = require("path");
+const fs = require("fs/promises");
+const crypto = require("crypto");
+const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
 
 const app = express();
 
-// Middlewares
-app.use(cors());
+const SUPABASE_URL =
+  process.env.SUPABASE_URL || "https://lkbuqgsdmxzzzuamjtrv.supabase.co";
+const SUPABASE_ANON_KEY =
+  process.env.SUPABASE_ANON_KEY ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYnVxZ3NkbXh6enp1YW1qdHJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5MjEyNTgsImV4cCI6MjA5MTQ5NzI1OH0.QH8yVOHFd0irocFXVK4urzknUi2aqXUTshugCL0HwWk";
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const PORT = Number(process.env.ADMIN_API_PORT || process.env.PORT || 5000);
+const ADMIN_EMAIL_ALLOWLIST = new Set(
+  (process.env.ADMIN_EMAIL_ALLOWLIST || "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean),
+);
+const ENABLE_DEV_ADMIN_FALLBACK = process.env.NODE_ENV !== "production";
+const ADMIN_STORE_PATH = path.join(__dirname, "..", "data", "admin-store.json");
+
+const authClient = createClient(
+  SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  },
+);
+
+const serviceClient = SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+  : null;
+
+app.use(
+  cors({
+    origin: true,
+  }),
+);
 app.use(express.json());
 
-// إعداد الاتصال بقاعدة البيانات
-const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT,
-});
+function normalizeRole(value) {
+  if (typeof value !== "string") return null;
 
-// تجربة الاتصال
-pool.connect((err, client, release) => {
-  if (err) {
-    return console.error("خطأ في الاتصال بالقاعدة:", err.stack);
+  const normalizedValue = value.trim().toLowerCase();
+  if (normalizedValue === "content_admin") return "content_admin";
+  if (normalizedValue === "super_admin") return "super_admin";
+  return null;
+}
+
+function buildActorLabel(user) {
+  return (
+    user?.user_metadata?.full_name?.trim() ||
+    user?.user_metadata?.name?.trim() ||
+    user?.email ||
+    user?.id ||
+    "admin"
+  );
+}
+
+function resolveAdminRole(user) {
+  if (!user) return null;
+
+  const metadata = user.user_metadata || {};
+  const explicitRole =
+    normalizeRole(metadata.role) || normalizeRole(metadata.admin_role);
+
+  if (explicitRole) {
+    return explicitRole;
   }
-  console.log("تم الاتصال بقاعدة البيانات بنجاح! ✅");
-  release();
-});
 
-// مسار تجريبي للتأكد أن السيرفر يعمل
+  if (metadata.is_admin === true) {
+    return "super_admin";
+  }
+
+  const normalizedEmail = user.email?.trim().toLowerCase();
+  if (normalizedEmail && ADMIN_EMAIL_ALLOWLIST.has(normalizedEmail)) {
+    return "super_admin";
+  }
+
+  if (ENABLE_DEV_ADMIN_FALLBACK) {
+    return "super_admin";
+  }
+
+  return null;
+}
+
+function createEntryId() {
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function isSupportedVerificationBadge(value) {
+  return value === "yellow" || value === "blue";
+}
+
+function normalizeVerificationBadge(value) {
+  return value === "blue" ? "blue" : "yellow";
+}
+
+function getVerificationBadgeLabel(value) {
+  return normalizeVerificationBadge(value) === "blue" ? "الزرقاء" : "الصفراء";
+}
+
+function normalizeVerifiedUsers(value) {
+  if (!Array.isArray(value)) return [];
+
+  return value.filter(
+    (entry) =>
+      entry &&
+      typeof entry === "object" &&
+      typeof entry.userId === "string" &&
+      entry.userId.trim(),
+  );
+}
+
+function createAuditLogEntry({ action, targetType, targetId, details, actor }) {
+  return {
+    id: createEntryId(),
+    action,
+    targetType,
+    targetId,
+    details,
+    actor,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function serializeVerificationEntry(entry) {
+  return {
+    userId: entry.userId,
+    badge: normalizeVerificationBadge(entry.badge),
+    updatedAt:
+      typeof entry.updatedAt === "string"
+        ? entry.updatedAt
+        : new Date().toISOString(),
+    updatedBy: typeof entry.updatedBy === "string" ? entry.updatedBy : "admin",
+  };
+}
+
+function buildVerificationLookup(verifiedUsers) {
+  return new Map(
+    normalizeVerifiedUsers(verifiedUsers).map((entry) => [
+      entry.userId,
+      serializeVerificationEntry(entry),
+    ]),
+  );
+}
+
+async function ensureAdminStore() {
+  await fs.mkdir(path.dirname(ADMIN_STORE_PATH), { recursive: true });
+
+  try {
+    await fs.access(ADMIN_STORE_PATH);
+  } catch {
+    await fs.writeFile(
+      ADMIN_STORE_PATH,
+      JSON.stringify(
+        { reports: [], auditLogs: [], verifiedUsers: [] },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+  }
+}
+
+async function readAdminStore() {
+  await ensureAdminStore();
+
+  try {
+    const rawValue = await fs.readFile(ADMIN_STORE_PATH, "utf8");
+    const parsedValue = JSON.parse(rawValue);
+
+    return {
+      reports: Array.isArray(parsedValue?.reports) ? parsedValue.reports : [],
+      auditLogs: Array.isArray(parsedValue?.auditLogs)
+        ? parsedValue.auditLogs
+        : [],
+      verifiedUsers: normalizeVerifiedUsers(parsedValue?.verifiedUsers).map(
+        serializeVerificationEntry,
+      ),
+    };
+  } catch {
+    return {
+      reports: [],
+      auditLogs: [],
+      verifiedUsers: [],
+    };
+  }
+}
+
+async function writeAdminStore(store) {
+  await ensureAdminStore();
+  await fs.writeFile(ADMIN_STORE_PATH, JSON.stringify(store, null, 2), "utf8");
+}
+
+function getVideoStoragePath(videoUrl) {
+  try {
+    const parsedUrl = new URL(videoUrl);
+    const marker = "/storage/v1/object/public/videos/";
+    const markerIndex = parsedUrl.pathname.indexOf(marker);
+    if (markerIndex === -1) return null;
+    return decodeURIComponent(
+      parsedUrl.pathname.slice(markerIndex + marker.length),
+    );
+  } catch {
+    return null;
+  }
+}
+
+function requireServiceClient(res) {
+  if (serviceClient) {
+    return true;
+  }
+
+  res.status(503).json({
+    error: "ADMIN_SERVICE_ROLE_MISSING",
+    message:
+      "الخادم الإداري يحتاج SUPABASE_SERVICE_ROLE_KEY لتفعيل جلب البيانات الإدارية والحذف المحمي.",
+  });
+  return false;
+}
+
+async function authenticateRequest(req, res) {
+  const authorizationHeader = req.headers.authorization || "";
+  const accessToken = authorizationHeader.startsWith("Bearer ")
+    ? authorizationHeader.slice(7).trim()
+    : "";
+
+  if (!accessToken) {
+    res.status(401).json({
+      error: "AUTH_REQUIRED",
+      message: "يجب تسجيل الدخول أولًا.",
+    });
+    return null;
+  }
+
+  const { data, error } = await authClient.auth.getUser(accessToken);
+
+  if (error || !data?.user) {
+    res.status(401).json({
+      error: "INVALID_SESSION",
+      message: "تعذر التحقق من جلسة المستخدم.",
+    });
+    return null;
+  }
+
+  return data.user;
+}
+
+async function requireAuthenticatedUser(req, res, next) {
+  const user = await authenticateRequest(req, res);
+  if (!user) return;
+
+  req.authUser = user;
+  next();
+}
+
+async function requireAdmin(req, res, next) {
+  const user = await authenticateRequest(req, res);
+  if (!user) return;
+
+  const role = resolveAdminRole(user);
+
+  if (!role) {
+    res.status(403).json({
+      error: "ADMIN_FORBIDDEN",
+      message: "هذا الحساب لا يملك صلاحية الأدمن.",
+    });
+    return;
+  }
+
+  req.authUser = user;
+  req.adminRole = role;
+  next();
+}
+
 app.get("/", (req, res) => {
-  res.send("السيرفر شغال تمام!");
+  res.json({
+    service: "WEBPLUS Admin API",
+    status: "ok",
+    serviceRoleConfigured: Boolean(serviceClient),
+  });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`السيرفر شغال على المنفذ: ${PORT}`);
+app.get("/api/admin/session", requireAdmin, (req, res) => {
+  res.json({
+    role: req.adminRole,
+    email: req.authUser?.email || null,
+    userId: req.authUser?.id,
+  });
 });
+
+app.get("/api/admin/public/verification", async (req, res) => {
+  const store = await readAdminStore();
+  res.json({
+    verifiedUsers: normalizeVerifiedUsers(store.verifiedUsers).map(
+      serializeVerificationEntry,
+    ),
+  });
+});
+
+app.get("/api/admin/reports", requireAdmin, async (req, res) => {
+  const store = await readAdminStore();
+  res.json(store.reports);
+});
+
+app.get("/api/admin/verification", requireAdmin, async (req, res) => {
+  const store = await readAdminStore();
+  res.json({
+    verifiedUsers: normalizeVerifiedUsers(store.verifiedUsers).map(
+      serializeVerificationEntry,
+    ),
+  });
+});
+
+app.post("/api/admin/reports", requireAuthenticatedUser, async (req, res) => {
+  const {
+    targetType,
+    targetId,
+    source,
+    summary,
+    reason,
+    reporterLabel,
+    status,
+  } = req.body || {};
+
+  if (
+    typeof targetType !== "string" ||
+    typeof targetId !== "string" ||
+    typeof source !== "string" ||
+    typeof summary !== "string" ||
+    typeof reason !== "string"
+  ) {
+    res.status(400).json({
+      error: "INVALID_REPORT",
+      message: "بيانات البلاغ غير مكتملة.",
+    });
+    return;
+  }
+
+  const nextReport = {
+    id: createEntryId(),
+    targetType,
+    targetId,
+    source,
+    summary,
+    reason,
+    status:
+      status === "reviewing" || status === "resolved" || status === "dismissed"
+        ? status
+        : "new",
+    createdAt: new Date().toISOString(),
+    reporterLabel: reporterLabel || buildActorLabel(req.authUser),
+  };
+
+  const store = await readAdminStore();
+  store.reports.unshift(nextReport);
+  await writeAdminStore(store);
+
+  res.status(201).json(nextReport);
+});
+
+app.patch("/api/admin/reports/:reportId", requireAdmin, async (req, res) => {
+  const { reportId } = req.params;
+  const { status } = req.body || {};
+
+  if (
+    status !== "new" &&
+    status !== "reviewing" &&
+    status !== "resolved" &&
+    status !== "dismissed"
+  ) {
+    res.status(400).json({
+      error: "INVALID_REPORT_STATUS",
+      message: "حالة البلاغ غير صالحة.",
+    });
+    return;
+  }
+
+  const store = await readAdminStore();
+  const reportIndex = store.reports.findIndex(
+    (report) => report.id === reportId,
+  );
+
+  if (reportIndex === -1) {
+    res.status(404).json({
+      error: "REPORT_NOT_FOUND",
+      message: "البلاغ المطلوب غير موجود.",
+    });
+    return;
+  }
+
+  const updatedReport = {
+    ...store.reports[reportIndex],
+    status,
+  };
+  store.reports[reportIndex] = updatedReport;
+  await writeAdminStore(store);
+
+  res.json({
+    reports: store.reports,
+  });
+});
+
+app.get("/api/admin/audit", requireAdmin, async (req, res) => {
+  const store = await readAdminStore();
+  res.json(store.auditLogs);
+});
+
+app.post("/api/admin/audit", requireAdmin, async (req, res) => {
+  const { action, targetType, targetId, details, actor } = req.body || {};
+
+  if (
+    typeof action !== "string" ||
+    typeof targetType !== "string" ||
+    typeof targetId !== "string" ||
+    typeof details !== "string"
+  ) {
+    res.status(400).json({
+      error: "INVALID_AUDIT_LOG",
+      message: "بيانات سجل العملية غير مكتملة.",
+    });
+    return;
+  }
+
+  const nextLog = createAuditLogEntry({
+    action,
+    targetType,
+    targetId,
+    details,
+    actor:
+      typeof actor === "string" && actor.trim()
+        ? actor
+        : buildActorLabel(req.authUser),
+  });
+
+  const store = await readAdminStore();
+  store.auditLogs.unshift(nextLog);
+  await writeAdminStore(store);
+
+  res.status(201).json(nextLog);
+});
+
+app.patch(
+  "/api/admin/users/:userId/verification",
+  requireAdmin,
+  async (req, res) => {
+    const userId =
+      typeof req.params.userId === "string" ? req.params.userId.trim() : "";
+    const { verified, badge } = req.body || {};
+
+    if (!userId) {
+      res.status(400).json({
+        error: "INVALID_USER_ID",
+        message: "معرف المستخدم غير صالح.",
+      });
+      return;
+    }
+
+    if (typeof verified !== "boolean") {
+      res.status(400).json({
+        error: "INVALID_VERIFICATION_STATE",
+        message: "حالة التوثيق يجب أن تكون true أو false.",
+      });
+      return;
+    }
+
+    if (
+      verified &&
+      typeof badge !== "undefined" &&
+      !isSupportedVerificationBadge(badge)
+    ) {
+      res.status(400).json({
+        error: "INVALID_VERIFICATION_BADGE",
+        message: "لون الشارة يجب أن يكون yellow أو blue.",
+      });
+      return;
+    }
+
+    const actor = buildActorLabel(req.authUser);
+    const store = await readAdminStore();
+    const lookup = buildVerificationLookup(store.verifiedUsers);
+
+    if (verified) {
+      const nextBadge = isSupportedVerificationBadge(badge)
+        ? badge
+        : lookup.get(userId)?.badge || "yellow";
+
+      lookup.set(userId, {
+        userId,
+        badge: nextBadge,
+        updatedAt: new Date().toISOString(),
+        updatedBy: actor,
+      });
+    } else {
+      lookup.delete(userId);
+    }
+
+    const nextVerification = lookup.get(userId) ?? null;
+
+    store.verifiedUsers = Array.from(lookup.values());
+    store.auditLogs.unshift(
+      createAuditLogEntry({
+        action: verified ? "verify_user" : "remove_user_verification",
+        targetType: "user",
+        targetId: userId,
+        details: verified
+          ? `تم تعيين الشارة ${getVerificationBadgeLabel(nextVerification?.badge)} للمستخدم ${userId}`
+          : `تم سحب التوثيق من المستخدم ${userId}`,
+        actor,
+      }),
+    );
+    await writeAdminStore(store);
+
+    res.json({
+      verified,
+      verification: nextVerification,
+      verifiedUsers: store.verifiedUsers,
+    });
+  },
+);
+
+app.get("/api/admin/dashboard", requireAdmin, async (req, res) => {
+  if (!requireServiceClient(res)) return;
+
+  const [usersRes, groupsRes, membersRes, videosRes, store] = await Promise.all(
+    [
+      serviceClient.from("users").select("id, email, full_name"),
+      serviceClient.from("groups").select("id, name, is_private, created_by"),
+      serviceClient.from("group_members").select("group_id, user_id"),
+      serviceClient
+        .from("videos")
+        .select("id, video_url, caption")
+        .order("id", { ascending: false }),
+      readAdminStore(),
+    ],
+  );
+
+  const firstError =
+    usersRes.error ?? groupsRes.error ?? membersRes.error ?? videosRes.error;
+
+  if (firstError) {
+    res.status(500).json({
+      error: "ADMIN_DASHBOARD_FAILED",
+      message: firstError.message || "تعذر تحميل بيانات الأدمن.",
+    });
+    return;
+  }
+
+  const memberCountMap = new Map();
+  (membersRes.data || []).forEach((member) => {
+    const currentCount = memberCountMap.get(member.group_id) || 0;
+    memberCountMap.set(member.group_id, currentCount + 1);
+  });
+
+  const groups = (groupsRes.data || []).map((group) => ({
+    ...group,
+    memberCount: memberCountMap.get(group.id) || 0,
+  }));
+  const verificationLookup = buildVerificationLookup(store.verifiedUsers);
+  const users = (usersRes.data || []).map((user) => ({
+    ...user,
+    verified: verificationLookup.has(user.id),
+    verificationBadge: verificationLookup.get(user.id)?.badge || null,
+  }));
+
+  res.json({
+    users,
+    groups,
+    videos: videosRes.data || [],
+    reports: store.reports,
+    auditLogs: store.auditLogs,
+    verifiedUsers: store.verifiedUsers,
+  });
+});
+
+app.delete("/api/admin/groups/:groupId", requireAdmin, async (req, res) => {
+  if (!requireServiceClient(res)) return;
+
+  const { groupId } = req.params;
+  const { data: groupRow } = await serviceClient
+    .from("groups")
+    .select("id, name")
+    .eq("id", groupId)
+    .maybeSingle();
+
+  await serviceClient.from("group_members").delete().eq("group_id", groupId);
+  await serviceClient.from("messages").delete().eq("group_id", groupId);
+
+  const { error } = await serviceClient
+    .from("groups")
+    .delete()
+    .eq("id", groupId);
+
+  if (error) {
+    res.status(500).json({
+      error: "DELETE_GROUP_FAILED",
+      message: error.message || "تعذر حذف القروب.",
+    });
+    return;
+  }
+
+  const store = await readAdminStore();
+  store.auditLogs.unshift({
+    ...createAuditLogEntry({
+      action: "delete_group",
+      targetType: "group",
+      targetId: groupId,
+      details: `تم حذف القروب ${groupRow?.name || groupId}`,
+      actor: buildActorLabel(req.authUser),
+    }),
+  });
+  await writeAdminStore(store);
+
+  res.json({ success: true, deletedGroupId: groupId });
+});
+
+app.delete("/api/admin/videos/:videoId", requireAdmin, async (req, res) => {
+  if (!requireServiceClient(res)) return;
+
+  const videoId = Number(req.params.videoId);
+
+  if (!Number.isFinite(videoId)) {
+    res.status(400).json({
+      error: "INVALID_VIDEO_ID",
+      message: "معرف الفيديو غير صالح.",
+    });
+    return;
+  }
+
+  const { data: videoRow } = await serviceClient
+    .from("videos")
+    .select("id, video_url, caption")
+    .eq("id", videoId)
+    .maybeSingle();
+
+  const { error } = await serviceClient
+    .from("videos")
+    .delete()
+    .eq("id", videoId);
+
+  if (error) {
+    res.status(500).json({
+      error: "DELETE_VIDEO_FAILED",
+      message: error.message || "تعذر حذف الفيديو.",
+    });
+    return;
+  }
+
+  const storagePath = getVideoStoragePath(videoRow?.video_url || "");
+  if (storagePath) {
+    await serviceClient.storage
+      .from("videos")
+      .remove([storagePath])
+      .catch(() => null);
+  }
+
+  const store = await readAdminStore();
+  store.auditLogs.unshift({
+    ...createAuditLogEntry({
+      action: "delete_video",
+      targetType: "video",
+      targetId: String(videoId),
+      details: `تم حذف فيديو TikTok رقم ${videoId}`,
+      actor: buildActorLabel(req.authUser),
+    }),
+  });
+  await writeAdminStore(store);
+
+  res.json({ success: true, deletedVideoId: videoId });
+});
+
+http
+  .createServer(
+    {
+      maxHeaderSize: 128 * 1024,
+    },
+    app,
+  )
+  .listen(PORT, () => {
+    console.log(`WEBPLUS Admin API listening on http://localhost:${PORT}`);
+    console.log(`Supabase service role configured: ${Boolean(serviceClient)}`);
+  });

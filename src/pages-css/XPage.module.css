@@ -224,9 +224,25 @@
   color: white;
 }
 
-.post-user-info span {
+.post-user-info > span:not(.verifiedName) {
   color: var(--x-text-gray);
   margin-right: 5px;
+}
+
+.verifiedName {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--x-white);
+  margin-right: 0;
+}
+
+.verifiedName > b,
+.verifiedName > span:not([aria-label]),
+.detail-post-head .verifiedName,
+.comment-author .verifiedName {
+  color: var(--x-white);
+  margin-right: 0;
 }
 
 .post-menu-trigger {
@@ -381,7 +397,10 @@
 }
 
 .comment-author {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
   margin-bottom: 4px;
   color: #79c0ff;
   font-size: 12px;
@@ -566,7 +585,7 @@
   font-size: 14px;
 }
 
-.detail-post-head span {
+.detail-post-head > span:not(.verifiedName) {
   color: var(--x-text-gray);
 }
 
