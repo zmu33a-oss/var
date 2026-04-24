@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import styles from "../pages-css/AdminPage.module.css";
 import type { AdminRole } from "../lib/admin";
+import { useAuth } from "../lib/AuthContext";
 import {
   ADMIN_STORE_EVENT,
   appendAdminAuditLog,
@@ -183,6 +184,80 @@ function mergeUsersWithVerification(
   }));
 }
 
+function getAdminLoadMessage(error: unknown, fallbackMessage: string) {
+  if (!(error instanceof Error)) {
+    return fallbackMessage;
+  }
+
+  const message = error.message.trim();
+  if (!message || /failed to fetch/i.test(message)) {
+    return fallbackMessage;
+  }
+
+  return message;
+}
+
+async function safeAdminQuery<T>(
+  request: PromiseLike<{
+    data: T | null;
+    error: { message?: string | null } | null;
+  }>,
+  fallbackData: T,
+  fallbackMessage: string,
+) {
+  try {
+    const result = await request;
+    if (result.error) {
+      return {
+        data: fallbackData,
+        errorMessage: getAdminLoadMessage(result.error, fallbackMessage),
+      };
+    }
+
+    return {
+      data: result.data ?? fallbackData,
+      errorMessage: "",
+    };
+  } catch (error) {
+    return {
+      data: fallbackData,
+      errorMessage: getAdminLoadMessage(error, fallbackMessage),
+    };
+  }
+}
+
+function appendFallbackAdminUser(
+  rows: AdminUserRow[],
+  verifiedUsers: VerifiedUserRecord[],
+  currentUser: {
+    id?: string | null;
+    email?: string | null;
+    fullName?: string | null;
+  },
+) {
+  const userId = currentUser.id?.trim();
+  if (!userId) {
+    return rows;
+  }
+
+  if (rows.some((row) => row.id === userId)) {
+    return rows;
+  }
+
+  const verification = verifiedUsers.find((entry) => entry.userId === userId);
+
+  return [
+    {
+      id: userId,
+      email: currentUser.email?.trim() || null,
+      full_name: currentUser.fullName?.trim() || null,
+      verified: Boolean(verification),
+      verificationBadge: verification?.badge ?? null,
+    },
+    ...rows,
+  ];
+}
+
 export default function AdminPage({
   role,
   onClose,
@@ -190,6 +265,7 @@ export default function AdminPage({
   onDeletePost,
   actorLabel,
 }: AdminPageProps) {
+  const { user, profile } = useAuth();
   const safePosts = Array.isArray(posts) ? posts : [];
   const safeActorLabel = actorLabel || "admin";
   const shouldUseLocalAdminFallback = (error: unknown) => {
@@ -231,54 +307,89 @@ export default function AdminPage({
       nextAuditLogs,
       verifiedUsers,
     ] = await Promise.all([
-      supabase.from("users").select("id, email, full_name"),
-      supabase.from("groups").select("id, name, is_private, created_by"),
-      supabase.from("group_members").select("group_id, user_id"),
-      supabase.from("videos").select("id, video_url, caption").order("id", {
-        ascending: false,
-      }),
-      loadAdminReports(),
-      loadAdminAuditLogs(),
-      loadVerifiedUsers(true),
-    ]);
-
-    const firstError =
-      usersRes.error ?? groupsRes.error ?? membersRes.error ?? videosRes.error;
-
-    if (firstError) {
-      throw new Error(firstError.message || "تعذر تحميل بيانات الأدمن الآن");
-    }
-
-    const memberCountMap = new Map<string, number>();
-    (membersRes.data ?? []).forEach((member) => {
-      const currentCount = memberCountMap.get(member.group_id) ?? 0;
-      memberCountMap.set(member.group_id, currentCount + 1);
-    });
-
-    return {
-      users: mergeUsersWithVerification(
-        (usersRes.data ?? []) as Array<{
+      safeAdminQuery(
+        supabase.from("users").select("id, email, full_name"),
+        [] as Array<{
           id: string;
           email: string | null;
           full_name: string | null;
         }>,
-        verifiedUsers,
+        "تعذر تحميل قائمة المستخدمين الآن.",
       ),
-      groups: (
-        (groupsRes.data ?? []) as Array<{
+      safeAdminQuery(
+        supabase.from("groups").select("id, name, is_private, created_by"),
+        [] as Array<{
           id: string;
           name: string;
           is_private: boolean;
           created_by: string | null;
-        }>
-      ).map((group) => ({
+        }>,
+        "تعذر تحميل القروبات الآن.",
+      ),
+      safeAdminQuery(
+        supabase.from("group_members").select("group_id, user_id"),
+        [] as Array<{
+          group_id: string;
+          user_id: string;
+        }>,
+        "تعذر تحميل أعضاء القروبات الآن.",
+      ),
+      safeAdminQuery(
+        supabase.from("videos").select("id, video_url, caption").order("id", {
+          ascending: false,
+        }),
+        [] as AdminVideoRow[],
+        "تعذر تحميل الفيديوهات الآن.",
+      ),
+      loadAdminReports().catch(() => []),
+      loadAdminAuditLogs().catch(() => []),
+      loadVerifiedUsers(true).catch(() => []),
+    ]);
+
+    const currentUserFullName =
+      profile?.full_name ??
+      (typeof user?.user_metadata?.full_name === "string"
+        ? user.user_metadata.full_name
+        : typeof user?.user_metadata?.name === "string"
+          ? user.user_metadata.name
+          : null);
+
+    const memberCountMap = new Map<string, number>();
+    membersRes.data.forEach((member) => {
+      const currentCount = memberCountMap.get(member.group_id) ?? 0;
+      memberCountMap.set(member.group_id, currentCount + 1);
+    });
+
+    const mergedUsers = mergeUsersWithVerification(
+      usersRes.data,
+      verifiedUsers,
+    );
+    const nextUsers = appendFallbackAdminUser(mergedUsers, verifiedUsers, {
+      id: profile?.id ?? user?.id ?? null,
+      email: profile?.email ?? user?.email ?? null,
+      fullName: currentUserFullName,
+    });
+
+    const partialErrors = [
+      usersRes.errorMessage,
+      groupsRes.errorMessage,
+      membersRes.errorMessage,
+      videosRes.errorMessage,
+    ].filter(Boolean);
+
+    return {
+      users: nextUsers,
+      groups: groupsRes.data.map((group) => ({
         ...group,
         memberCount: memberCountMap.get(group.id) ?? 0,
       })),
-      videos: (videosRes.data ?? []) as AdminVideoRow[],
+      videos: videosRes.data,
       reports: nextReports,
       auditLogs: nextAuditLogs,
       verifiedUsers,
+      errorMessage: partialErrors.length
+        ? "تعذر تحميل بعض بيانات الإدارة الآن. تم عرض البيانات المتاحة فقط."
+        : "",
     };
   };
 
@@ -297,9 +408,7 @@ export default function AdminPage({
     } catch (error) {
       if (!shouldUseLocalAdminFallback(error)) {
         setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "تعذر تحميل بيانات الأدمن الآن",
+          getAdminLoadMessage(error, "تعذر تحميل بيانات الأدمن الآن"),
         );
         return;
       }
@@ -313,11 +422,10 @@ export default function AdminPage({
       setVideos(fallbackData.videos);
       setReports(fallbackData.reports);
       setAuditLogs(fallbackData.auditLogs);
+      setErrorMessage(fallbackData.errorMessage);
     } catch (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "تعذر تحميل بيانات الأدمن الآن",
+        getAdminLoadMessage(error, "تعذر تحميل بيانات الأدمن الآن"),
       );
     }
   };

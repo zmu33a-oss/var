@@ -28,10 +28,23 @@ type TikTokVideoCardProps = {
   creatorAvatarUrl: string | null;
   creatorAvatarFrameEnabled?: boolean;
   creatorVerificationBadge?: VerificationBadgeVariant | null;
+  stats: {
+    likes: number;
+    comments: number;
+    saves: number;
+    shares: number;
+  };
+  likedByMe?: boolean;
+  savedByMe?: boolean;
+  sharedByMe?: boolean;
   isActive: boolean;
   shouldLoad?: boolean;
   onVideoError?: () => void;
   onAddVideo?: () => void;
+  onToggleLike?: () => void;
+  onToggleSave?: () => void;
+  onComment?: () => void;
+  onShare?: () => void;
   onReport?: () => void;
 };
 
@@ -57,6 +70,18 @@ function readStoredDockTopPercent() {
   return clampDockTopPercent(parsedValue);
 }
 
+function formatCount(value: number) {
+  if (value >= 1000000) {
+    return `${(value / 1000000).toFixed(1)}m`;
+  }
+
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}k`;
+  }
+
+  return String(value);
+}
+
 export default function TikTokVideoCard({
   videoId,
   video_url,
@@ -66,18 +91,24 @@ export default function TikTokVideoCard({
   creatorAvatarUrl,
   creatorAvatarFrameEnabled = false,
   creatorVerificationBadge = null,
+  stats,
+  likedByMe = false,
+  savedByMe = false,
+  sharedByMe = false,
   isActive,
   shouldLoad = true,
   onVideoError,
   onAddVideo,
+  onToggleLike,
+  onToggleSave,
+  onComment,
+  onShare,
   onReport,
 }: TikTokVideoCardProps) {
   const [videoError, setVideoError] = useState("");
   const [isPaused, setIsPaused] = useState(false);
   const [isDockOpen, setIsDockOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [liked, setLiked] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [dockTopPercent, setDockTopPercent] = useState(() =>
     readStoredDockTopPercent(),
   );
@@ -295,25 +326,6 @@ export default function TikTokVideoCard({
     }
   };
 
-  const handleShare = async () => {
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: "Xtik",
-          text: "شاهد هذا الفيديو على Xtik",
-          url: window.location.href,
-        });
-      }
-    } catch {
-      // Ignore abort/cancel from native share sheet
-    }
-  };
-
-  const handleComment = () => {
-    // Placeholder until comments backend is wired.
-    alert("ميزة التعليقات جاهزة للتوصيل بالباكند");
-  };
-
   const handleFullscreen = async () => {
     const video = videoRef.current;
     if (!video) return;
@@ -400,29 +412,41 @@ export default function TikTokVideoCard({
 
           <button
             type="button"
-            className={`${styles.dockActionBtn} ${liked ? styles.dockActionActive : ""}`}
-            onClick={() => setLiked((prev) => !prev)}
-            aria-label="إعجاب"
+            className={`${styles.dockActionBtn} ${likedByMe ? styles.dockActionActive : ""}`}
+            onClick={onToggleLike}
+            aria-label={`إعجاب ${stats.likes}`}
+            title={`الإعجابات ${stats.likes}`}
           >
             <Heart size={18} />
+            <span className={styles.dockActionCount}>
+              {formatCount(stats.likes)}
+            </span>
           </button>
 
           <button
             type="button"
             className={styles.dockActionBtn}
-            onClick={handleComment}
-            aria-label="تعليق"
+            onClick={onComment}
+            aria-label={`تعليق ${stats.comments}`}
+            title={`التعليقات ${stats.comments}`}
           >
             <MessageCircle size={20} />
+            <span className={styles.dockActionCount}>
+              {formatCount(stats.comments)}
+            </span>
           </button>
 
           <button
             type="button"
-            className={styles.dockActionBtn}
-            onClick={handleShare}
-            aria-label="مشاركة"
+            className={`${styles.dockActionBtn} ${sharedByMe ? styles.dockActionActive : ""}`}
+            onClick={onShare}
+            aria-label={`مشاركة ${stats.shares}`}
+            title={`المشاركات ${stats.shares}`}
           >
             <Send size={20} />
+            <span className={styles.dockActionCount}>
+              {formatCount(stats.shares)}
+            </span>
           </button>
 
           <button
@@ -436,11 +460,15 @@ export default function TikTokVideoCard({
 
           <button
             type="button"
-            className={`${styles.dockActionBtn} ${saved ? styles.dockActionActive : ""}`}
-            onClick={() => setSaved((prev) => !prev)}
-            aria-label="حفظ"
+            className={`${styles.dockActionBtn} ${savedByMe ? styles.dockActionActive : ""}`}
+            onClick={onToggleSave}
+            aria-label={`حفظ ${stats.saves}`}
+            title={`الحفظ ${stats.saves}`}
           >
             <Bookmark size={20} />
+            <span className={styles.dockActionCount}>
+              {formatCount(stats.saves)}
+            </span>
           </button>
 
           <button

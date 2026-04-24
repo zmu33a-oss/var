@@ -3,20 +3,44 @@ import TikTokVideoCard from "../components/TikTokVideoCard";
 import styles from "../pages-css/TikTokPage.module.css";
 import { useAuth } from "../lib/AuthContext";
 import { createAdminReport } from "../lib/adminStore";
+import {
+  addTikTokVideoComment,
+  createTikTokVideoInDatabase,
+  fetchTikTokVideosFromDatabase,
+  recordTikTokVideoShare,
+  toggleTikTokVideoLike,
+  toggleTikTokVideoSave,
+  type TikTokComment,
+  type TikTokVideo,
+} from "../lib/tiktokTables";
 import { buildXHandle } from "../lib/xPosts";
 import { useVerificationRegistry } from "../lib/verification";
 import { supabase } from "./supabase";
 
-type VideoItem = {
-  id: number;
-  video_url: string;
-  caption: string;
-};
+type VideoItem = TikTokVideo;
 
 const TIKTOK_VIDEOS_CACHE_KEY = "webplus:tiktok-videos";
 const FETCH_VIDEOS_TIMEOUT_MS = 10000;
 
-function isVideoItem(value: unknown): value is VideoItem {
+function isTikTokComment(value: unknown): value is TikTokComment {
+  if (!value || typeof value !== "object") return false;
+
+  const comment = value as Partial<TikTokComment>;
+  return (
+    typeof comment.id === "number" &&
+    typeof comment.userId === "string" &&
+    typeof comment.authorName === "string" &&
+    typeof comment.authorHandle === "string" &&
+    typeof comment.body === "string" &&
+    typeof comment.createdAt === "string"
+  );
+}
+
+function isVideoItem(value: unknown): value is Partial<VideoItem> & {
+  id: number;
+  video_url: string;
+  caption: string;
+} {
   if (!value || typeof value !== "object") return false;
 
   const video = value as Partial<VideoItem>;
@@ -27,6 +51,55 @@ function isVideoItem(value: unknown): value is VideoItem {
   );
 }
 
+function normalizeVideoItem(
+  video: Partial<VideoItem> & {
+    id: number;
+    video_url: string;
+    caption: string;
+  },
+): VideoItem {
+  return {
+    id: video.id,
+    video_url: video.video_url,
+    caption: video.caption,
+    user_id: typeof video.user_id === "string" ? video.user_id : null,
+    creator_name:
+      typeof video.creator_name === "string" ? video.creator_name : null,
+    creator_handle:
+      typeof video.creator_handle === "string" ? video.creator_handle : null,
+    creator_avatar_url:
+      typeof video.creator_avatar_url === "string"
+        ? video.creator_avatar_url
+        : null,
+    creator_avatar_frame_enabled: Boolean(video.creator_avatar_frame_enabled),
+    created_at: typeof video.created_at === "string" ? video.created_at : null,
+    likedByMe: Boolean(video.likedByMe),
+    savedByMe: Boolean(video.savedByMe),
+    sharedByMe: Boolean(video.sharedByMe),
+    comments: Array.isArray(video.comments)
+      ? video.comments.filter(isTikTokComment)
+      : [],
+    stats: {
+      likes:
+        typeof video.stats?.likes === "number"
+          ? Math.max(0, video.stats.likes)
+          : 0,
+      comments:
+        typeof video.stats?.comments === "number"
+          ? Math.max(0, video.stats.comments)
+          : 0,
+      saves:
+        typeof video.stats?.saves === "number"
+          ? Math.max(0, video.stats.saves)
+          : 0,
+      shares:
+        typeof video.stats?.shares === "number"
+          ? Math.max(0, video.stats.shares)
+          : 0,
+    },
+  };
+}
+
 function loadCachedVideos(): VideoItem[] {
   if (typeof window === "undefined") return [];
 
@@ -35,7 +108,9 @@ function loadCachedVideos(): VideoItem[] {
     if (!raw) return [];
 
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter(isVideoItem) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter(isVideoItem).map((video) => normalizeVideoItem(video))
+      : [];
   } catch {
     return [];
   }
@@ -102,7 +177,6 @@ export default function TikTokPage() {
   const avatarFrameEnabled = Boolean(
     profile?.avatar_frame_enabled ?? user?.user_metadata?.avatar_frame_enabled,
   );
-  const currentUserVerificationBadge = getVerification(user?.id)?.badge ?? null;
 
   const visibleVideos = videos
     .map((vid) => ({
@@ -129,33 +203,24 @@ export default function TikTokPage() {
     setLoadError("");
 
     try {
-      const queryPromise = supabase
-        .from("videos")
-        .select("*")
-        .order("id", { ascending: false });
-
       const timeoutPromise = new Promise<never>((_, reject) => {
         window.setTimeout(() => {
           reject(new Error("FETCH_VIDEOS_TIMEOUT"));
         }, FETCH_VIDEOS_TIMEOUT_MS);
       });
 
-      const { data, error } = await Promise.race([
-        queryPromise,
+      const nextVideos = (await Promise.race([
+        fetchTikTokVideosFromDatabase(user?.id),
         timeoutPromise,
-      ]);
+      ])) as VideoItem[];
 
       if (requestId !== fetchRequestIdRef.current) return;
 
-      if (error) {
-        console.log("خطأ جلب الفيديوهات:", error);
-        setLoadError("تعذر تحميل الفيديوهات الآن");
-        return;
-      }
-
-      const nextVideos = (data ?? []).filter(isVideoItem);
-      setVideos(nextVideos);
-      saveCachedVideos(nextVideos);
+      const normalizedVideos = nextVideos.map((video) =>
+        normalizeVideoItem(video),
+      );
+      setVideos(normalizedVideos);
+      saveCachedVideos(normalizedVideos);
       setBrokenVideoIds([]);
     } catch (error) {
       if (requestId !== fetchRequestIdRef.current) return;
@@ -171,7 +236,7 @@ export default function TikTokPage() {
 
   useEffect(() => {
     void fetchVideos();
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!loading) return;
@@ -192,6 +257,27 @@ export default function TikTokPage() {
       return Math.min(current, visibleVideos.length - 1);
     });
   }, [visibleVideos.length]);
+
+  const updateVideoLocally = (
+    videoId: number,
+    updater: (video: VideoItem) => VideoItem,
+  ) => {
+    setVideos((currentVideos) => {
+      const nextVideos = currentVideos.map((video) =>
+        video.id === videoId ? normalizeVideoItem(updater(video)) : video,
+      );
+
+      saveCachedVideos(nextVideos);
+      return nextVideos;
+    });
+  };
+
+  const restoreVideosFromDatabase = async (message?: string) => {
+    await fetchVideos();
+    if (message) {
+      window.alert(message);
+    }
+  };
 
   const handleVideoError = (videoId: number) => {
     setBrokenVideoIds((prev) =>
@@ -219,9 +305,152 @@ export default function TikTokPage() {
     }
   };
 
+  const handleToggleLike = (video: VideoItem) => {
+    if (!user?.id) {
+      window.alert("يجب تسجيل الدخول لتنفيذ الإعجاب");
+      return;
+    }
+
+    const nextLiked = !video.likedByMe;
+
+    updateVideoLocally(video.id, (currentVideo) => ({
+      ...currentVideo,
+      likedByMe: nextLiked,
+      stats: {
+        ...currentVideo.stats,
+        likes: Math.max(0, currentVideo.stats.likes + (nextLiked ? 1 : -1)),
+      },
+    }));
+
+    void toggleTikTokVideoLike(video.id, user.id, nextLiked)
+      .then(() => fetchVideos())
+      .catch(() => restoreVideosFromDatabase("تعذر تحديث الإعجاب الآن"));
+  };
+
+  const handleToggleSave = (video: VideoItem) => {
+    if (!user?.id) {
+      window.alert("يجب تسجيل الدخول لحفظ الفيديو");
+      return;
+    }
+
+    const nextSaved = !video.savedByMe;
+
+    updateVideoLocally(video.id, (currentVideo) => ({
+      ...currentVideo,
+      savedByMe: nextSaved,
+      stats: {
+        ...currentVideo.stats,
+        saves: Math.max(0, currentVideo.stats.saves + (nextSaved ? 1 : -1)),
+      },
+    }));
+
+    void toggleTikTokVideoSave(video.id, user.id, nextSaved)
+      .then(() => fetchVideos())
+      .catch(() => restoreVideosFromDatabase("تعذر تحديث الحفظ الآن"));
+  };
+
+  const handleCommentVideo = (video: VideoItem) => {
+    if (!user?.id) {
+      window.alert("يجب تسجيل الدخول لكتابة تعليق");
+      return;
+    }
+
+    const existingComments = video.comments.length
+      ? video.comments
+          .slice(-3)
+          .map((comment) => `${comment.authorHandle}: ${comment.body}`)
+          .join("\n")
+      : "لا توجد تعليقات بعد.";
+
+    const nextComment = window.prompt(
+      `${existingComments}\n\nاكتب تعليقك الجديد:`,
+      "",
+    );
+
+    if (!nextComment?.trim()) {
+      return;
+    }
+
+    const optimisticComment: TikTokComment = {
+      id: Date.now(),
+      userId: user.id,
+      authorName: displayName,
+      authorHandle: handle,
+      body: nextComment.trim(),
+      createdAt: new Date().toISOString(),
+    };
+
+    updateVideoLocally(video.id, (currentVideo) => ({
+      ...currentVideo,
+      comments: [...currentVideo.comments, optimisticComment],
+      stats: {
+        ...currentVideo.stats,
+        comments: currentVideo.stats.comments + 1,
+      },
+    }));
+
+    void addTikTokVideoComment({
+      videoId: video.id,
+      userId: user.id,
+      authorName: displayName,
+      authorHandle: handle,
+      body: nextComment.trim(),
+    })
+      .then(() => fetchVideos())
+      .catch(() => restoreVideosFromDatabase("تعذر حفظ التعليق الآن"));
+  };
+
+  const handleShareVideo = async (video: VideoItem) => {
+    let shareMode: "system" | "copy-link" | "other" = "other";
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: video.caption || "Xtik",
+          text: "شاهد هذا الفيديو على Xtik",
+          url: video.video_url || window.location.href,
+        });
+        shareMode = "system";
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(
+          video.video_url || window.location.href,
+        );
+        shareMode = "copy-link";
+        window.alert("تم نسخ رابط الفيديو");
+      } else {
+        return;
+      }
+    } catch {
+      return;
+    }
+
+    if (!user?.id || video.sharedByMe) {
+      return;
+    }
+
+    updateVideoLocally(video.id, (currentVideo) => ({
+      ...currentVideo,
+      sharedByMe: true,
+      stats: {
+        ...currentVideo.stats,
+        shares: currentVideo.stats.shares + 1,
+      },
+    }));
+
+    void recordTikTokVideoShare(video.id, user.id, shareMode)
+      .then(() => fetchVideos())
+      .catch(() => restoreVideosFromDatabase("تعذر تسجيل المشاركة الآن"));
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!user?.id) {
+      window.alert("يجب تسجيل الدخول لرفع فيديو جديد");
+      e.target.value = "";
+      return;
+    }
 
     console.log("1- تم اختيار الملف:", file.name);
 
@@ -238,7 +467,7 @@ export default function TikTokPage() {
 
     if (uploadError) {
       console.log("2- خطأ الرفع كامل:", JSON.stringify(uploadError, null, 2));
-      alert(uploadError.message);
+      window.alert(uploadError.message);
       return;
     }
 
@@ -250,21 +479,24 @@ export default function TikTokPage() {
 
     const publicUrl = publicUrlData.publicUrl;
 
-    const { error: insertError } = await supabase.from("videos").insert([
-      {
-        video_url: publicUrl,
+    try {
+      await createTikTokVideoInDatabase({
+        userId: user.id,
+        videoUrl: publicUrl,
         caption: "",
-      },
-    ]);
-
-    if (insertError) {
+        creatorName: displayName,
+        creatorHandle: handle,
+        creatorAvatarUrl: avatarUrl,
+        creatorAvatarFrameEnabled: avatarFrameEnabled,
+      });
+    } catch (insertError) {
       console.log("4- خطأ حفظ الجدول:", insertError);
-      alert("تم رفع الفيديو لكن فشل حفظه في الجدول");
+      window.alert("تم رفع الفيديو لكن فشل حفظه في الجدول");
       return;
     }
 
     console.log("5- تم رفع الفيديو وحفظه");
-    alert("تم رفع الفيديو بنجاح");
+    window.alert("تم رفع الفيديو بنجاح");
 
     await fetchVideos();
 
@@ -272,6 +504,7 @@ export default function TikTokPage() {
       fileInputRef.current.value = "";
     }
   };
+
   return (
     <div
       ref={containerRef}
@@ -326,24 +559,52 @@ export default function TikTokPage() {
           </button>
         </div>
       ) : (
-        visibleVideos.map((vid, index) => (
-          <TikTokVideoCard
-            key={vid.id}
-            videoId={vid.id}
-            video_url={vid.video_url}
-            caption={vid.caption}
-            creatorName={displayName}
-            creatorHandle={handle}
-            creatorAvatarUrl={avatarUrl}
-            creatorAvatarFrameEnabled={avatarFrameEnabled}
-            creatorVerificationBadge={currentUserVerificationBadge}
-            isActive={index === activeIndex}
-            shouldLoad={Math.abs(index - activeIndex) <= 1}
-            onVideoError={() => handleVideoError(vid.id)}
-            onAddVideo={handleOpenFiles}
-            onReport={() => void handleReportVideo(vid)}
-          />
-        ))
+        visibleVideos.map((vid, index) => {
+          const isCurrentUsersVideo = Boolean(
+            user?.id && vid.user_id === user.id,
+          );
+
+          return (
+            <TikTokVideoCard
+              key={vid.id}
+              videoId={vid.id}
+              video_url={vid.video_url}
+              caption={vid.caption}
+              creatorName={
+                vid.creator_name?.trim() ||
+                (isCurrentUsersVideo ? displayName : "Xtik")
+              }
+              creatorHandle={
+                vid.creator_handle?.trim() ||
+                (isCurrentUsersVideo ? handle : "@xtik")
+              }
+              creatorAvatarUrl={
+                vid.creator_avatar_url ??
+                (isCurrentUsersVideo ? avatarUrl : null)
+              }
+              creatorAvatarFrameEnabled={
+                vid.creator_avatar_frame_enabled ||
+                (isCurrentUsersVideo ? avatarFrameEnabled : false)
+              }
+              creatorVerificationBadge={
+                getVerification(vid.user_id)?.badge ?? null
+              }
+              stats={vid.stats}
+              likedByMe={vid.likedByMe}
+              savedByMe={vid.savedByMe}
+              sharedByMe={vid.sharedByMe}
+              isActive={index === activeIndex}
+              shouldLoad={Math.abs(index - activeIndex) <= 1}
+              onVideoError={() => handleVideoError(vid.id)}
+              onAddVideo={handleOpenFiles}
+              onToggleLike={() => handleToggleLike(vid)}
+              onToggleSave={() => handleToggleSave(vid)}
+              onComment={() => handleCommentVideo(vid)}
+              onShare={() => void handleShareVideo(vid)}
+              onReport={() => void handleReportVideo(vid)}
+            />
+          );
+        })
       )}
     </div>
   );

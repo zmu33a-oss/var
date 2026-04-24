@@ -128,6 +128,49 @@ const alIttihadVsAlAhliUpdates: UpdateItem[] = [
   },
 ];
 
+const alShababVsAlQadsiahUpdates: UpdateItem[] = [
+  {
+    id: 1,
+    author: "ملعب الرياض",
+    handle: "@RiyadhPitch",
+    avatar: "ر",
+    time: "1m",
+    text: "القادسية استغل المساحات مبكرًا والشباب يحاول يرجع بالضغط العالي قبل نهاية الشوط.",
+    hashtag: "#الشباب_القادسية",
+    engagement: "84%",
+  },
+  {
+    id: 2,
+    author: "تحليل روشن",
+    handle: "@RoshnStats",
+    avatar: "ت",
+    time: "2m",
+    text: "الأرقام الحالية تشير إلى أفضلية هجومية للقادسية مع كثافة واضحة على الطرف الأيسر.",
+    hashtag: "#دوري_روشن",
+    engagement: "81%",
+  },
+  {
+    id: 3,
+    author: "مدرج الشباب",
+    handle: "@ShababZone",
+    avatar: "ش",
+    time: "4m",
+    text: "الشباب قريب من تقليص الفارق بعد فرصتين متتاليتين والجمهور ينتظر التحول في الرتم.",
+    hashtag: "#الشباب",
+    engagement: "86%",
+  },
+  {
+    id: 4,
+    author: "صوت المباراة",
+    handle: "@MatchPulse",
+    avatar: "ص",
+    time: "5m",
+    text: "مباراة تكتيكية وسريعة، وكل تبديل الآن قد يغيّر شكل المواجهة في آخر الثلث الثاني.",
+    hashtag: "#القادسية",
+    engagement: "79%",
+  },
+];
+
 const matches: MatchCardData[] = [
   {
     id: 1,
@@ -166,6 +209,25 @@ const matches: MatchCardData[] = [
       logoText: "ا",
     },
     updates: alIttihadVsAlAhliUpdates,
+  },
+  {
+    id: 3,
+    title: "دوري روشن",
+    round: "الجولة 28",
+    score: [0, 2],
+    time: "51:02",
+    stadium: "ملعب الشباب",
+    attendance: "14,800 متفرج",
+    date: "الأحد 25 مايو 2025",
+    leftTeam: {
+      name: "الشباب",
+      logoText: "ش",
+    },
+    rightTeam: {
+      name: "القادسية",
+      logoText: "ق",
+    },
+    updates: alShababVsAlQadsiahUpdates,
   },
 ];
 

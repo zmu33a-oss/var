@@ -6,6 +6,7 @@ import {
   shouldFallbackAdminApi,
   updateAdminReportStatusApi,
 } from "./adminApi";
+import { supabase } from "../pages/supabase";
 
 export type AdminReportTargetType =
   | "x_post"
@@ -108,6 +109,50 @@ function createLocalReport(
   return nextReport;
 }
 
+async function createSupabaseReport(
+  input: Omit<AdminReport, "id" | "status" | "createdAt"> & {
+    status?: AdminReportStatus;
+  },
+) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data, error } = await supabase
+    .from("admin_reports")
+    .insert({
+      target_type: input.targetType,
+      target_id: input.targetId,
+      source: input.source,
+      summary: input.summary,
+      reason: input.reason,
+      status: input.status ?? "new",
+      reporter_label: input.reporterLabel ?? null,
+      created_by: user?.id ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .select(
+      "id, target_type, target_id, source, summary, reason, status, reporter_label, created_at",
+    )
+    .single();
+
+  if (error || !data) {
+    throw error;
+  }
+
+  return {
+    id: data.id,
+    targetType: data.target_type,
+    targetId: data.target_id,
+    source: data.source,
+    summary: data.summary,
+    reason: data.reason,
+    status: data.status,
+    createdAt: data.created_at,
+    reporterLabel: data.reporter_label ?? undefined,
+  } satisfies AdminReport;
+}
+
 export async function loadAdminReports() {
   try {
     const nextReports = await loadAdminReportsApi();
@@ -136,7 +181,17 @@ export async function createAdminReport(
     ]);
     return nextReport;
   } catch {
-    return createLocalReport(input);
+    try {
+      const nextReport = await createSupabaseReport(input);
+      const cachedReports = readArrayStorage<AdminReport>(REPORTS_STORAGE_KEY);
+      writeArrayStorage(REPORTS_STORAGE_KEY, [
+        nextReport,
+        ...cachedReports.filter((report) => report.id !== nextReport.id),
+      ]);
+      return nextReport;
+    } catch {
+      return createLocalReport(input);
+    }
   }
 }
 

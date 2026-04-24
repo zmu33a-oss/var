@@ -28,9 +28,15 @@ type Group = {
   created_at?: string;
   avatar_url?: string | null;
   created_by?: string | null;
+  dm_key?: string | null;
   last_message?: string;
   last_message_at?: string;
   unread?: number;
+};
+
+type GroupReadState = {
+  group_id: string;
+  last_read_at: string;
 };
 
 type Message = {
@@ -200,8 +206,108 @@ export default function ChatPage({
 
     return Array.from(unique.values()).sort(
       (left, right) =>
-        new Date(right.created_at ?? 0).getTime() -
-        new Date(left.created_at ?? 0).getTime(),
+        new Date(right.last_message_at ?? right.created_at ?? 0).getTime() -
+        new Date(left.last_message_at ?? left.created_at ?? 0).getTime(),
+    );
+  };
+
+  const buildDmKey = (leftUserId: string, rightUserId: string) =>
+    `dm:${[leftUserId, rightUserId].sort().join(":")}`;
+
+  const withUnreadState = (items: Group[], readStates: GroupReadState[]) => {
+    const readStatesByGroupId = new Map(
+      readStates.map((state) => [state.group_id, state.last_read_at]),
+    );
+
+    return items.map((group) => {
+      const lastReadAt = readStatesByGroupId.get(group.id);
+      const hasUnread = Boolean(
+        group.last_message_at &&
+        new Date(group.last_message_at).getTime() >
+          new Date(lastReadAt ?? 0).getTime(),
+      );
+
+      return {
+        ...group,
+        unread: hasUnread ? 1 : 0,
+      } satisfies Group;
+    });
+  };
+
+  const syncLocalGroupPreview = (
+    groupId: string,
+    lastMessage: string,
+    lastMessageAt: string,
+    unread = 0,
+  ) => {
+    setGroups((currentGroups) =>
+      mergeGroups(
+        currentGroups.map((group) =>
+          group.id === groupId
+            ? {
+                ...group,
+                last_message: lastMessage,
+                last_message_at: lastMessageAt,
+                unread,
+              }
+            : group,
+        ),
+      ),
+    );
+
+    setActiveGroup((currentGroup) =>
+      currentGroup?.id === groupId
+        ? {
+            ...currentGroup,
+            last_message: lastMessage,
+            last_message_at: lastMessageAt,
+            unread,
+          }
+        : currentGroup,
+    );
+  };
+
+  const fetchGroupReadStates = async (groupIds: string[]) => {
+    if (!me || groupIds.length === 0) {
+      return [] as GroupReadState[];
+    }
+
+    const { data, error } = await supabase
+      .from("group_read_states")
+      .select("group_id, last_read_at")
+      .eq("user_id", me.id)
+      .in("group_id", groupIds);
+
+    if (error) {
+      return [] as GroupReadState[];
+    }
+
+    return (data ?? []) as GroupReadState[];
+  };
+
+  const markGroupAsRead = async (groupId: string) => {
+    if (!me) return;
+
+    const lastReadAt = new Date().toISOString();
+
+    await supabase.from("group_read_states").upsert(
+      {
+        group_id: groupId,
+        user_id: me.id,
+        last_read_at: lastReadAt,
+      },
+      { onConflict: "group_id,user_id" },
+    );
+
+    setGroups((currentGroups) =>
+      currentGroups.map((group) =>
+        group.id === groupId
+          ? {
+              ...group,
+              unread: 0,
+            }
+          : group,
+      ),
     );
   };
 
@@ -258,7 +364,9 @@ export default function ChatPage({
   const fetchOwnedGroups = async () => {
     const primary = await supabase
       .from("groups")
-      .select("id, name, is_private, avatar_url, created_by")
+      .select(
+        "id, name, is_private, avatar_url, created_by, dm_key, last_message, last_message_at",
+      )
       .eq("created_by", me!.id);
 
     if (!primary.error) {
@@ -299,7 +407,9 @@ export default function ChatPage({
 
     const primary = await supabase
       .from("groups")
-      .select("id, name, is_private, avatar_url, created_by")
+      .select(
+        "id, name, is_private, avatar_url, created_by, dm_key, last_message, last_message_at",
+      )
       .in("id", groupIds);
 
     if (!primary.error) {
@@ -375,15 +485,19 @@ export default function ChatPage({
       ...memberGroups,
       ...((ownedData ?? []) as Group[]),
     ]);
+    const readStates = await fetchGroupReadStates(
+      list.map((group) => group.id),
+    );
+    const nextList = withUnreadState(list, readStates);
 
-    setGroups(list);
+    setGroups(nextList);
     setLoadingGroups(false);
 
     if (initialGroupId) {
-      const target = list.find((group) => group.id === initialGroupId);
+      const target = nextList.find((group) => group.id === initialGroupId);
       if (target) setActiveGroup(target);
     } else if (activeGroup) {
-      const refreshedActiveGroup = list.find(
+      const refreshedActiveGroup = nextList.find(
         (group) => group.id === activeGroup.id,
       );
 
@@ -454,6 +568,10 @@ export default function ChatPage({
             if (prev.find((message) => message.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
+          syncLocalGroupPreview(groupId, newMsg.content, newMsg.created_at, 0);
+          if (newMsg.sender_id !== me?.id) {
+            void markGroupAsRead(groupId);
+          }
           setTimeout(
             () => bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
             60,
@@ -489,6 +607,13 @@ export default function ChatPage({
         if (prev.find((message) => message.id === sentMessage.id)) return prev;
         return [...prev, sentMessage];
       });
+      syncLocalGroupPreview(
+        activeGroup.id,
+        sentMessage.content,
+        sentMessage.created_at,
+        0,
+      );
+      void markGroupAsRead(activeGroup.id);
       setTimeout(
         () => bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
         60,
@@ -502,6 +627,7 @@ export default function ChatPage({
     if (!activeGroup) return;
     fetchMessages(activeGroup.id);
     subscribeRealtime(activeGroup.id);
+    void markGroupAsRead(activeGroup.id);
 
     return () => {
       realtimeRef.current?.unsubscribe();
@@ -555,6 +681,8 @@ export default function ChatPage({
     const createdGroup: Group = {
       ...grp,
       avatar_url: groupImage ?? grp.avatar_url ?? null,
+      last_message: grp.last_message ?? undefined,
+      last_message_at: grp.last_message_at ?? undefined,
     };
 
     const { error: memberErr } = await supabase
@@ -814,13 +942,28 @@ export default function ChatPage({
     }
 
     const dmName = `DM:${me.id}:${targetUser.id}`;
+    const dmKey = buildDmKey(me.id, targetUser.id);
 
     // check if DM already exists
-    const { data: existing } = await supabase
+    const existingByKey = await supabase
       .from("groups")
-      .select("id, name, is_private")
-      .eq("name", dmName)
+      .select(
+        "id, name, is_private, avatar_url, created_by, dm_key, last_message, last_message_at",
+      )
+      .eq("dm_key", dmKey)
       .single();
+
+    const existing =
+      existingByKey.data ??
+      (
+        await supabase
+          .from("groups")
+          .select(
+            "id, name, is_private, avatar_url, created_by, last_message, last_message_at",
+          )
+          .eq("name", dmName)
+          .single()
+      ).data;
 
     if (existing) {
       if (initialMessage) {
@@ -843,11 +986,56 @@ export default function ChatPage({
 
     const { data: grp, error: grpErr } = await supabase
       .from("groups")
-      .insert({ name: dmName, is_private: true, created_by: me.id })
+      .insert({
+        name: dmName,
+        is_private: true,
+        created_by: me.id,
+        dm_key: dmKey,
+      })
       .select()
       .single();
 
     if (grpErr) {
+      const legacyInsert = await supabase
+        .from("groups")
+        .insert({ name: dmName, is_private: true, created_by: me.id })
+        .select()
+        .single();
+
+      if (legacyInsert.error || !legacyInsert.data) {
+        setError("تعذر إنشاء الدردشة");
+        setCreating(false);
+        return;
+      }
+
+      await supabase.from("group_members").insert([
+        { group_id: legacyInsert.data.id, user_id: me.id },
+        { group_id: legacyInsert.data.id, user_id: targetUser.id },
+      ]);
+
+      if (initialMessage) {
+        const { err: messageErr } = await insertMessageToGroup(
+          legacyInsert.data.id,
+          me.id,
+          initialMessage,
+        );
+
+        if (messageErr) {
+          setError("تم إنشاء الدردشة لكن تعذر إرسال الرسالة الأولى");
+        }
+      }
+
+      setCreating(false);
+      closeNewDMModal();
+      await fetchGroups();
+      setActiveGroup({
+        ...legacyInsert.data,
+        name: targetUser.full_name || targetUser.email || dmName,
+      });
+      return;
+    }
+
+    if (!grp) {
       setError("تعذر إنشاء الدردشة");
       setCreating(false);
       return;
@@ -873,6 +1061,7 @@ export default function ChatPage({
     setCreating(false);
     closeNewDMModal();
     await fetchGroups();
+    void markGroupAsRead(grp.id);
     setActiveGroup({
       ...grp,
       name: targetUser.full_name || targetUser.email || dmName,

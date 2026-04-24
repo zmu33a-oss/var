@@ -211,6 +211,222 @@ async function writeAdminStore(store) {
   await fs.writeFile(ADMIN_STORE_PATH, JSON.stringify(store, null, 2), "utf8");
 }
 
+function serializeAdminReportEntry(entry) {
+  return {
+    id: entry.id,
+    targetType: entry.target_type,
+    targetId: entry.target_id,
+    source: entry.source,
+    summary: entry.summary,
+    reason: entry.reason,
+    status: entry.status,
+    createdAt: entry.created_at,
+    reporterLabel: entry.reporter_label || undefined,
+  };
+}
+
+function serializeAdminAuditLogEntry(entry) {
+  return {
+    id: entry.id,
+    action: entry.action,
+    targetType: entry.target_type,
+    targetId: entry.target_id,
+    details: entry.details,
+    actor: entry.actor_label,
+    createdAt: entry.created_at,
+  };
+}
+
+async function loadAdminReportsFromDatabase() {
+  if (!serviceClient) return null;
+
+  const { data, error } = await serviceClient
+    .from("admin_reports")
+    .select(
+      "id, target_type, target_id, source, summary, reason, status, reporter_label, created_at",
+    )
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return null;
+  }
+
+  return (data || []).map(serializeAdminReportEntry);
+}
+
+async function insertAdminReportToDatabase(input) {
+  if (!serviceClient) return null;
+
+  const { data, error } = await serviceClient
+    .from("admin_reports")
+    .insert({
+      target_type: input.targetType,
+      target_id: input.targetId,
+      source: input.source,
+      summary: input.summary,
+      reason: input.reason,
+      status: input.status,
+      reporter_label: input.reporterLabel || null,
+      created_by: input.createdBy || null,
+      updated_at: new Date().toISOString(),
+    })
+    .select(
+      "id, target_type, target_id, source, summary, reason, status, reporter_label, created_at",
+    )
+    .single();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return serializeAdminReportEntry(data);
+}
+
+async function updateAdminReportStatusInDatabase(reportId, status) {
+  if (!serviceClient) return null;
+
+  const { error } = await serviceClient
+    .from("admin_reports")
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", reportId);
+
+  if (error) {
+    return null;
+  }
+
+  return loadAdminReportsFromDatabase();
+}
+
+async function loadAdminAuditLogsFromDatabase() {
+  if (!serviceClient) return null;
+
+  const { data, error } = await serviceClient
+    .from("admin_audit_logs")
+    .select(
+      "id, action, target_type, target_id, details, actor_label, created_at",
+    )
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return null;
+  }
+
+  return (data || []).map(serializeAdminAuditLogEntry);
+}
+
+async function appendAdminAuditLogToDatabase(input) {
+  if (!serviceClient) return null;
+
+  const { data, error } = await serviceClient
+    .from("admin_audit_logs")
+    .insert({
+      action: input.action,
+      target_type: input.targetType,
+      target_id: input.targetId,
+      details: input.details,
+      actor_label: input.actor,
+      actor_user_id: input.actorUserId || null,
+    })
+    .select(
+      "id, action, target_type, target_id, details, actor_label, created_at",
+    )
+    .single();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return serializeAdminAuditLogEntry(data);
+}
+
+async function loadVerifiedUsersFromDatabase() {
+  if (!serviceClient) return null;
+
+  const { data, error } = await serviceClient
+    .from("user_verifications")
+    .select("user_id, badge, updated_at, updated_by")
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    return null;
+  }
+
+  return (data || []).map((entry) =>
+    serializeVerificationEntry({
+      userId: entry.user_id,
+      badge: entry.badge,
+      updatedAt: entry.updated_at,
+      updatedBy: entry.updated_by,
+    }),
+  );
+}
+
+async function updateUserVerificationInDatabase({
+  userId,
+  verified,
+  badge,
+  actor,
+}) {
+  if (!serviceClient) return null;
+
+  const currentVerifiedUsers = (await loadVerifiedUsersFromDatabase()) || [];
+
+  if (verified) {
+    const existingEntry = currentVerifiedUsers.find(
+      (entry) => entry.userId === userId,
+    );
+    const nextBadge = isSupportedVerificationBadge(badge)
+      ? badge
+      : existingEntry?.badge || "yellow";
+
+    const { error } = await serviceClient.from("user_verifications").upsert(
+      {
+        user_id: userId,
+        badge: nextBadge,
+        updated_at: new Date().toISOString(),
+        updated_by: actor,
+      },
+      { onConflict: "user_id" },
+    );
+
+    if (error) {
+      return null;
+    }
+  } else {
+    const { error } = await serviceClient
+      .from("user_verifications")
+      .delete()
+      .eq("user_id", userId);
+
+    if (error) {
+      return null;
+    }
+  }
+
+  return loadVerifiedUsersFromDatabase();
+}
+
+async function loadAdminPersistenceState() {
+  const [reports, auditLogs, verifiedUsers] = await Promise.all([
+    loadAdminReportsFromDatabase(),
+    loadAdminAuditLogsFromDatabase(),
+    loadVerifiedUsersFromDatabase(),
+  ]);
+
+  if (!reports || !auditLogs || !verifiedUsers) {
+    return null;
+  }
+
+  return {
+    reports,
+    auditLogs,
+    verifiedUsers,
+  };
+}
+
 function getVideoStoragePath(videoUrl) {
   try {
     const parsedUrl = new URL(videoUrl);
@@ -309,6 +525,15 @@ app.get("/api/admin/session", requireAdmin, (req, res) => {
 });
 
 app.get("/api/admin/public/verification", async (req, res) => {
+  const verifiedUsersFromDatabase = await loadVerifiedUsersFromDatabase();
+
+  if (verifiedUsersFromDatabase) {
+    res.json({
+      verifiedUsers: verifiedUsersFromDatabase,
+    });
+    return;
+  }
+
   const store = await readAdminStore();
   res.json({
     verifiedUsers: normalizeVerifiedUsers(store.verifiedUsers).map(
@@ -318,11 +543,27 @@ app.get("/api/admin/public/verification", async (req, res) => {
 });
 
 app.get("/api/admin/reports", requireAdmin, async (req, res) => {
+  const reportsFromDatabase = await loadAdminReportsFromDatabase();
+
+  if (reportsFromDatabase) {
+    res.json(reportsFromDatabase);
+    return;
+  }
+
   const store = await readAdminStore();
   res.json(store.reports);
 });
 
 app.get("/api/admin/verification", requireAdmin, async (req, res) => {
+  const verifiedUsersFromDatabase = await loadVerifiedUsersFromDatabase();
+
+  if (verifiedUsersFromDatabase) {
+    res.json({
+      verifiedUsers: verifiedUsersFromDatabase,
+    });
+    return;
+  }
+
   const store = await readAdminStore();
   res.json({
     verifiedUsers: normalizeVerifiedUsers(store.verifiedUsers).map(
@@ -371,6 +612,22 @@ app.post("/api/admin/reports", requireAuthenticatedUser, async (req, res) => {
     reporterLabel: reporterLabel || buildActorLabel(req.authUser),
   };
 
+  const createdDatabaseReport = await insertAdminReportToDatabase({
+    targetType: nextReport.targetType,
+    targetId: nextReport.targetId,
+    source: nextReport.source,
+    summary: nextReport.summary,
+    reason: nextReport.reason,
+    status: nextReport.status,
+    reporterLabel: nextReport.reporterLabel,
+    createdBy: req.authUser?.id || null,
+  });
+
+  if (createdDatabaseReport) {
+    res.status(201).json(createdDatabaseReport);
+    return;
+  }
+
   const store = await readAdminStore();
   store.reports.unshift(nextReport);
   await writeAdminStore(store);
@@ -391,6 +648,18 @@ app.patch("/api/admin/reports/:reportId", requireAdmin, async (req, res) => {
     res.status(400).json({
       error: "INVALID_REPORT_STATUS",
       message: "حالة البلاغ غير صالحة.",
+    });
+    return;
+  }
+
+  const databaseReports = await updateAdminReportStatusInDatabase(
+    reportId,
+    status,
+  );
+
+  if (databaseReports) {
+    res.json({
+      reports: databaseReports,
     });
     return;
   }
@@ -421,6 +690,13 @@ app.patch("/api/admin/reports/:reportId", requireAdmin, async (req, res) => {
 });
 
 app.get("/api/admin/audit", requireAdmin, async (req, res) => {
+  const auditLogsFromDatabase = await loadAdminAuditLogsFromDatabase();
+
+  if (auditLogsFromDatabase) {
+    res.json(auditLogsFromDatabase);
+    return;
+  }
+
   const store = await readAdminStore();
   res.json(store.auditLogs);
 });
@@ -451,6 +727,20 @@ app.post("/api/admin/audit", requireAdmin, async (req, res) => {
         ? actor
         : buildActorLabel(req.authUser),
   });
+
+  const createdDatabaseLog = await appendAdminAuditLogToDatabase({
+    action: nextLog.action,
+    targetType: nextLog.targetType,
+    targetId: nextLog.targetId,
+    details: nextLog.details,
+    actor: nextLog.actor,
+    actorUserId: req.authUser?.id || null,
+  });
+
+  if (createdDatabaseLog) {
+    res.status(201).json(createdDatabaseLog);
+    return;
+  }
 
   const store = await readAdminStore();
   store.auditLogs.unshift(nextLog);
@@ -496,6 +786,36 @@ app.patch(
     }
 
     const actor = buildActorLabel(req.authUser);
+    const nextVerifiedUsers = await updateUserVerificationInDatabase({
+      userId,
+      verified,
+      badge,
+      actor,
+    });
+
+    if (nextVerifiedUsers) {
+      const nextVerification =
+        nextVerifiedUsers.find((entry) => entry.userId === userId) ?? null;
+
+      await appendAdminAuditLogToDatabase({
+        action: verified ? "verify_user" : "remove_user_verification",
+        targetType: "user",
+        targetId: userId,
+        details: verified
+          ? `تم تعيين الشارة ${getVerificationBadgeLabel(nextVerification?.badge)} للمستخدم ${userId}`
+          : `تم سحب التوثيق من المستخدم ${userId}`,
+        actor,
+        actorUserId: req.authUser?.id || null,
+      });
+
+      res.json({
+        verified,
+        verification: nextVerification,
+        verifiedUsers: nextVerifiedUsers,
+      });
+      return;
+    }
+
     const store = await readAdminStore();
     const lookup = buildVerificationLookup(store.verifiedUsers);
 
@@ -541,8 +861,8 @@ app.patch(
 app.get("/api/admin/dashboard", requireAdmin, async (req, res) => {
   if (!requireServiceClient(res)) return;
 
-  const [usersRes, groupsRes, membersRes, videosRes, store] = await Promise.all(
-    [
+  const [usersRes, groupsRes, membersRes, videosRes, persistedState] =
+    await Promise.all([
       serviceClient.from("users").select("id, email, full_name"),
       serviceClient.from("groups").select("id, name, is_private, created_by"),
       serviceClient.from("group_members").select("group_id, user_id"),
@@ -550,9 +870,8 @@ app.get("/api/admin/dashboard", requireAdmin, async (req, res) => {
         .from("videos")
         .select("id, video_url, caption")
         .order("id", { ascending: false }),
-      readAdminStore(),
-    ],
-  );
+      loadAdminPersistenceState(),
+    ]);
 
   const firstError =
     usersRes.error ?? groupsRes.error ?? membersRes.error ?? videosRes.error;
@@ -575,7 +894,9 @@ app.get("/api/admin/dashboard", requireAdmin, async (req, res) => {
     ...group,
     memberCount: memberCountMap.get(group.id) || 0,
   }));
-  const verificationLookup = buildVerificationLookup(store.verifiedUsers);
+  const fallbackStore = persistedState ? null : await readAdminStore();
+  const adminState = persistedState || fallbackStore;
+  const verificationLookup = buildVerificationLookup(adminState.verifiedUsers);
   const users = (usersRes.data || []).map((user) => ({
     ...user,
     verified: verificationLookup.has(user.id),
@@ -586,9 +907,9 @@ app.get("/api/admin/dashboard", requireAdmin, async (req, res) => {
     users,
     groups,
     videos: videosRes.data || [],
-    reports: store.reports,
-    auditLogs: store.auditLogs,
-    verifiedUsers: store.verifiedUsers,
+    reports: adminState.reports,
+    auditLogs: adminState.auditLogs,
+    verifiedUsers: adminState.verifiedUsers,
   });
 });
 
@@ -596,11 +917,6 @@ app.delete("/api/admin/groups/:groupId", requireAdmin, async (req, res) => {
   if (!requireServiceClient(res)) return;
 
   const { groupId } = req.params;
-  const { data: groupRow } = await serviceClient
-    .from("groups")
-    .select("id, name")
-    .eq("id", groupId)
-    .maybeSingle();
 
   await serviceClient.from("group_members").delete().eq("group_id", groupId);
   await serviceClient.from("messages").delete().eq("group_id", groupId);
@@ -617,18 +933,6 @@ app.delete("/api/admin/groups/:groupId", requireAdmin, async (req, res) => {
     });
     return;
   }
-
-  const store = await readAdminStore();
-  store.auditLogs.unshift({
-    ...createAuditLogEntry({
-      action: "delete_group",
-      targetType: "group",
-      targetId: groupId,
-      details: `تم حذف القروب ${groupRow?.name || groupId}`,
-      actor: buildActorLabel(req.authUser),
-    }),
-  });
-  await writeAdminStore(store);
 
   res.json({ success: true, deletedGroupId: groupId });
 });
@@ -672,18 +976,6 @@ app.delete("/api/admin/videos/:videoId", requireAdmin, async (req, res) => {
       .remove([storagePath])
       .catch(() => null);
   }
-
-  const store = await readAdminStore();
-  store.auditLogs.unshift({
-    ...createAuditLogEntry({
-      action: "delete_video",
-      targetType: "video",
-      targetId: String(videoId),
-      details: `تم حذف فيديو TikTok رقم ${videoId}`,
-      actor: buildActorLabel(req.authUser),
-    }),
-  });
-  await writeAdminStore(store);
 
   res.json({ success: true, deletedVideoId: videoId });
 });

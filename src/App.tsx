@@ -12,7 +12,7 @@ import ChatPage from "./pages/ChatPage";
 import AdminPage from "./pages/AdminPage";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
 import { canAccessAdmin, getAdminRole } from "./lib/admin";
-import { supabase } from "./pages/supabase";
+import { fetchXPostsFromDatabase, syncXPostsChange } from "./lib/socialTables";
 import {
   loadXPosts,
   normalizeXPosts,
@@ -36,37 +36,38 @@ function AppContent() {
   const { user, isRecovery, clearRecovery, loading } = useAuth();
   const adminRole = getAdminRole(user);
   const isAdminAllowed = canAccessAdmin(user);
-  const syncedXPostsRef = useRef("");
   const xPostsRef = useRef<XPost[]>(xPosts);
+  const xSyncRequestIdRef = useRef(0);
 
-  const persistXPosts = (nextPosts: XPost[]) => {
-    saveXPosts(nextPosts);
+  const updateXPosts = (updater: (currentPosts: XPost[]) => XPost[]) => {
+    const previousPosts = xPostsRef.current;
+    const optimisticPosts = updater(previousPosts);
 
-    if (!loading && user) {
-      const serializedPosts = JSON.stringify(nextPosts);
-      syncedXPostsRef.current = serializedPosts;
+    xPostsRef.current = optimisticPosts;
+    setXPosts(optimisticPosts);
+    saveXPosts(optimisticPosts);
 
-      void supabase.auth
-        .updateUser({
-          data: {
-            ...user.user_metadata,
-            x_posts: nextPosts,
-          },
-        })
-        .catch(() => {
-          syncedXPostsRef.current = "";
-        });
+    if (loading || !user) {
       return;
     }
 
-    syncedXPostsRef.current = JSON.stringify(nextPosts);
-  };
+    const requestId = ++xSyncRequestIdRef.current;
 
-  const updateXPosts = (updater: (currentPosts: XPost[]) => XPost[]) => {
-    const nextPosts = updater(xPostsRef.current);
-    xPostsRef.current = nextPosts;
-    setXPosts(nextPosts);
-    persistXPosts(nextPosts);
+    void syncXPostsChange({
+      previousPosts,
+      nextPosts: optimisticPosts,
+      currentUserId: user.id,
+    })
+      .then((persistedPosts) => {
+        if (requestId !== xSyncRequestIdRef.current) return;
+
+        xPostsRef.current = persistedPosts;
+        setXPosts(persistedPosts);
+        saveXPosts(persistedPosts);
+      })
+      .catch(() => {
+        // Keep the optimistic snapshot and local fallback if DB sync fails.
+      });
   };
 
   // كشف OAuth redirect — نقرأ URL قبل أن يُنظّفه Supabase
@@ -111,25 +112,51 @@ function AppContent() {
     if (!user) {
       const localPosts = loadXPosts();
       xPostsRef.current = localPosts;
-      syncedXPostsRef.current = JSON.stringify(localPosts);
       setXPosts(localPosts);
       return;
     }
 
-    const remotePosts = normalizeXPosts(user.user_metadata?.x_posts);
-    if (remotePosts?.length) {
-      xPostsRef.current = remotePosts;
-      syncedXPostsRef.current = JSON.stringify(remotePosts);
-      setXPosts(remotePosts);
-      saveXPosts(remotePosts);
-      return;
-    }
+    let cancelled = false;
 
-    const localPosts = loadXPosts();
-    xPostsRef.current = localPosts;
-    syncedXPostsRef.current = "";
-    setXPosts(localPosts);
-  }, [user?.id, loading]);
+    const hydratePosts = async () => {
+      try {
+        const databasePosts = await fetchXPostsFromDatabase(user.id);
+
+        if (cancelled) return;
+
+        if (databasePosts.length > 0) {
+          xPostsRef.current = databasePosts;
+          setXPosts(databasePosts);
+          saveXPosts(databasePosts);
+          return;
+        }
+      } catch {
+        // Fall back to legacy sources below.
+      }
+
+      const legacyPosts = normalizeXPosts(user.user_metadata?.x_posts);
+      if (legacyPosts?.length) {
+        if (cancelled) return;
+
+        xPostsRef.current = legacyPosts;
+        setXPosts(legacyPosts);
+        saveXPosts(legacyPosts);
+        return;
+      }
+
+      const localPosts = loadXPosts();
+      if (cancelled) return;
+
+      xPostsRef.current = localPosts;
+      setXPosts(localPosts);
+    };
+
+    void hydratePosts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.user_metadata?.x_posts, loading]);
 
   const openChat = (composer: ChatComposer = null) => {
     if (!user) {
@@ -223,6 +250,7 @@ function AppContent() {
           onSignOut={() => setTab("home")}
           onOpenAdmin={() => setTab("admin")}
           canOpenAdmin={isAdminAllowed}
+          xPosts={xPosts}
         />
       )}
       {visibleTab === "admin" && adminRole && (

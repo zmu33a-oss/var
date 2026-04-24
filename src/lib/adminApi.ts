@@ -135,11 +135,31 @@ export async function fetchAdminDashboard() {
 }
 
 export async function fetchPublicVerifiedUsers() {
-  const result = await adminRequest<{ verifiedUsers: VerifiedUserRecord[] }>(
-    "/public/verification",
-  );
+  try {
+    const result = await adminRequest<{ verifiedUsers: VerifiedUserRecord[] }>(
+      "/public/verification",
+    );
 
-  return result.verifiedUsers;
+    return result.verifiedUsers;
+  } catch {
+    const { data, error } = await supabase
+      .from("user_verifications")
+      .select("user_id, badge, updated_at, updated_by")
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []).map((entry) => ({
+      userId: entry.user_id,
+      badge: (entry.badge === "blue"
+        ? "blue"
+        : "yellow") as VerificationBadgeVariant,
+      updatedAt: entry.updated_at,
+      updatedBy: entry.updated_by,
+    }));
+  }
 }
 
 export async function deleteAdminGroup(groupId: string) {
