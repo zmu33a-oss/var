@@ -148,11 +148,16 @@ const normalizeVideoUrl = (rawUrl: string) => {
   }
 };
 
-export default function TikTokPage() {
+type TikTokPageProps = {
+  cameraRequestKey?: number;
+};
+
+export default function TikTokPage({ cameraRequestKey = 0 }: TikTokPageProps) {
   const { profile, user } = useAuth();
   const { getVerification } = useVerificationRegistry();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const lastHandledCameraRequestKey = useRef(cameraRequestKey);
   const [videos, setVideos] = useState<VideoItem[]>(() => loadCachedVideos());
   const [loading, setLoading] = useState(() => loadCachedVideos().length === 0);
   const [loadError, setLoadError] = useState("");
@@ -288,6 +293,15 @@ export default function TikTokPage() {
   const handleOpenFiles = () => {
     fileInputRef.current?.click();
   };
+
+  useEffect(() => {
+    if (cameraRequestKey === lastHandledCameraRequestKey.current) {
+      return;
+    }
+
+    lastHandledCameraRequestKey.current = cameraRequestKey;
+    handleOpenFiles();
+  }, [cameraRequestKey]);
 
   const handleReportVideo = async (video: VideoItem) => {
     try {

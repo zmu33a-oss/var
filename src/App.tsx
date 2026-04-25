@@ -32,6 +32,7 @@ function AppContent() {
   const [mode, setMode] = useState<HomeMode>("tiktok");
   const [chatComposer, setChatComposer] = useState<ChatComposer>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [tiktokCameraRequestKey, setTiktokCameraRequestKey] = useState(0);
   const [xPosts, setXPosts] = useState<XPost[]>(() => loadXPosts());
   const { user, isRecovery, clearRecovery, loading } = useAuth();
   const adminRole = getAdminRole(user);
@@ -177,6 +178,24 @@ function AppContent() {
   };
 
   const visibleTab = tab === "chat" ? chatBaseTab : tab;
+  const bottomNavHomeActionMode =
+    visibleTab === "home" && tab !== "chat" && chatComposer !== "post"
+      ? mode
+      : undefined;
+
+  const handleBottomNavHomeAction = () => {
+    if (mode === "x") {
+      openChat("dm");
+      return;
+    }
+
+    if (!user) {
+      setTab("account");
+      return;
+    }
+
+    setTiktokCameraRequestKey((currentKey) => currentKey + 1);
+  };
 
   // شاشة تحميل خفيفة ريثما يُحدد وضع الجلسة
   if (loading) {
@@ -215,7 +234,7 @@ function AppContent() {
 
       {visibleTab === "home" && mode === "tiktok" && (
         <div style={{ width: "100%", minHeight: "100vh", background: "#000" }}>
-          <TikTokPage />
+          <TikTokPage cameraRequestKey={tiktokCameraRequestKey} />
         </div>
       )}
 
@@ -312,6 +331,8 @@ function AppContent() {
             ? "account"
             : visibleTab
         }
+        homeMode={bottomNavHomeActionMode}
+        onHomeAction={handleBottomNavHomeAction}
         setTab={(nextTab) => {
           // لو مسجّل دخول وضغط الحساب → روّح للبروفايل مباشرة
           if (nextTab === "account" && user) {

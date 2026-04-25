@@ -1,18 +1,18 @@
 :root {
-  --bg-main: #02060f;
+  --bg-main: #000000;
   --text-main: #f7fbff;
   --text-soft: #c2cfe7;
   --text-muted: #8591ab;
-  --border-main: rgba(157, 195, 255, 0.22);
+  --border-main: rgba(255, 255, 255, 0.18);
   --border-soft: rgba(255, 255, 255, 0.16);
   --radius-card: 18px;
   --radius-pill: 999px;
   --card-max: 390px;
-  --team-size: 44px;
-  --team-width: 66px;
-  --score-size: 30px;
+  --team-size: 40px;
+  --team-width: 58px;
+  --score-size: 26px;
   --title-size: 18px;
-  --time-size: 11px;
+  --time-size: 10px;
 }
 
 @keyframes tickerIn {
@@ -44,14 +44,7 @@
   margin: 0 auto;
   padding: 8px 8px calc(80px + env(safe-area-inset-bottom, 0px));
   direction: rtl;
-  background:
-    radial-gradient(circle at 14% 0%, rgba(37, 78, 163, 0.24), transparent 34%),
-    radial-gradient(
-      circle at 92% 14%,
-      rgba(18, 95, 206, 0.18),
-      transparent 32%
-    ),
-    linear-gradient(180deg, #040b16 0%, #01040b 100%);
+  background: linear-gradient(180deg, #000000 0%, #030303 100%);
 }
 
 .cards-stack {
@@ -65,23 +58,31 @@
   width: 100%;
   border: 1px solid var(--border-main);
   border-radius: var(--radius-card);
-  background:
-    radial-gradient(
-      circle at top center,
-      rgba(34, 84, 179, 0.18),
-      transparent 48%
-    ),
-    linear-gradient(180deg, rgba(8, 18, 39, 0.96) 0%, rgba(3, 8, 18, 0.98) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(7, 7, 10, 0.97) 0%,
+    rgba(1, 1, 3, 0.99) 100%
+  );
   box-shadow:
-    0 18px 36px rgba(2, 6, 14, 0.44),
-    inset 0 1px 0 rgba(170, 200, 255, 0.12);
+    0 14px 28px rgba(0, 0, 0, 0.52),
+    0 0 20px rgba(255, 255, 255, 0.12),
+    0 0 6px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   position: relative;
   overflow: hidden;
 }
 
+.card-top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 7px 8px 0;
+  direction: ltr;
+}
+
 .league-header {
   text-align: center;
-  padding: 9px 10px 2px;
+  padding: 4px 10px 0;
 }
 
 .league-title-row {
@@ -117,26 +118,33 @@
   font-size: 10px;
 }
 
-.live-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+.live-badge,
+.match-time-corner {
   width: fit-content;
   padding: 3px 7px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border-soft);
-  background: rgba(7, 18, 42, 0.84);
-  color: #ff5b78;
   font-weight: 800;
   font-size: 9px;
+  line-height: 1.1;
+}
+
+.live-badge {
+  background: rgba(7, 18, 42, 0.84);
+  color: #ff5b78;
+}
+
+.match-time-corner {
+  background: rgba(4, 12, 26, 0.84);
+  color: var(--text-main);
 }
 
 .match-main {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 5px 8px 4px;
-  gap: 6px;
+  padding: 3px 8px 2px;
+  gap: 4px;
 }
 
 .team-block {
@@ -172,9 +180,9 @@
 }
 
 .team-block h3 {
-  margin: 2px 0 0;
+  margin: 1px 0 0;
   color: var(--text-main);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   line-height: 1.2;
 }
@@ -202,18 +210,6 @@
   opacity: 0.95;
 }
 
-.time-pill {
-  margin-top: 2px;
-  display: inline-block;
-  padding: 3px 7px;
-  border-radius: 999px;
-  background: rgba(4, 12, 26, 0.84);
-  border: 1px solid rgba(193, 215, 255, 0.18);
-  color: var(--text-main);
-  font-size: var(--time-size);
-  line-height: 1.2;
-}
-
 .stadium-line {
   width: calc(100% - 24px);
   height: 1px;
@@ -230,16 +226,16 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 5px;
-  padding: 6px 8px;
+  padding: 4px 8px 6px;
 }
 
 .meta-item {
-  padding: 4px 5px;
+  padding: 3px 5px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(174, 204, 255, 0.1);
   color: #dbe7ff;
-  font-size: 9px;
+  font-size: 8px;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -358,10 +354,10 @@
 
 .tweet-footer {
   margin-top: 5px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 3px;
 }
 
 .engagement-rate {
@@ -372,6 +368,8 @@
   border-radius: 999px;
   background: rgba(133, 169, 235, 0.14);
   border: 1px solid rgba(182, 211, 255, 0.18);
+  transform: none;
+  white-space: nowrap;
 }
 
 .hashtag-btn-wrap {
@@ -389,6 +387,7 @@
 
 .live-hashtag {
   font-size: 9px;
+  white-space: nowrap;
 }
 
 .hashtag-btn {
@@ -464,9 +463,9 @@
 
 @media (max-width: 380px) {
   :root {
-    --team-size: 34px;
-    --team-width: 52px;
-    --score-size: 24px;
+    --team-size: 30px;
+    --team-width: 44px;
+    --score-size: 21px;
     --title-size: 14px;
   }
 
@@ -474,9 +473,13 @@
     padding-inline: 6px;
   }
 
+  .card-top-row {
+    padding-inline: 6px;
+  }
+
   .match-main {
     padding-inline: 6px;
-    gap: 4px;
+    gap: 3px;
   }
 
   .match-meta {
@@ -496,6 +499,10 @@
 
   .ticker-text {
     font-size: 9px;
+  }
+
+  .tweet-footer {
+    gap: 2px;
   }
 
   .hashtag-btn-wrap,

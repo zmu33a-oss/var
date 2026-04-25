@@ -323,6 +323,11 @@ function MatchCard({ match }: { match: MatchCardData }) {
 
   return (
     <div className={styles["league-card"]}>
+      <div className={styles["card-top-row"]}>
+        <div className={styles["match-time-corner"]}>{match.time}</div>
+        <div className={styles["live-badge"]}>● مباشر</div>
+      </div>
+
       <div className={styles["league-header"]}>
         <div className={styles["league-title-row"]}>
           <div className={styles["league-badge"]}>RSL</div>
@@ -330,8 +335,6 @@ function MatchCard({ match }: { match: MatchCardData }) {
         </div>
         <p>{match.round}</p>
       </div>
-
-      <div className={styles["live-badge"]}>● مباشر</div>
 
       <div className={styles["match-main"]}>
         <TeamBlock team={match.leftTeam} />
@@ -342,7 +345,6 @@ function MatchCard({ match }: { match: MatchCardData }) {
             <span className={styles["score-dash"]}>-</span>
             <span>{match.score[1]}</span>
           </div>
-          <div className={styles["time-pill"]}>{match.time}</div>
         </div>
 
         <TeamBlock team={match.rightTeam} />
