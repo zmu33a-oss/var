@@ -1685,14 +1685,20 @@ app.delete("/api/admin/videos/:videoId", requireAdmin, async (req, res) => {
   res.json({ success: true, deletedVideoId: videoId });
 });
 
-http
-  .createServer(
-    {
-      maxHeaderSize: 128 * 1024,
-    },
-    app,
-  )
-  .listen(PORT, () => {
-    console.log(`WEBPLUS Admin API listening on http://localhost:${PORT}`);
-    console.log(`Supabase service role configured: ${Boolean(serviceClient)}`);
-  });
+if (require.main === module) {
+  http
+    .createServer(
+      {
+        maxHeaderSize: 128 * 1024,
+      },
+      app,
+    )
+    .listen(PORT, () => {
+      console.log(`WEBPLUS Admin API listening on http://localhost:${PORT}`);
+      console.log(
+        `Supabase service role configured: ${Boolean(serviceClient)}`,
+      );
+    });
+}
+
+module.exports = app;
