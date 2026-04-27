@@ -180,6 +180,15 @@ export async function deleteAdminVideo(videoId: number) {
   );
 }
 
+export async function deleteOwnVideoApi(videoId: number) {
+  return adminRequest<{ success: true; deletedVideoId: number }>(
+    `/videos/${videoId}/owner`,
+    {
+      method: "DELETE",
+    },
+  );
+}
+
 export async function loadAdminReportsApi() {
   return adminRequest<AdminReport[]>("/reports");
 }

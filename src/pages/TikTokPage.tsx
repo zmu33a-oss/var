@@ -6,6 +6,7 @@ import { createAdminReport } from "../lib/adminStore";
 import {
   addTikTokVideoComment,
   createTikTokVideoInDatabase,
+  deleteTikTokVideoFromDatabase,
   fetchTikTokVideosFromDatabase,
   recordTikTokVideoShare,
   toggleTikTokVideoLike,
@@ -319,6 +320,49 @@ export default function TikTokPage({ cameraRequestKey = 0 }: TikTokPageProps) {
     }
   };
 
+  const handleDeleteVideo = async (video: VideoItem) => {
+    if (!user?.id) {
+      window.alert("يجب تسجيل الدخول لحذف الفيديو");
+      return;
+    }
+
+    if (video.user_id !== user.id) {
+      window.alert("يمكنك حذف فيديوهاتك فقط");
+      return;
+    }
+
+    const confirmed = window.confirm("هل تريد حذف هذا الفيديو نهائيا؟");
+    if (!confirmed) {
+      return;
+    }
+
+    const previousVideos = videos;
+    const previousBrokenVideoIds = brokenVideoIds;
+
+    setVideos((currentVideos) => {
+      const nextVideos = currentVideos.filter(
+        (currentVideo) => currentVideo.id !== video.id,
+      );
+      saveCachedVideos(nextVideos);
+      return nextVideos;
+    });
+    setBrokenVideoIds((currentIds) =>
+      currentIds.filter((currentId) => currentId !== video.id),
+    );
+
+    try {
+      await deleteTikTokVideoFromDatabase(video.id, user.id);
+    } catch {
+      setVideos(previousVideos);
+      setBrokenVideoIds(previousBrokenVideoIds);
+      saveCachedVideos(previousVideos);
+      window.alert("تعذر حذف الفيديو الآن");
+      return;
+    }
+
+    window.alert("تم حذف الفيديو");
+  };
+
   const handleToggleLike = (video: VideoItem) => {
     if (!user?.id) {
       window.alert("يجب تسجيل الدخول لتنفيذ الإعجاب");
@@ -610,12 +654,13 @@ export default function TikTokPage({ cameraRequestKey = 0 }: TikTokPageProps) {
               isActive={index === activeIndex}
               shouldLoad={Math.abs(index - activeIndex) <= 1}
               onVideoError={() => handleVideoError(vid.id)}
-              onAddVideo={handleOpenFiles}
               onToggleLike={() => handleToggleLike(vid)}
               onToggleSave={() => handleToggleSave(vid)}
               onComment={() => handleCommentVideo(vid)}
               onShare={() => void handleShareVideo(vid)}
               onReport={() => void handleReportVideo(vid)}
+              onDeleteVideo={() => void handleDeleteVideo(vid)}
+              isOwnVideo={isCurrentUsersVideo}
             />
           );
         })

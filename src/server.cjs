@@ -16,6 +16,11 @@ const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYnVxZ3NkbXh6enp1YW1qdHJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5MjEyNTgsImV4cCI6MjA5MTQ5NzI1OH0.QH8yVOHFd0irocFXVK4urzknUi2aqXUTshugCL0HwWk";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const PORT = Number(process.env.ADMIN_API_PORT || process.env.PORT || 5000);
+const SPORTMONKS_BASE_URL = (
+  process.env.SPORTMONKS_BASE_URL || "https://api.sportmonks.com/v3/football"
+).replace(/\/+$/, "");
+const SPORTMONKS_API_TOKEN = (process.env.SPORTMONKS_API_TOKEN || "").trim();
+const SPORTMONKS_INPLAY_URL = (process.env.SPORTMONKS_INPLAY_URL || "").trim();
 const ADMIN_EMAIL_ALLOWLIST = new Set(
   (process.env.ADMIN_EMAIL_ALLOWLIST || "")
     .split(",")
@@ -51,6 +56,527 @@ app.use(
   }),
 );
 app.use(express.json());
+
+function toArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function toFiniteNumber(...candidates) {
+  for (const candidate of candidates) {
+    const value = Number(candidate);
+
+    if (Number.isFinite(value)) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function toNonEmptyString(...candidates) {
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") continue;
+
+    const value = candidate.trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function resolveSportmonksApiToken() {
+  if (SPORTMONKS_API_TOKEN) {
+    return SPORTMONKS_API_TOKEN;
+  }
+
+  if (!SPORTMONKS_INPLAY_URL) {
+    return "";
+  }
+
+  try {
+    return new URL(SPORTMONKS_INPLAY_URL).searchParams.get("api_token") || "";
+  } catch {
+    return "";
+  }
+}
+
+function buildSportmonksInplayUrl() {
+  if (SPORTMONKS_INPLAY_URL) {
+    return SPORTMONKS_INPLAY_URL;
+  }
+
+  const apiToken = resolveSportmonksApiToken();
+  if (!apiToken) {
+    return "";
+  }
+
+  const requestUrl = new URL(`${SPORTMONKS_BASE_URL}/livescores/inplay`);
+  requestUrl.searchParams.set("api_token", apiToken);
+  return requestUrl.toString();
+}
+
+function buildSportmonksFixtureDetailsUrl(fixtureId) {
+  const apiToken = resolveSportmonksApiToken();
+  if (!apiToken || !fixtureId) {
+    return "";
+  }
+
+  const requestUrl = new URL(`${SPORTMONKS_BASE_URL}/fixtures/${fixtureId}`);
+  requestUrl.searchParams.set("api_token", apiToken);
+  requestUrl.searchParams.set(
+    "include",
+    "participants;league;state;scores;events.type;events.player;events.relatedplayer;lineups.player",
+  );
+  return requestUrl.toString();
+}
+
+async function fetchSportmonksJson(requestUrl) {
+  const response = await fetch(requestUrl, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const error = new Error(
+      body?.message ||
+        `SportMonks request failed with status ${response.status}`,
+    );
+    error.statusCode = response.status;
+    throw error;
+  }
+
+  return body;
+}
+
+function normalizeSportmonksParticipant(participant, fallbackLocation = "") {
+  const source =
+    participant && typeof participant.participant === "object"
+      ? participant.participant
+      : participant;
+
+  return {
+    id: source?.id ?? participant?.participant_id ?? participant?.id ?? null,
+    name: toNonEmptyString(
+      source?.name,
+      participant?.name,
+      source?.short_name,
+      participant?.short_name,
+    ),
+    logo: toNonEmptyString(
+      source?.image_path,
+      participant?.image_path,
+      source?.logo,
+      participant?.logo,
+    ),
+    location:
+      toNonEmptyString(
+        participant?.meta?.location,
+        participant?.location,
+        participant?.type,
+        fallbackLocation,
+      )?.toLowerCase() || "",
+  };
+}
+
+function extractSportmonksTeams(fixture) {
+  const participants = toArray(fixture?.participants)
+    .map((participant) => normalizeSportmonksParticipant(participant))
+    .filter((participant) => participant.name);
+
+  if (participants.length >= 2) {
+    const homeParticipant =
+      participants.find((participant) =>
+        participant.location.includes("home"),
+      ) || participants[0];
+    const awayParticipant =
+      participants.find((participant) =>
+        participant.location.includes("away"),
+      ) ||
+      participants.find((participant) => participant !== homeParticipant) ||
+      participants[1];
+
+    return {
+      home: homeParticipant,
+      away: awayParticipant,
+    };
+  }
+
+  const homeParticipant = normalizeSportmonksParticipant(
+    fixture?.homeTeam || fixture?.localteam || fixture?.home || null,
+    "home",
+  );
+  const awayParticipant = normalizeSportmonksParticipant(
+    fixture?.awayTeam || fixture?.visitorteam || fixture?.away || null,
+    "away",
+  );
+
+  return {
+    home: homeParticipant.name ? homeParticipant : null,
+    away: awayParticipant.name ? awayParticipant : null,
+  };
+}
+
+function extractGoalsFromScoreEntry(scoreEntry) {
+  return toFiniteNumber(
+    scoreEntry?.score?.goals,
+    scoreEntry?.score?.goal,
+    scoreEntry?.score?.current,
+    scoreEntry?.goals,
+    scoreEntry?.result,
+    scoreEntry?.value,
+  );
+}
+
+function isMatchingScoreEntry(scoreEntry, team, fallbackLocation) {
+  if (!team) {
+    return false;
+  }
+
+  const scoreLocation =
+    toNonEmptyString(
+      scoreEntry?.score?.participant,
+      scoreEntry?.participant,
+      scoreEntry?.participant_type,
+      scoreEntry?.meta?.location,
+    )?.toLowerCase() || "";
+
+  if (scoreLocation && scoreLocation.includes(fallbackLocation)) {
+    return true;
+  }
+
+  const participantId = toFiniteNumber(
+    scoreEntry?.participant_id,
+    scoreEntry?.score?.participant_id,
+    scoreEntry?.participant?.id,
+  );
+
+  return (
+    participantId !== null &&
+    team.id !== null &&
+    participantId === Number(team.id)
+  );
+}
+
+function extractTeamGoals(fixture, team, fallbackLocation) {
+  const scoreEntries = toArray(fixture?.scores);
+
+  if (scoreEntries.length) {
+    const matchingEntries = scoreEntries.filter((scoreEntry) =>
+      isMatchingScoreEntry(scoreEntry, team, fallbackLocation),
+    );
+    const preferredEntry =
+      matchingEntries.find((scoreEntry) =>
+        /current|live|ft/i.test(
+          toNonEmptyString(scoreEntry?.description, scoreEntry?.type?.name) ||
+            "",
+        ),
+      ) || matchingEntries[matchingEntries.length - 1];
+
+    const goals = extractGoalsFromScoreEntry(preferredEntry);
+    if (goals !== null) {
+      return goals;
+    }
+  }
+
+  return toFiniteNumber(
+    fixture?.scores?.[fallbackLocation],
+    fixture?.score?.[fallbackLocation],
+    fixture?.[`${fallbackLocation}_score`],
+    fixture?.result?.[fallbackLocation],
+  );
+}
+
+function extractSportmonksLiveLabel(fixture) {
+  const minute = toFiniteNumber(
+    fixture?.time?.minute,
+    fixture?.minute,
+    fixture?.state?.minute,
+    fixture?.clock?.minute,
+  );
+  const addedTime = toFiniteNumber(
+    fixture?.time?.added_time,
+    fixture?.time?.injury_time,
+    fixture?.extra_minute,
+  );
+
+  if (minute !== null) {
+    return addedTime !== null ? `${minute}+${addedTime}'` : `${minute}'`;
+  }
+
+  return (
+    toNonEmptyString(
+      fixture?.state?.short_name,
+      fixture?.state?.name,
+      fixture?.status,
+      fixture?.result_info,
+    ) || "LIVE"
+  );
+}
+
+function formatSportmonksEventMinute(event) {
+  const minute = toFiniteNumber(
+    event?.minute,
+    event?.time?.minute,
+    event?.clock?.minute,
+  );
+  const addedTime = toFiniteNumber(
+    event?.extra_minute,
+    event?.time?.extra_minute,
+    event?.added_time,
+  );
+
+  if (minute !== null) {
+    return addedTime !== null ? `${minute}+${addedTime}'` : `${minute}'`;
+  }
+
+  return "•";
+}
+
+function normalizeSportmonksEvent(event) {
+  const typeName =
+    toNonEmptyString(
+      event?.type?.name,
+      event?.type?.developer_name,
+      event?.event,
+      event?.result,
+    ) || "حدث";
+  const playerName =
+    toNonEmptyString(
+      event?.player_name,
+      event?.player?.name,
+      event?.player?.display_name,
+      event?.player?.data?.display_name,
+    ) || "";
+  const relatedPlayerName =
+    toNonEmptyString(
+      event?.relatedplayer_name,
+      event?.relatedplayer?.name,
+      event?.relatedplayer?.display_name,
+      event?.relatedplayer?.data?.display_name,
+    ) || "";
+  const note =
+    toNonEmptyString(
+      event?.comment,
+      event?.detail,
+      event?.reason,
+      event?.info,
+    ) || "";
+
+  const detailParts = [playerName, relatedPlayerName, note].filter(Boolean);
+
+  return {
+    minute: formatSportmonksEventMinute(event),
+    title: typeName,
+    detail: detailParts.join(" · ") || "تفاصيل الحدث غير متوفرة",
+  };
+}
+
+function parseSportmonksFormationField(value) {
+  if (typeof value !== "string") {
+    return {
+      row: null,
+      column: null,
+    };
+  }
+
+  const [rowPart, columnPart] = value.split(":");
+
+  return {
+    row: toFiniteNumber(rowPart),
+    column: toFiniteNumber(columnPart),
+  };
+}
+
+function compareNullableNumbers(left, right) {
+  if (left === right) {
+    return 0;
+  }
+
+  if (left === null) {
+    return 1;
+  }
+
+  if (right === null) {
+    return -1;
+  }
+
+  return left - right;
+}
+
+function normalizeSportmonksLineupPlayer(lineupEntry) {
+  const name =
+    toNonEmptyString(
+      lineupEntry?.player_name,
+      lineupEntry?.player?.name,
+      lineupEntry?.player?.display_name,
+    ) || "";
+
+  if (!name) {
+    return null;
+  }
+
+  const formation = parseSportmonksFormationField(lineupEntry?.formation_field);
+  const formationPosition = toFiniteNumber(lineupEntry?.formation_position);
+  const typeId = toFiniteNumber(lineupEntry?.type_id, lineupEntry?.type?.id);
+  const isStarter =
+    typeId === 11 ||
+    (typeId !== 12 && (formation.row !== null || formationPosition !== null));
+
+  return {
+    id:
+      lineupEntry?.player_id ??
+      lineupEntry?.player?.id ??
+      lineupEntry?.id ??
+      null,
+    name,
+    image:
+      toNonEmptyString(
+        lineupEntry?.player?.image_path,
+        lineupEntry?.player?.photo,
+        lineupEntry?.image_path,
+      ) || null,
+    number: toFiniteNumber(
+      lineupEntry?.jersey_number,
+      lineupEntry?.shirt_number,
+      lineupEntry?.number,
+    ),
+    formationRow: formation.row,
+    formationColumn: formation.column,
+    formationPosition,
+    role: isStarter ? "starter" : "bench",
+  };
+}
+
+function sortSportmonksLineupPlayers(left, right) {
+  return (
+    compareNullableNumbers(left.formationRow, right.formationRow) ||
+    compareNullableNumbers(left.formationColumn, right.formationColumn) ||
+    compareNullableNumbers(left.formationPosition, right.formationPosition) ||
+    compareNullableNumbers(left.number, right.number) ||
+    left.name.localeCompare(right.name)
+  );
+}
+
+function deriveSportmonksFormation(starters) {
+  const rowCounts = new Map();
+
+  for (const player of starters) {
+    if (player.formationRow === null) {
+      continue;
+    }
+
+    rowCounts.set(
+      player.formationRow,
+      (rowCounts.get(player.formationRow) || 0) + 1,
+    );
+  }
+
+  const orderedRows = [...rowCounts.entries()]
+    .sort((left, right) => left[0] - right[0])
+    .map(([, count]) => count);
+
+  if (!orderedRows.length) {
+    return null;
+  }
+
+  const outfieldRows =
+    orderedRows[0] === 1 ? orderedRows.slice(1) : orderedRows;
+  return outfieldRows.length ? outfieldRows.join("-") : null;
+}
+
+function normalizeSportmonksTeamLineup(lineupEntries, team) {
+  if (!team?.id) {
+    return null;
+  }
+
+  const teamId = Number(team.id);
+  const normalizedPlayers = lineupEntries
+    .filter((lineupEntry) => {
+      const entryTeamId = toFiniteNumber(
+        lineupEntry?.team_id,
+        lineupEntry?.participant_id,
+        lineupEntry?.team?.id,
+      );
+
+      return entryTeamId !== null && entryTeamId === teamId;
+    })
+    .map(normalizeSportmonksLineupPlayer)
+    .filter(Boolean);
+
+  if (!normalizedPlayers.length) {
+    return null;
+  }
+
+  const starters = normalizedPlayers
+    .filter((player) => player.role === "starter")
+    .sort(sortSportmonksLineupPlayers);
+  const bench = normalizedPlayers
+    .filter((player) => player.role === "bench")
+    .sort(sortSportmonksLineupPlayers);
+
+  return {
+    formation: deriveSportmonksFormation(starters),
+    starters,
+    bench,
+  };
+}
+
+function normalizeSportmonksLineups(fixture, teams) {
+  const lineupEntries = toArray(fixture?.lineups);
+
+  if (!lineupEntries.length) {
+    return null;
+  }
+
+  const home = normalizeSportmonksTeamLineup(lineupEntries, teams.home);
+  const away = normalizeSportmonksTeamLineup(lineupEntries, teams.away);
+
+  if (!home && !away) {
+    return null;
+  }
+
+  return {
+    home,
+    away,
+  };
+}
+
+function normalizeSportmonksFixture(fixture) {
+  const teams = extractSportmonksTeams(fixture);
+  if (!teams.home?.name || !teams.away?.name) {
+    return null;
+  }
+
+  const lineup = normalizeSportmonksLineups(fixture, teams);
+
+  return {
+    fixtureId: fixture?.id ?? fixture?.fixture_id ?? null,
+    leagueName:
+      toNonEmptyString(
+        fixture?.league?.name,
+        fixture?.league_name,
+        fixture?.competition?.name,
+      ) || "Live Match",
+    liveLabel: extractSportmonksLiveLabel(fixture),
+    home: {
+      name: teams.home.name,
+      logo: teams.home.logo,
+      score: extractTeamGoals(fixture, teams.home, "home"),
+    },
+    away: {
+      name: teams.away.name,
+      logo: teams.away.logo,
+      score: extractTeamGoals(fixture, teams.away, "away"),
+    },
+    events: toArray(fixture?.events).map(normalizeSportmonksEvent),
+    lineup,
+  };
+}
 
 function normalizeRole(value) {
   if (typeof value !== "string") return null;
@@ -454,6 +980,20 @@ function requireServiceClient(res) {
   return false;
 }
 
+function createUserScopedClient(accessToken) {
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  });
+}
+
 async function authenticateRequest(req, res) {
   const authorizationHeader = req.headers.authorization || "";
   const accessToken = authorizationHeader.startsWith("Bearer ")
@@ -478,20 +1018,26 @@ async function authenticateRequest(req, res) {
     return null;
   }
 
-  return data.user;
+  return {
+    user: data.user,
+    accessToken,
+  };
 }
 
 async function requireAuthenticatedUser(req, res, next) {
-  const user = await authenticateRequest(req, res);
-  if (!user) return;
+  const authResult = await authenticateRequest(req, res);
+  if (!authResult) return;
 
-  req.authUser = user;
+  req.authUser = authResult.user;
+  req.authAccessToken = authResult.accessToken;
   next();
 }
 
 async function requireAdmin(req, res, next) {
-  const user = await authenticateRequest(req, res);
-  if (!user) return;
+  const authResult = await authenticateRequest(req, res);
+  if (!authResult) return;
+
+  const user = authResult.user;
 
   const role = resolveAdminRole(user);
 
@@ -504,6 +1050,7 @@ async function requireAdmin(req, res, next) {
   }
 
   req.authUser = user;
+  req.authAccessToken = authResult.accessToken;
   req.adminRole = role;
   next();
 }
@@ -514,6 +1061,90 @@ app.get("/", (req, res) => {
     status: "ok",
     serviceRoleConfigured: Boolean(serviceClient),
   });
+});
+
+app.get("/api/sportmonks/inplay", async (req, res) => {
+  const inplayUrl = buildSportmonksInplayUrl();
+
+  if (!inplayUrl) {
+    res.status(503).json({
+      source: "sportmonks",
+      status: "unconfigured",
+      message:
+        "SportMonks غير مهيأ بعد. أضف SPORTMONKS_API_TOKEN أو SPORTMONKS_INPLAY_URL إلى البيئة.",
+      fetchedAt: new Date().toISOString(),
+      match: null,
+    });
+    return;
+  }
+
+  try {
+    const inplayPayload = await fetchSportmonksJson(inplayUrl);
+    const fixtures = toArray(inplayPayload?.data);
+
+    if (!fixtures.length) {
+      res.json({
+        source: "sportmonks",
+        status: "empty",
+        message:
+          typeof inplayPayload?.message === "string"
+            ? inplayPayload.message
+            : "لا توجد مباراة live متاحة الآن من SportMonks.",
+        fetchedAt: new Date().toISOString(),
+        match: null,
+      });
+      return;
+    }
+
+    const baseFixture = fixtures[0];
+    const detailsUrl = buildSportmonksFixtureDetailsUrl(
+      baseFixture?.id ?? baseFixture?.fixture_id,
+    );
+
+    let detailedFixture = null;
+    if (detailsUrl) {
+      try {
+        const detailsPayload = await fetchSportmonksJson(detailsUrl);
+        detailedFixture = detailsPayload?.data || null;
+      } catch {
+        detailedFixture = null;
+      }
+    }
+
+    const normalizedMatch = normalizeSportmonksFixture(
+      detailedFixture || baseFixture,
+    );
+
+    if (!normalizedMatch) {
+      res.json({
+        source: "sportmonks",
+        status: "empty",
+        message:
+          "تم الاتصال بـ SportMonks لكن تعذر تحويل المباراة إلى الشكل المطلوب.",
+        fetchedAt: new Date().toISOString(),
+        match: null,
+      });
+      return;
+    }
+
+    res.json({
+      source: "sportmonks",
+      status: "live",
+      fetchedAt: new Date().toISOString(),
+      match: normalizedMatch,
+    });
+  } catch (error) {
+    res.status(502).json({
+      source: "sportmonks",
+      status: "error",
+      message:
+        error instanceof Error && error.message
+          ? error.message
+          : "تعذر تحميل البيانات الحية من SportMonks.",
+      fetchedAt: new Date().toISOString(),
+      match: null,
+    });
+  }
 });
 
 app.get("/api/admin/session", requireAdmin, (req, res) => {
@@ -917,6 +1548,80 @@ app.delete("/api/admin/groups/:groupId", requireAdmin, async (req, res) => {
   if (!requireServiceClient(res)) return;
 
   const { groupId } = req.params;
+
+  app.delete(
+    "/api/admin/videos/:videoId/owner",
+    requireAuthenticatedUser,
+    async (req, res) => {
+      const videoId = Number(req.params.videoId);
+
+      if (!Number.isInteger(videoId) || videoId <= 0) {
+        res.status(400).json({
+          error: "INVALID_VIDEO_ID",
+          message: "معرف الفيديو غير صالح.",
+        });
+        return;
+      }
+
+      const userClient = createUserScopedClient(req.authAccessToken);
+
+      const { data: videoRow, error: videoError } = await userClient
+        .from("videos")
+        .select("id, user_id, video_url")
+        .eq("id", videoId)
+        .maybeSingle();
+
+      if (videoError) {
+        res.status(500).json({
+          error: "VIDEO_LOOKUP_FAILED",
+          message: "تعذر التحقق من ملكية الفيديو.",
+        });
+        return;
+      }
+
+      if (!videoRow) {
+        res.status(404).json({
+          error: "VIDEO_NOT_FOUND",
+          message: "الفيديو غير موجود.",
+        });
+        return;
+      }
+
+      if (videoRow.user_id !== req.authUser.id) {
+        res.status(403).json({
+          error: "VIDEO_DELETE_FORBIDDEN",
+          message: "لا يمكنك حذف إلا فيديوهاتك.",
+        });
+        return;
+      }
+
+      const { error: deleteError } = await userClient
+        .from("videos")
+        .delete()
+        .eq("id", videoId)
+        .eq("user_id", req.authUser.id);
+
+      if (deleteError) {
+        res.status(500).json({
+          error: "VIDEO_DELETE_FAILED",
+          message: "تعذر حذف الفيديو الآن.",
+        });
+        return;
+      }
+
+      if (serviceClient) {
+        const storagePath = getVideoStoragePath(videoRow.video_url);
+        if (storagePath) {
+          await serviceClient.storage.from("videos").remove([storagePath]);
+        }
+      }
+
+      res.json({
+        success: true,
+        deletedVideoId: videoId,
+      });
+    },
+  );
 
   await serviceClient.from("group_members").delete().eq("group_id", groupId);
   await serviceClient.from("messages").delete().eq("group_id", groupId);

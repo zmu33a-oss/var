@@ -33,6 +33,7 @@ function AppContent() {
   const [chatComposer, setChatComposer] = useState<ChatComposer>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [tiktokCameraRequestKey, setTiktokCameraRequestKey] = useState(0);
+  const [pendingTikTokOpen, setPendingTikTokOpen] = useState(false);
   const [xPosts, setXPosts] = useState<XPost[]>(() => loadXPosts());
   const { user, isRecovery, clearRecovery, loading } = useAuth();
   const adminRole = getAdminRole(user);
@@ -178,19 +179,32 @@ function AppContent() {
   };
 
   const visibleTab = tab === "chat" ? chatBaseTab : tab;
-  const bottomNavHomeActionMode =
-    visibleTab === "home" && tab !== "chat" && chatComposer !== "post"
-      ? mode
-      : undefined;
+
+  useEffect(() => {
+    if (!pendingTikTokOpen || mode !== "tiktok" || visibleTab !== "home") {
+      return;
+    }
+
+    setPendingTikTokOpen(false);
+    setTiktokCameraRequestKey((currentKey) => currentKey + 1);
+  }, [pendingTikTokOpen, mode, visibleTab]);
 
   const handleBottomNavHomeAction = () => {
     if (mode === "x") {
-      openChat("dm");
+      openChat("post");
       return;
     }
 
     if (!user) {
       setTab("account");
+      return;
+    }
+
+    if (visibleTab !== "home" || tab === "chat" || chatComposer === "post") {
+      setPendingTikTokOpen(true);
+      setChatComposer(null);
+      setChatBaseTab("home");
+      setTab("home");
       return;
     }
 
@@ -262,7 +276,14 @@ function AppContent() {
         </div>
       )}
 
-      {visibleTab === "fans" && <FansPage />}
+      {visibleTab === "fans" && (
+        <FansPage
+          onRequireAuth={() => {
+            setAuthMode("login");
+            setTab("account");
+          }}
+        />
+      )}
       {visibleTab === "leagues" && <LeaguesPage />}
       {visibleTab === "profile" && (
         <ProfilePage
@@ -331,7 +352,7 @@ function AppContent() {
             ? "account"
             : visibleTab
         }
-        homeMode={bottomNavHomeActionMode}
+        homeMode={mode}
         onHomeAction={handleBottomNavHomeAction}
         setTab={(nextTab) => {
           // لو مسجّل دخول وضغط الحساب → روّح للبروفايل مباشرة

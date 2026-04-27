@@ -686,6 +686,7 @@
 }
 
 .trendStageBody {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(56px, 15%) minmax(0, 85%);
   align-items: center;
@@ -749,6 +750,9 @@
     border-color 180ms ease,
     background 180ms ease,
     box-shadow 180ms ease;
+  touch-action: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .trendOptionButton:hover {
@@ -774,6 +778,320 @@
   box-shadow: 0 12px 22px rgba(16, 94, 153, 0.18);
 }
 
+.trendOptionButtonPreviewing {
+  border-color: rgba(255, 194, 90, 0.92);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 189, 70, 0.2) 0%,
+    rgba(113, 70, 6, 0.2) 100%
+  );
+  box-shadow:
+    0 12px 22px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(255, 194, 90, 0.18);
+}
+
+.trendPreviewDock {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.trendPreviewCard {
+  --trend-preview-accent: #ffbf38;
+  --trend-preview-secondary: #ff8740;
+  width: 100%;
+  min-height: 100%;
+  padding: 16px 14px 12px;
+  border-radius: 20px;
+  border: 1.3px solid rgba(255, 255, 255, 0.84);
+  background:
+    radial-gradient(
+      circle at top left,
+      color-mix(in srgb, var(--trend-preview-accent) 26%, transparent),
+      transparent 38%
+    ),
+    linear-gradient(180deg, rgba(7, 8, 12, 0.96) 0%, rgba(4, 4, 6, 0.96) 100%);
+  box-shadow:
+    0 24px 46px rgba(0, 0, 0, 0.48),
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  animation: trendPreviewSlideIn 180ms cubic-bezier(0.2, 0.9, 0.2, 1);
+  will-change: transform, opacity;
+  box-sizing: border-box;
+}
+
+.trendPreviewCardExiting {
+  animation: trendPreviewSlideOut 360ms cubic-bezier(0.22, 0.61, 0.36, 1)
+    forwards;
+}
+
+.trendPreviewCardGold {
+  --trend-preview-accent: #ffc53d;
+  --trend-preview-secondary: #ff8740;
+}
+
+.trendPreviewCardSilver {
+  --trend-preview-accent: #d5dcef;
+  --trend-preview-secondary: #8fa4d8;
+}
+
+.trendPreviewCardBronze {
+  --trend-preview-accent: #d89767;
+  --trend-preview-secondary: #91552e;
+}
+
+.trendPreviewHead {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 82px;
+  align-items: start;
+  gap: 12px;
+  direction: ltr;
+}
+
+.trendPreviewMedalBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding-top: 3px;
+}
+
+.trendPreviewMedal {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 30%,
+    rgba(255, 255, 255, 0.6),
+    var(--trend-preview-accent) 34%,
+    color-mix(in srgb, var(--trend-preview-secondary) 80%, black) 100%
+  );
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 12px 20px rgba(0, 0, 0, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.trendPreviewMedal::before {
+  content: "";
+  position: absolute;
+  top: -16px;
+  left: 13px;
+  right: 13px;
+  height: 18px;
+  background: linear-gradient(
+    180deg,
+    var(--trend-preview-secondary) 0%,
+    color-mix(in srgb, var(--trend-preview-secondary) 78%, black) 100%
+  );
+  clip-path: polygon(0 0, 100% 0, 78% 100%, 50% 74%, 22% 100%);
+}
+
+.trendPreviewMedalIcon {
+  width: 20px;
+  height: 20px;
+  color: #fff8d0;
+  stroke-width: 2.4px;
+}
+
+.trendPreviewMedalLabel {
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.trendPreviewRankBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: center;
+  justify-content: center;
+  padding-top: 5px;
+  text-align: center;
+}
+
+.trendPreviewRank {
+  color: var(--trend-preview-accent);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-shadow: 0 6px 14px rgba(0, 0, 0, 0.32);
+}
+
+.trendPreviewRankSubline {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.trendPreviewIdentity {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  text-align: center;
+}
+
+.trendPreviewAvatarWrap {
+  width: 58px;
+  height: 58px;
+  padding: 3px;
+  border-radius: 50%;
+  background: linear-gradient(
+    180deg,
+    var(--trend-preview-accent) 0%,
+    var(--trend-preview-secondary) 100%
+  );
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 20px rgba(0, 0, 0, 0.28);
+  box-sizing: border-box;
+}
+
+.trendPreviewAvatarWrapFramed {
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.22),
+    0 12px 20px rgba(0, 0, 0, 0.28);
+}
+
+.trendPreviewAvatar,
+.trendPreviewAvatarFallback {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+.trendPreviewAvatar {
+  display: block;
+  object-fit: cover;
+  background: #0d1118;
+}
+
+.trendPreviewAvatarFallback {
+  background: linear-gradient(180deg, #242a36 0%, #0e131b 100%);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.trendPreviewIdentityName,
+.trendPreviewIdentityHandle {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.trendPreviewIdentityName {
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.trendPreviewIdentityHandle {
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 9px;
+  font-weight: 800;
+  direction: ltr;
+}
+
+.trendPreviewSpotlight {
+  width: fit-content;
+  min-height: 44px;
+  margin: 0 auto;
+  padding: 0 20px;
+  border-radius: 14px;
+  border: 1.2px solid rgba(255, 255, 255, 0.76);
+  background: rgba(5, 5, 7, 0.48);
+  color: var(--trend-preview-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 900;
+  text-align: center;
+  box-shadow:
+    0 10px 18px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-sizing: border-box;
+}
+
+.trendPreviewStatsBar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: auto;
+  padding: 14px 12px 12px;
+  border-radius: 17px;
+  border: 1px solid rgba(255, 212, 110, 0.38);
+  background: linear-gradient(180deg, #259df7 0%, #1570c6 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 12px 22px rgba(15, 63, 111, 0.28);
+}
+
+.trendPreviewStat {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.trendPreviewStatValue {
+  color: #ffffff;
+  font-size: 19px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.trendPreviewStatLabel {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+@keyframes trendPreviewSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes trendPreviewSlideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(20px) scale(0.985);
+  }
+}
+
 .trendOptionLabel {
   font-size: 9px;
   font-weight: 900;
@@ -796,6 +1114,7 @@
 }
 
 .trendVideoPane {
+  position: relative;
   min-width: 0;
 }
 
@@ -1399,6 +1718,80 @@
 @media (max-width: 640px) {
   .contentShell {
     margin-top: 90px;
+  }
+
+  .trendStageBody {
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .trendPreviewDock {
+    inset: 0;
+  }
+
+  .trendPreviewCard {
+    padding: 12px 10px 10px;
+    border-radius: 18px;
+  }
+
+  .trendPreviewHead {
+    grid-template-columns: 56px minmax(0, 1fr) 70px;
+    gap: 8px;
+  }
+
+  .trendPreviewMedal {
+    width: 46px;
+    height: 46px;
+  }
+
+  .trendPreviewMedal::before {
+    top: -14px;
+    left: 12px;
+    right: 12px;
+    height: 16px;
+  }
+
+  .trendPreviewMedalIcon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .trendPreviewRank {
+    font-size: 16px;
+  }
+
+  .trendPreviewRankSubline,
+  .trendPreviewMedalLabel,
+  .trendPreviewIdentityHandle {
+    font-size: 8px;
+  }
+
+  .trendPreviewIdentityName {
+    font-size: 10px;
+  }
+
+  .trendPreviewAvatarWrap {
+    width: 52px;
+    height: 52px;
+  }
+
+  .trendPreviewSpotlight {
+    min-height: 34px;
+    padding-inline: 14px;
+    font-size: 13px;
+  }
+
+  .trendPreviewStatsBar {
+    gap: 6px;
+    padding: 10px 8px 8px;
+  }
+
+  .trendPreviewStatValue {
+    font-size: 16px;
+  }
+
+  .trendPreviewStatLabel {
+    font-size: 8px;
   }
 
   .fanCard {
@@ -2188,6 +2581,99 @@
 @media (max-width: 380px) {
   .topSheet {
     width: min(calc(100% - 110px), 252px);
+  }
+
+  .trendStageBody {
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .trendOptionButton {
+    min-height: 48px;
+    border-radius: 12px;
+    gap: 5px;
+  }
+
+  .trendOptionChip {
+    min-width: 40px;
+    font-size: 7px;
+  }
+
+  .trendPreviewDock {
+    inset: 0;
+  }
+
+  .trendPreviewCard {
+    padding: 9px 8px 8px;
+    border-radius: 15px;
+    gap: 10px;
+  }
+
+  .trendPreviewHead {
+    grid-template-columns: 46px minmax(0, 1fr) 56px;
+    gap: 6px;
+  }
+
+  .trendPreviewMedal {
+    width: 40px;
+    height: 40px;
+  }
+
+  .trendPreviewMedal::before {
+    top: -12px;
+    left: 10px;
+    right: 10px;
+    height: 14px;
+  }
+
+  .trendPreviewMedalIcon {
+    width: 16px;
+    height: 16px;
+  }
+
+  .trendPreviewRank {
+    font-size: 12px;
+  }
+
+  .trendPreviewRankSubline,
+  .trendPreviewMedalLabel,
+  .trendPreviewIdentityHandle {
+    font-size: 7px;
+  }
+
+  .trendPreviewIdentityName {
+    font-size: 9px;
+  }
+
+  .trendPreviewAvatarWrap {
+    width: 44px;
+    height: 44px;
+    padding: 2px;
+  }
+
+  .trendPreviewAvatarFallback {
+    font-size: 18px;
+  }
+
+  .trendPreviewSpotlight {
+    min-height: 30px;
+    padding-inline: 12px;
+    border-radius: 10px;
+    font-size: 11px;
+  }
+
+  .trendPreviewStatsBar {
+    gap: 4px;
+    padding: 8px 6px 6px;
+    border-radius: 12px;
+  }
+
+  .trendPreviewStatValue {
+    font-size: 13px;
+  }
+
+  .trendPreviewStatLabel {
+    font-size: 7px;
   }
 
   .sheetFrame {

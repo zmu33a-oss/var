@@ -1,4 +1,9 @@
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   Award,
   Check,
@@ -13,11 +18,13 @@ import {
 import hilalMenuGif from "../assets/fans-menu/hilal.webp";
 import nassrMenuGif from "../assets/fans-menu/nassr.webp";
 import ittihadMenuGif from "../assets/fans-menu/ittihad.webp";
+import messengerNotificationSound from "../assets/messenger_notification.mp3";
 import { useAuth } from "../lib/AuthContext";
 import {
   createEmptyFanSupportSnapshot,
   fetchFanSupportSnapshot,
   isFanSupportSchemaCacheMiss,
+  readCachedFanSupportSnapshot,
   setFanTeamSupport,
   toCounterDigits,
   type FanSupportSnapshot,
@@ -30,6 +37,86 @@ import {
 import styles from "../pages-css/FansPage.module.css";
 
 const trendRankLabels = ["1", "2", "3"] as const;
+
+const trendPreviewThemes = [
+  {
+    rankTitle: "المركز الأول",
+    spotlightLabel: "الأكثر تفاعلًا",
+    medalLabel: "ذهبي",
+    className: styles.trendPreviewCardGold,
+  },
+  {
+    rankTitle: "المركز الثاني",
+    spotlightLabel: "تفاعل قوي",
+    medalLabel: "فضي",
+    className: styles.trendPreviewCardSilver,
+  },
+  {
+    rankTitle: "المركز الثالث",
+    spotlightLabel: "ترند صاعد",
+    medalLabel: "برونزي",
+    className: styles.trendPreviewCardBronze,
+  },
+] as const;
+
+const trendPreviewMetricLabels = [
+  { key: "comments", label: "تعليق" },
+  { key: "likes", label: "إعجاب" },
+  { key: "saves", label: "حفظ" },
+  { key: "shares", label: "مشاركة" },
+] as const;
+
+const fallbackTrendPreviewCards = [
+  {
+    creatorName: "x tik@",
+    creatorHandle: "@xtik.top",
+    stats: {
+      comments: 190,
+      likes: 76,
+      saves: 28,
+      shares: 34,
+    },
+  },
+  {
+    creatorName: "xtik plus",
+    creatorHandle: "@xtik.plus",
+    stats: {
+      comments: 154,
+      likes: 68,
+      saves: 24,
+      shares: 19,
+    },
+  },
+  {
+    creatorName: "xtik live",
+    creatorHandle: "@xtik.live",
+    stats: {
+      comments: 122,
+      likes: 57,
+      saves: 18,
+      shares: 13,
+    },
+  },
+] as const;
+
+const formatArabicCount = (value: number) =>
+  new Intl.NumberFormat("ar-EG").format(value);
+
+const getTrendCreatorName = (video: TikTokVideo) =>
+  video.creator_name?.trim() || "صانع الترند";
+
+const getTrendCreatorHandle = (video: TikTokVideo) => {
+  const rawHandle = video.creator_handle?.trim();
+
+  if (!rawHandle) {
+    return "@xtik";
+  }
+
+  return rawHandle.startsWith("@") ? rawHandle : `@${rawHandle}`;
+};
+
+const getTrendCreatorInitial = (video: TikTokVideo) =>
+  getTrendCreatorName(video).charAt(0) || "X";
 
 const normalizeVideoUrl = (rawUrl: string) => {
   const cleaned = rawUrl.trim().replace(/^[^a-zA-Z]+/, "");
@@ -154,44 +241,143 @@ const supportTeams = [
   },
 ] as const;
 
-const FansPage = () => {
+type FansPageProps = {
+  onRequireAuth?: () => void;
+};
+
+const FansPage = ({ onRequireAuth }: FansPageProps) => {
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [supportSnapshot, setSupportSnapshot] = useState<FanSupportSnapshot>(
     createEmptyFanSupportSnapshot,
   );
-  const [supportLoading, setSupportLoading] = useState(true);
   const [supportTableReady, setSupportTableReady] = useState(true);
   const [pendingTeamId, setPendingTeamId] = useState<FanSupportTeamId | null>(
     null,
   );
   const [trendVideos, setTrendVideos] = useState<TikTokVideo[]>([]);
   const [trendLoading, setTrendLoading] = useState(true);
+  const [trendPreviewFallbackReady, setTrendPreviewFallbackReady] =
+    useState(false);
   const [activeTrendId, setActiveTrendId] = useState<number | null>(null);
+  const [isTrendPreviewExiting, setIsTrendPreviewExiting] = useState(false);
+  const [pressedTrendIndex, setPressedTrendIndex] = useState<number | null>(
+    null,
+  );
   const [isTopSheetPeekHidden, setIsTopSheetPeekHidden] = useState(false);
+  const trendPreviewExitTimeoutRef = useRef<number | null>(null);
+  const cheerSoundRef = useRef<HTMLAudioElement | null>(null);
+
+  const clearTrendPreviewExitTimeout = () => {
+    if (trendPreviewExitTimeoutRef.current !== null) {
+      window.clearTimeout(trendPreviewExitTimeoutRef.current);
+      trendPreviewExitTimeoutRef.current = null;
+    }
+  };
+
+  const beginTrendPreviewExit = () => {
+    if (
+      pressedTrendIndex === null ||
+      trendPreviewExitTimeoutRef.current !== null
+    ) {
+      return;
+    }
+
+    setIsTrendPreviewExiting(true);
+
+    trendPreviewExitTimeoutRef.current = window.setTimeout(() => {
+      setPressedTrendIndex(null);
+      setIsTrendPreviewExiting(false);
+      trendPreviewExitTimeoutRef.current = null;
+    }, 360);
+  };
+
+  const showTrendPreview = (index: number) => {
+    clearTrendPreviewExitTimeout();
+    setIsTrendPreviewExiting(false);
+    setPressedTrendIndex(index);
+  };
+
+  const playCheerSound = () => {
+    const currentAudio = cheerSoundRef.current;
+
+    if (currentAudio) {
+      currentAudio.currentTime = 0;
+      void currentAudio.play().catch(() => undefined);
+      return;
+    }
+
+    const nextAudio = new Audio(messengerNotificationSound);
+    nextAudio.preload = "auto";
+    cheerSoundRef.current = nextAudio;
+    void nextAudio.play().catch(() => undefined);
+  };
 
   useEffect(() => {
     let isDisposed = false;
 
-    setSupportLoading(true);
+    setSupportSnapshot(readCachedFanSupportSnapshot(user?.id));
 
-    void fetchFanSupportSnapshot(user?.id)
-      .then(({ snapshot, tableReady }) => {
-        if (!isDisposed) {
-          setSupportSnapshot(snapshot);
-          setSupportTableReady(tableReady);
-        }
-      })
-      .finally(() => {
-        if (!isDisposed) {
-          setSupportLoading(false);
-        }
-      });
+    void fetchFanSupportSnapshot(user?.id).then(({ snapshot, tableReady }) => {
+      if (!isDisposed) {
+        setSupportSnapshot(snapshot);
+        setSupportTableReady(tableReady);
+      }
+    });
 
     return () => {
       isDisposed = true;
     };
   }, [user?.id]);
+
+  useEffect(() => {
+    if (pressedTrendIndex === null) {
+      return;
+    }
+
+    const handlePreviewRelease = () => {
+      beginTrendPreviewExit();
+    };
+
+    window.addEventListener("pointerup", handlePreviewRelease);
+    window.addEventListener("pointercancel", handlePreviewRelease);
+    window.addEventListener("blur", handlePreviewRelease);
+
+    return () => {
+      window.removeEventListener("pointerup", handlePreviewRelease);
+      window.removeEventListener("pointercancel", handlePreviewRelease);
+      window.removeEventListener("blur", handlePreviewRelease);
+    };
+  }, [pressedTrendIndex]);
+
+  useEffect(() => {
+    return () => {
+      clearTrendPreviewExitTimeout();
+
+      const currentAudio = cheerSoundRef.current;
+      if (currentAudio) {
+        currentAudio.pause();
+        cheerSoundRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!trendLoading) {
+      setTrendPreviewFallbackReady(true);
+      return;
+    }
+
+    setTrendPreviewFallbackReady(false);
+
+    const timeoutId = window.setTimeout(() => {
+      setTrendPreviewFallbackReady(true);
+    }, 1400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [trendLoading, user?.id]);
 
   useEffect(() => {
     let isDisposed = false;
@@ -287,8 +473,26 @@ const FansPage = () => {
     }
 
     const nextSupported = !supportSnapshot.supportedByMe[teamId];
+    const previousSnapshot = supportSnapshot;
+
+    if (nextSupported) {
+      playCheerSound();
+    }
 
     setPendingTeamId(teamId);
+    setSupportSnapshot((currentSnapshot) => ({
+      counts: {
+        ...currentSnapshot.counts,
+        [teamId]: Math.max(
+          0,
+          currentSnapshot.counts[teamId] + (nextSupported ? 1 : -1),
+        ),
+      },
+      supportedByMe: {
+        ...currentSnapshot.supportedByMe,
+        [teamId]: nextSupported,
+      },
+    }));
 
     try {
       await setFanTeamSupport(teamId, user.id, nextSupported);
@@ -297,6 +501,8 @@ const FansPage = () => {
       setSupportTableReady(tableReady);
     } catch (error) {
       console.warn("Failed to update fan support", error);
+
+      setSupportSnapshot(previousSnapshot);
 
       if (isFanSupportSchemaCacheMiss(error)) {
         setSupportTableReady(false);
@@ -315,6 +521,60 @@ const FansPage = () => {
     trendVideos.find((video) => video.id === activeTrendId) ??
     trendVideos[0] ??
     null;
+  const trendPreviewInteractionReady =
+    trendPreviewFallbackReady || !trendLoading;
+  const previewTrendVideo =
+    pressedTrendIndex !== null
+      ? (trendVideos[pressedTrendIndex] ?? null)
+      : null;
+  const previewTrendTheme =
+    pressedTrendIndex !== null ? trendPreviewThemes[pressedTrendIndex] : null;
+  const previewTrendFallback =
+    pressedTrendIndex !== null
+      ? fallbackTrendPreviewCards[pressedTrendIndex]
+      : null;
+
+  const previewTrendDisplay =
+    previewTrendTheme && previewTrendFallback
+      ? {
+          creatorName: previewTrendVideo
+            ? getTrendCreatorName(previewTrendVideo)
+            : previewTrendFallback.creatorName,
+          creatorHandle: previewTrendVideo
+            ? getTrendCreatorHandle(previewTrendVideo)
+            : previewTrendFallback.creatorHandle,
+          creatorInitial: previewTrendVideo
+            ? getTrendCreatorInitial(previewTrendVideo)
+            : previewTrendFallback.creatorName.charAt(0) || "X",
+          avatarUrl: previewTrendVideo?.creator_avatar_url ?? null,
+          avatarFramed:
+            previewTrendVideo?.creator_avatar_frame_enabled ?? false,
+          stats: previewTrendVideo?.stats ?? previewTrendFallback.stats,
+        }
+      : null;
+
+  const handleTrendPreviewStart = (
+    index: number,
+    video: TikTokVideo | null,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    if (video) {
+      setActiveTrendId(video.id);
+    }
+
+    showTrendPreview(index);
+  };
+
+  const handleTrendPreviewEnd = () => {
+    beginTrendPreviewExit();
+  };
 
   return (
     <div className={styles.fansPage} dir="rtl">
@@ -358,17 +618,17 @@ const FansPage = () => {
                         <button
                           className={`${styles.cheerButton} ${isSupported ? styles.cheerButtonActive : ""}`}
                           onClick={() => {
+                            if (!user?.id) {
+                              onRequireAuth?.();
+                              return;
+                            }
+
                             void toggleTeamSupport(team.id);
                           }}
                           type="button"
                           aria-pressed={isSupported}
                           aria-busy={isPending}
-                          disabled={
-                            !user?.id ||
-                            supportLoading ||
-                            isPending ||
-                            !supportTableReady
-                          }
+                          disabled={isPending || !supportTableReady}
                           title={
                             !user?.id
                               ? "سجل الدخول للتشجيع"
@@ -503,23 +763,31 @@ const FansPage = () => {
                     const isActive = video
                       ? video.id === activeTrendVideo?.id
                       : false;
+                    const isPreviewing = index === pressedTrendIndex;
 
                     return (
                       <button
                         key={label}
-                        className={`${styles.trendOptionButton} ${isActive ? styles.trendOptionButtonActive : ""}`}
+                        className={`${styles.trendOptionButton} ${isActive ? styles.trendOptionButtonActive : ""} ${isPreviewing ? styles.trendOptionButtonPreviewing : ""}`}
                         onClick={() => {
                           if (video) {
                             setActiveTrendId(video.id);
                           }
                         }}
+                        onPointerDown={(event) => {
+                          handleTrendPreviewStart(index, video, event);
+                        }}
+                        onPointerUp={handleTrendPreviewEnd}
+                        onPointerCancel={handleTrendPreviewEnd}
+                        onLostPointerCapture={handleTrendPreviewEnd}
+                        onContextMenu={(event) => event.preventDefault()}
                         type="button"
                         aria-pressed={isActive}
-                        disabled={!video}
+                        disabled={!trendPreviewInteractionReady}
                       >
                         <span className={styles.trendOptionLabel}>{label}</span>
                         <span className={styles.trendOptionChip}>
-                          {video ? "معاينة" : trendLoading ? "تحميل" : "فارغ"}
+                          {trendPreviewInteractionReady ? "معاينة" : "تحميل"}
                         </span>
                       </button>
                     );
@@ -554,6 +822,80 @@ const FansPage = () => {
                     </div>
                   </div>
                 </div>
+
+                {previewTrendTheme && previewTrendDisplay ? (
+                  <div className={styles.trendPreviewDock}>
+                    <article
+                      className={`${styles.trendPreviewCard} ${previewTrendTheme.className} ${isTrendPreviewExiting ? styles.trendPreviewCardExiting : ""}`}
+                    >
+                      <div className={styles.trendPreviewHead}>
+                        <div className={styles.trendPreviewMedalBlock}>
+                          <span className={styles.trendPreviewMedal}>
+                            <Award className={styles.trendPreviewMedalIcon} />
+                          </span>
+                          <span className={styles.trendPreviewMedalLabel}>
+                            {previewTrendTheme.medalLabel}
+                          </span>
+                        </div>
+
+                        <div className={styles.trendPreviewRankBlock}>
+                          <span className={styles.trendPreviewRank}>
+                            {previewTrendTheme.rankTitle}
+                          </span>
+                          <span className={styles.trendPreviewRankSubline}>
+                            في ترند الفانس الآن
+                          </span>
+                        </div>
+
+                        <div className={styles.trendPreviewIdentity}>
+                          <span
+                            className={`${styles.trendPreviewAvatarWrap} ${previewTrendDisplay.avatarFramed ? styles.trendPreviewAvatarWrapFramed : ""}`}
+                          >
+                            {previewTrendDisplay.avatarUrl ? (
+                              <img
+                                src={previewTrendDisplay.avatarUrl}
+                                alt=""
+                                className={styles.trendPreviewAvatar}
+                              />
+                            ) : (
+                              <span
+                                className={styles.trendPreviewAvatarFallback}
+                              >
+                                {previewTrendDisplay.creatorInitial}
+                              </span>
+                            )}
+                          </span>
+
+                          <span className={styles.trendPreviewIdentityName}>
+                            {previewTrendDisplay.creatorName}
+                          </span>
+                          <span className={styles.trendPreviewIdentityHandle}>
+                            {previewTrendDisplay.creatorHandle}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className={styles.trendPreviewSpotlight}>
+                        {previewTrendTheme.spotlightLabel}
+                      </div>
+
+                      <div className={styles.trendPreviewStatsBar}>
+                        {trendPreviewMetricLabels.map(({ key, label }) => (
+                          <div key={key} className={styles.trendPreviewStat}>
+                            <span className={styles.trendPreviewStatValue}>
+                              {formatArabicCount(
+                                previewTrendDisplay.stats[key],
+                              )}
+                            </span>
+                            <span className={styles.trendPreviewStatLabel}>
+                              {label}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  </div>
+                ) : null}
               </div>
             </div>
           </article>

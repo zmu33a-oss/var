@@ -5,14 +5,16 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import styles from "../pages-css/TikTokPage.module.css";
+import varWordmark from "../assets/VAR.png";
 import {
   Bookmark,
   Flag,
   Heart,
   MessageCircle,
-  Plus,
+  MoreHorizontal,
   Send,
   Scan,
+  Trash2,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -40,12 +42,13 @@ type TikTokVideoCardProps = {
   isActive: boolean;
   shouldLoad?: boolean;
   onVideoError?: () => void;
-  onAddVideo?: () => void;
   onToggleLike?: () => void;
   onToggleSave?: () => void;
   onComment?: () => void;
   onShare?: () => void;
   onReport?: () => void;
+  onDeleteVideo?: () => void;
+  isOwnVideo?: boolean;
 };
 
 const DOCK_TOP_STORAGE_KEY = "webplus:tiktok-dock-top";
@@ -98,16 +101,18 @@ export default function TikTokVideoCard({
   isActive,
   shouldLoad = true,
   onVideoError,
-  onAddVideo,
   onToggleLike,
   onToggleSave,
   onComment,
   onShare,
   onReport,
+  onDeleteVideo,
+  isOwnVideo = false,
 }: TikTokVideoCardProps) {
   const [videoError, setVideoError] = useState("");
   const [isPaused, setIsPaused] = useState(false);
   const [isDockOpen, setIsDockOpen] = useState(false);
+  const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [dockTopPercent, setDockTopPercent] = useState(() =>
     readStoredDockTopPercent(),
@@ -123,6 +128,7 @@ export default function TikTokVideoCard({
   const safeCreatorName = creatorName?.trim() || "Xtik";
   const safeCreatorHandle = creatorHandle?.trim() || "@xtik";
   const creatorInitial = safeCreatorName.charAt(0).toUpperCase() || "X";
+  const canDeleteVideo = Boolean(isOwnVideo && onDeleteVideo);
 
   const updateDockTopPercent = (nextValue: number) => {
     const clampedValue = clampDockTopPercent(nextValue);
@@ -275,7 +281,42 @@ export default function TikTokVideoCard({
     video.pause();
     setIsPaused(true);
     setIsDockOpen(false);
+    setIsActionsMenuOpen(false);
   }, [isActive, video_url, shouldLoad]);
+
+  useEffect(() => {
+    if (isDockOpen && isActive) {
+      return;
+    }
+
+    setIsActionsMenuOpen(false);
+  }, [isDockOpen, isActive, videoId]);
+
+  useEffect(() => {
+    if (!isActionsMenuOpen || typeof window === "undefined") {
+      return;
+    }
+
+    const handlePointerDownOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        setIsActionsMenuOpen(false);
+        return;
+      }
+
+      if (dockWrapRef.current?.contains(target)) {
+        return;
+      }
+
+      setIsActionsMenuOpen(false);
+    };
+
+    window.addEventListener("pointerdown", handlePointerDownOutside);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDownOutside);
+    };
+  }, [isActionsMenuOpen]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -345,6 +386,7 @@ export default function TikTokVideoCard({
   ) => {
     event.preventDefault();
     event.stopPropagation();
+    setIsActionsMenuOpen(false);
     dockDragRef.current = {
       pointerId: event.pointerId,
       startY: event.clientY,
@@ -403,16 +445,7 @@ export default function TikTokVideoCard({
         <div className={styles.leftDockPanel}>
           <button
             type="button"
-            className={styles.dockAddBtn}
-            onClick={onAddVideo}
-            aria-label="إضافة فيديو"
-          >
-            <Plus size={20} />
-          </button>
-
-          <button
-            type="button"
-            className={`${styles.dockActionBtn} ${likedByMe ? styles.dockActionActive : ""}`}
+            className={`${styles.dockActionBtn} ${styles.dockActionBtnCounted} ${likedByMe ? styles.dockActionActive : ""}`}
             onClick={onToggleLike}
             aria-label={`إعجاب ${stats.likes}`}
             title={`الإعجابات ${stats.likes}`}
@@ -425,7 +458,7 @@ export default function TikTokVideoCard({
 
           <button
             type="button"
-            className={styles.dockActionBtn}
+            className={`${styles.dockActionBtn} ${styles.dockActionBtnCounted}`}
             onClick={onComment}
             aria-label={`تعليق ${stats.comments}`}
             title={`التعليقات ${stats.comments}`}
@@ -438,7 +471,7 @@ export default function TikTokVideoCard({
 
           <button
             type="button"
-            className={`${styles.dockActionBtn} ${sharedByMe ? styles.dockActionActive : ""}`}
+            className={`${styles.dockActionBtn} ${styles.dockActionBtnCounted} ${sharedByMe ? styles.dockActionActive : ""}`}
             onClick={onShare}
             aria-label={`مشاركة ${stats.shares}`}
             title={`المشاركات ${stats.shares}`}
@@ -451,16 +484,7 @@ export default function TikTokVideoCard({
 
           <button
             type="button"
-            className={styles.dockActionBtn}
-            onClick={onReport}
-            aria-label={`تبليغ على الفيديو ${videoId}`}
-          >
-            <Flag size={18} />
-          </button>
-
-          <button
-            type="button"
-            className={`${styles.dockActionBtn} ${savedByMe ? styles.dockActionActive : ""}`}
+            className={`${styles.dockActionBtn} ${styles.dockActionBtnCounted} ${savedByMe ? styles.dockActionActive : ""}`}
             onClick={onToggleSave}
             aria-label={`حفظ ${stats.saves}`}
             title={`الحفظ ${stats.saves}`}
@@ -479,6 +503,57 @@ export default function TikTokVideoCard({
           >
             <Scan size={20} />
           </button>
+
+          <button
+            type="button"
+            className={`${styles.dockActionBtn} ${styles.dockMoreBtn} ${isActionsMenuOpen ? styles.dockActionActive : ""}`}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setIsActionsMenuOpen((current) => !current);
+            }}
+            aria-label="خيارات الفيديو"
+            aria-expanded={isActionsMenuOpen}
+            aria-haspopup="menu"
+          >
+            <MoreHorizontal size={20} />
+          </button>
+
+          {isActionsMenuOpen && (
+            <div className={styles.dockOverflowMenu} role="menu">
+              <button
+                type="button"
+                className={styles.dockOverflowMenuItem}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsActionsMenuOpen(false);
+                  onReport?.();
+                }}
+                role="menuitem"
+              >
+                <Flag size={15} />
+                <span>بلاغ</span>
+              </button>
+
+              {canDeleteVideo && (
+                <button
+                  type="button"
+                  className={`${styles.dockOverflowMenuItem} ${styles.dockOverflowMenuItemDanger}`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsActionsMenuOpen(false);
+                    onDeleteVideo?.();
+                  }}
+                  role="menuitem"
+                >
+                  <Trash2 size={15} />
+                  <span>حذف الفيديو</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <button
@@ -487,7 +562,13 @@ export default function TikTokVideoCard({
           onPointerDown={handleDockPointerDown}
           aria-label={isDockOpen ? "إخفاء الأدوات" : "إظهار الأدوات"}
         >
-          <span className={styles.dockTongueLabel}>PULL</span>
+          <img
+            className={styles.dockTongueLabel}
+            src={varWordmark}
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+          />
         </button>
       </div>
 

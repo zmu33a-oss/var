@@ -1,5 +1,6 @@
 import { Home, Trophy, User, Users } from "lucide-react";
 import styles from "../pages-css/BottomNav.module.css";
+import varWordmark from "../assets/VAR.png";
 
 export type TabType =
   | "home"
@@ -49,7 +50,20 @@ export default function BottomNav({
           aria-label={homeMode === "x" ? "رسالة جديدة" : "إضافة فيديو"}
         >
           <span className={styles["bottom-nav-action-wordmark-wrap"]}>
-            <span className={styles["bottom-nav-action-wordmark"]}>Xtik</span>
+            <img
+              className={styles["bottom-nav-action-wordmark-shadow"]}
+              src={varWordmark}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />
+            <img
+              className={styles["bottom-nav-action-wordmark"]}
+              src={varWordmark}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />
           </span>
         </button>
       )}

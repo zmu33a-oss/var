@@ -1,4 +1,5 @@
 import { supabase } from "../pages/supabase";
+import { deleteOwnVideoApi, shouldFallbackAdminApi } from "./adminApi";
 
 export type TikTokComment = {
   id: number;
@@ -182,46 +183,57 @@ async function fetchDependencies(videoIds: number[]) {
     };
   }
 
-  const [commentsRes, likesRes, savesRes, sharesRes] = await Promise.all([
-    supabase
-      .from("video_comments")
-      .select(
-        "id, video_id, user_id, author_name, author_handle, body, created_at",
-      )
-      .in("video_id", videoIds),
-    supabase
-      .from("video_likes")
-      .select("video_id, user_id")
-      .in("video_id", videoIds),
-    supabase
-      .from("video_saves")
-      .select("video_id, user_id")
-      .in("video_id", videoIds),
-    supabase
-      .from("video_shares")
-      .select("video_id, user_id")
-      .in("video_id", videoIds),
-  ]);
+  const [commentsRes, likesRes, savesRes, sharesRes] = await Promise.allSettled(
+    [
+      supabase
+        .from("video_comments")
+        .select(
+          "id, video_id, user_id, author_name, author_handle, body, created_at",
+        )
+        .in("video_id", videoIds),
+      supabase
+        .from("video_likes")
+        .select("video_id, user_id")
+        .in("video_id", videoIds),
+      supabase
+        .from("video_saves")
+        .select("video_id, user_id")
+        .in("video_id", videoIds),
+      supabase
+        .from("video_shares")
+        .select("video_id, user_id")
+        .in("video_id", videoIds),
+    ],
+  );
 
-  if (
-    commentsRes.error ||
-    likesRes.error ||
-    savesRes.error ||
-    sharesRes.error
-  ) {
-    return {
-      comments: [] as CommentRow[],
-      likes: [] as ReactionRow[],
-      saves: [] as ReactionRow[],
-      shares: [] as ReactionRow[],
-    };
-  }
+  const resolveDependencyRows = <TRow>(
+    result: PromiseSettledResult<{
+      data: TRow[] | null;
+      error: {
+        message?: string;
+        code?: string;
+      } | null;
+    }>,
+    label: string,
+  ) => {
+    if (result.status === "rejected") {
+      console.warn(`Failed to load TikTok ${label}`, result.reason);
+      return [] as TRow[];
+    }
+
+    if (result.value.error) {
+      console.warn(`Failed to load TikTok ${label}`, result.value.error);
+      return [] as TRow[];
+    }
+
+    return (result.value.data ?? []) as TRow[];
+  };
 
   return {
-    comments: (commentsRes.data ?? []) as CommentRow[],
-    likes: (likesRes.data ?? []) as ReactionRow[],
-    saves: (savesRes.data ?? []) as ReactionRow[],
-    shares: (sharesRes.data ?? []) as ReactionRow[],
+    comments: resolveDependencyRows<CommentRow>(commentsRes, "comments"),
+    likes: resolveDependencyRows<ReactionRow>(likesRes, "likes"),
+    saves: resolveDependencyRows<ReactionRow>(savesRes, "saves"),
+    shares: resolveDependencyRows<ReactionRow>(sharesRes, "shares"),
   };
 }
 
@@ -399,6 +411,30 @@ export async function addTikTokVideoComment({
     author_handle: authorHandle,
     body,
   });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function deleteTikTokVideoFromDatabase(
+  videoId: number,
+  userId: string,
+) {
+  try {
+    await deleteOwnVideoApi(videoId);
+    return;
+  } catch (error) {
+    if (!shouldFallbackAdminApi(error)) {
+      throw error;
+    }
+  }
+
+  const { error } = await supabase
+    .from("videos")
+    .delete()
+    .eq("id", videoId)
+    .eq("user_id", userId);
 
   if (error) {
     throw error;

@@ -39,23 +39,38 @@
 }
 
 .bottom-nav-action-wordmark-wrap {
-  min-width: 52px;
-  height: 24px;
+  min-width: 90px;
+  height: 30px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  overflow: visible;
+}
+
+.bottom-nav-action .bottom-nav-action-wordmark-shadow,
+.bottom-nav-action .bottom-nav-action-wordmark {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.bottom-nav-action .bottom-nav-action-wordmark-shadow {
+  z-index: 0;
+  opacity: 0.68;
+  transform: scale(1.03);
+  filter: blur(3px) brightness(1.08)
+    drop-shadow(0 0 9px rgba(255, 255, 255, 0.34))
+    drop-shadow(0 2px 7px rgba(0, 0, 0, 0.5));
 }
 
 .bottom-nav-action .bottom-nav-action-wordmark {
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: 0;
-  line-height: 1;
-  color: #ffffff;
-  text-shadow:
-    0 0 6px rgba(255, 255, 255, 0.9),
-    0 0 14px rgba(255, 255, 255, 0.32);
+  position: relative;
+  z-index: 1;
 }
 
 .bottom-nav-action span {

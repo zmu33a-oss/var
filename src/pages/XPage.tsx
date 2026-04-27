@@ -19,6 +19,7 @@ import {
 import TopTab from "./TopTab";
 import ProfileX from "./ProfileX";
 import styles from "../pages-css/XPage.module.css";
+import varWordmark from "../assets/VAR.png";
 import { useAuth } from "../lib/AuthContext";
 import { createAdminReport } from "../lib/adminStore";
 import VerificationBadge from "../components/VerificationBadge";
@@ -591,7 +592,12 @@ const XPage: React.FC<{
           isHeaderVisible ? styles["header-visible"] : styles["header-hidden"]
         }`}
       >
-        <span className={styles["header-title"]}>Xtik</span>
+        <img
+          className={styles["header-title"]}
+          src={varWordmark}
+          alt="VAR"
+          draggable={false}
+        />
 
         <div className={styles["header-subtitle"]}>
           <span>#الهلال × النصر — الأجواء حماسية قبل بداية المباراة</span>

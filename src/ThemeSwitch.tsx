@@ -11,8 +11,44 @@ export default function ThemeSwitch({ currentTab, setTab }: ThemeSwitchProps) {
 
   const dragging = useRef(false);
 
-  const label = currentTab === "home" ? "TikTok Mode" : "X Mode";
-  const nextLabel = currentTab === "home" ? "X Mode" : "TikTok Mode";
+  const isXMode = currentTab === "x";
+  const label = isXMode ? "X Mode" : "TikTok Mode";
+  const nextLabel = isXMode ? "TikTok Mode" : "X Mode";
+  const currentWordmarkSrc = isXMode ? "/VAR%20X.png" : "/VAR%20TIK.png";
+  const nextWordmarkSrc = isXMode ? "/VAR%20TIK.png" : "/VAR%20X.png";
+
+  const renderWordmark = (
+    src: string,
+    width: string,
+    height: string,
+    scale: number,
+  ) => (
+    <span
+      style={{
+        display: "block",
+        width,
+        height,
+        overflow: "hidden",
+        flexShrink: 0,
+      }}
+    >
+      <img
+        src={src}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        style={{
+          display: "block",
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          objectPosition: "center",
+          transform: `scale(${scale})`,
+          transformOrigin: "center",
+        }}
+      />
+    </span>
+  );
 
   const handleMouseDown = () => {
     dragging.current = true;
@@ -69,26 +105,30 @@ export default function ThemeSwitch({ currentTab, setTab }: ThemeSwitchProps) {
       }}
     >
       <button
+        aria-label={label}
         onClick={(e) => {
           e.stopPropagation();
           setOpen(!open);
         }}
         style={{
           display: "flex",
-          gap: "8px",
+          alignItems: "center",
+          gap: "6px",
           background: "#000000b0",
           color: "#fff",
           border: "1px solid #fff",
           borderRadius: "999px",
-          padding: "8px 12px",
+          padding: "7px 10px",
           cursor: "pointer",
         }}
       >
-        {label}
+        {renderWordmark(currentWordmarkSrc, "68px", "18px", 2.7)}
         <span
           style={{
             transition: "0.3s",
             transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            fontSize: "12px",
+            lineHeight: 1,
           }}
         >
           ▼
@@ -105,19 +145,23 @@ export default function ThemeSwitch({ currentTab, setTab }: ThemeSwitchProps) {
           }}
         >
           <button
+            aria-label={nextLabel}
             onClick={() => {
               setOpen(false);
               setTab(currentTab === "home" ? "x" : "home");
             }}
             style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
               background: "transparent",
               color: "#fff",
               border: "none",
-              padding: "10px",
+              padding: "9px 12px",
               cursor: "pointer",
             }}
           >
-            {nextLabel}
+            {renderWordmark(nextWordmarkSrc, "64px", "17px", 2.55)}
           </button>
         </div>
       )}
