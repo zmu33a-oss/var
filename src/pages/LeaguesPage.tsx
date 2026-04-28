@@ -3,6 +3,7 @@ import { BarChart3, Bell, Flag, LayoutGrid, X } from "lucide-react";
 import {
   fetchLeaguesLiveMatch,
   type LiveLeaguesMatch,
+  type LiveLeaguesResponseStatus,
   type LiveLeaguesTeamLineup,
 } from "../lib/leaguesLiveApi";
 import styles from "../pages-css/LeaguesPage.module.css";
@@ -17,145 +18,12 @@ const liveLineupColors: Record<LineupTeamKey, [string, string]> = {
   away: ["#ffc172", "#a24f1a"],
 };
 
-type PlayerSpot = {
-  name: string;
-  number: number;
-  top: string;
-  left: string;
-  colors: [string, string];
-};
-
-type MatchEvent = {
-  minute: string;
-  title: string;
-  detail: string;
-};
-
 type PollOption = {
   label: string;
   percentage: number;
   votes: string;
   accent: string;
 };
-
-const lineupPlayers: PlayerSpot[] = [
-  {
-    name: "بونو",
-    number: 37,
-    top: "86%",
-    left: "50%",
-    colors: ["#64b5ff", "#2448a9"],
-  },
-  {
-    name: "لودي",
-    number: 6,
-    top: "70%",
-    left: "17%",
-    colors: ["#8bb7ff", "#305fd6"],
-  },
-  {
-    name: "كوليبالي",
-    number: 3,
-    top: "73%",
-    left: "36%",
-    colors: ["#9dc7ff", "#3f6dce"],
-  },
-  {
-    name: "البليهي",
-    number: 5,
-    top: "73%",
-    left: "64%",
-    colors: ["#78a8ff", "#244eb2"],
-  },
-  {
-    name: "كانسيلو",
-    number: 20,
-    top: "70%",
-    left: "83%",
-    colors: ["#99d3ff", "#4778ea"],
-  },
-  {
-    name: "روبين نيفيز",
-    number: 8,
-    top: "56%",
-    left: "38%",
-    colors: ["#ffd5b2", "#d1712d"],
-  },
-  {
-    name: "سافيتش",
-    number: 22,
-    top: "56%",
-    left: "62%",
-    colors: ["#ffe0bf", "#c77c1d"],
-  },
-  {
-    name: "مالكوم",
-    number: 77,
-    top: "34%",
-    left: "18%",
-    colors: ["#ffa9ca", "#b53474"],
-  },
-  {
-    name: "سالم",
-    number: 29,
-    top: "40%",
-    left: "50%",
-    colors: ["#ffd9a4", "#c57c1d"],
-  },
-  {
-    name: "ليوناردو",
-    number: 11,
-    top: "34%",
-    left: "82%",
-    colors: ["#caa9ff", "#7441d8"],
-  },
-  {
-    name: "ميتروفيتش",
-    number: 9,
-    top: "16%",
-    left: "50%",
-    colors: ["#ffd0d8", "#c04867"],
-  },
-];
-
-const matchEvents: MatchEvent[] = [
-  {
-    minute: "12'",
-    title: "اختراق مبكر من الجهة اليمنى",
-    detail:
-      "الهلال خلق أفضلية عددية على الطرف وهدد المرمى بعرضية سريعة داخل المنطقة.",
-  },
-  {
-    minute: "33'",
-    title: "ضغط عالٍ من منتصف الملعب",
-    detail:
-      "الثنائي روبين نيفيز وسافيتش رفعا النسق وأجبرا المنافس على التمرير للخلف.",
-  },
-  {
-    minute: "57'",
-    title: "تعديل في تمركز الأظهرة",
-    detail:
-      "كانسيلو ولودي تقدما أكثر لتوسيع الملعب وفتح مسارات بينية خلف خط الوسط.",
-  },
-  {
-    minute: "79'",
-    title: "هجمة حاسمة من العمق",
-    detail:
-      "سالم استلم بين الخطوط ثم مرر في نصف المسافة إلى ميتروفيتش داخل القوس الهجومي.",
-  },
-];
-
-const lineupCoach = "خورخي خيسوس";
-
-const lineupSubstitutes = [
-  "21 ياسين بونو",
-  "88 حمد اليامي",
-  "16 ناصر الدوسري",
-  "28 محمد كنو",
-  "14 مصعب الجوير",
-  "7 ميشيل",
-  "99 عبدالله الحمدان",
-];
 
 const pollOptions: PollOption[] = [
   {
@@ -178,23 +46,65 @@ const pollOptions: PollOption[] = [
   },
 ];
 
-const fallbackLeaguesMatch: LiveLeaguesMatch = {
+const emptyLeaguesMatch: LiveLeaguesMatch = {
   fixtureId: null,
-  leagueName: "Champions League",
+  leagueName: "المباريات المباشرة",
   liveLabel: "LIVE",
   home: {
-    name: "Al Hilal",
-    logo: "/teams/alhilal.png",
-    score: 3,
+    name: "",
+    logo: null,
+    score: null,
   },
   away: {
-    name: "Al Nassr",
-    logo: "/teams/alnassr.png",
-    score: 2,
+    name: "",
+    logo: null,
+    score: null,
   },
-  events: matchEvents,
+  events: [],
   lineup: null,
 };
+
+function getLiveStatusTitle(
+  isLoadingLiveMatch: boolean,
+  liveStatus: LiveLeaguesResponseStatus,
+) {
+  if (isLoadingLiveMatch) {
+    return "جاري البحث عن مباراة مباشرة";
+  }
+
+  if (liveStatus === "unconfigured") {
+    return "المصدر الحي غير مهيأ";
+  }
+
+  if (liveStatus === "error") {
+    return "تعذر تحميل المباريات المباشرة";
+  }
+
+  return "لا توجد مباراة مباشرة الآن";
+}
+
+function getLiveStatusMessage(
+  isLoadingLiveMatch: boolean,
+  liveStatus: LiveLeaguesResponseStatus,
+  liveMessage: string,
+) {
+  if (isLoadingLiveMatch) {
+    return "سنحدّث هذه البطاقة تلقائيًا فور العثور على مباراة live متاحة.";
+  }
+
+  if (liveStatus === "unconfigured") {
+    return (
+      liveMessage ||
+      "أكمل إعدادات SportMonks لعرض المباراة الحية داخل هذه البطاقة."
+    );
+  }
+
+  if (liveStatus === "error") {
+    return liveMessage || "حدث خطأ أثناء محاولة جلب المباراة الحية من المصدر.";
+  }
+
+  return "المصدر متصل، لكن لا توجد مباراة مباشرة ضمن التغطية الحالية أو في هذا التوقيت.";
+}
 
 function renderScoreValue(score: number | null) {
   return score === null ? "-" : String(score);
@@ -285,6 +195,10 @@ export default function LeaguesPage() {
   const [activeLineupTeamKey, setActiveLineupTeamKey] =
     useState<LineupTeamKey>("home");
   const [liveMatch, setLiveMatch] = useState<LiveLeaguesMatch | null>(null);
+  const [liveStatus, setLiveStatus] =
+    useState<LiveLeaguesResponseStatus>("empty");
+  const [liveMessage, setLiveMessage] = useState("");
+  const [isLoadingLiveMatch, setIsLoadingLiveMatch] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -295,6 +209,10 @@ export default function LeaguesPage() {
       if (cancelled) {
         return;
       }
+
+      setIsLoadingLiveMatch(false);
+      setLiveStatus(response.status);
+      setLiveMessage(response.message ?? "");
 
       if (response.status === "live" && response.match) {
         setLiveMatch(response.match);
@@ -333,10 +251,15 @@ export default function LeaguesPage() {
   const getActionButtonClass = (tab: SheetTab) =>
     `${styles["action-button"]} ${isSheetOpen && activeSheetTab === tab ? styles["action-button-active"] : ""}`;
 
-  const displayedMatch = liveMatch || fallbackLeaguesMatch;
-  const displayedEvents = liveMatch
-    ? liveMatch.events
-    : fallbackLeaguesMatch.events;
+  const hasLiveMatch = Boolean(liveMatch);
+  const liveStatusTitle = getLiveStatusTitle(isLoadingLiveMatch, liveStatus);
+  const liveStatusMessage = getLiveStatusMessage(
+    isLoadingLiveMatch,
+    liveStatus,
+    liveMessage,
+  );
+  const displayedMatch = liveMatch || emptyLeaguesMatch;
+  const displayedEvents = liveMatch?.events ?? [];
   const displayedLineup = liveMatch?.lineup ?? null;
   const hasLiveLineup = Boolean(
     displayedLineup?.home?.starters.length ||
@@ -404,71 +327,83 @@ export default function LeaguesPage() {
             </button>
           </header>
 
-          <section className={styles.scoreboard}>
-            <div className={styles.team}>
-              <div className={styles["team-logo-wrap"]}>
-                <img
-                  src={displayedMatch.home.logo || "/teams/alhilal.png"}
-                  alt={displayedMatch.home.name}
-                  className={styles["team-logo"]}
-                />
-              </div>
-              <span className={styles["team-name"]}>
-                {displayedMatch.home.name}
-              </span>
+          {hasLiveMatch ? (
+            <>
+              <section className={styles.scoreboard}>
+                <div className={styles.team}>
+                  <div className={styles["team-logo-wrap"]}>
+                    <img
+                      src={displayedMatch.home.logo || "/teams/alhilal.png"}
+                      alt={displayedMatch.home.name}
+                      className={styles["team-logo"]}
+                    />
+                  </div>
+                  <span className={styles["team-name"]}>
+                    {displayedMatch.home.name}
+                  </span>
+                </div>
+
+                <div className={styles["score-block"]}>
+                  <div className={styles.score}>
+                    <span>{renderScoreValue(displayedMatch.home.score)}</span>
+                    <span className={styles.dash}>-</span>
+                    <span>{renderScoreValue(displayedMatch.away.score)}</span>
+                  </div>
+
+                  <div className={styles.live}>
+                    <span className={styles["live-dot"]} />
+                    {displayedMatch.liveLabel}
+                  </div>
+                </div>
+
+                <div className={styles.team}>
+                  <div className={styles["team-logo-wrap"]}>
+                    <img
+                      src={displayedMatch.away.logo || "/teams/alnassr.png"}
+                      alt={displayedMatch.away.name}
+                      className={styles["team-logo"]}
+                    />
+                  </div>
+                  <span className={styles["team-name"]}>
+                    {displayedMatch.away.name}
+                  </span>
+                </div>
+              </section>
+
+              <section className={styles["pressure-section"]}>
+                <div className={styles["pressure-labels"]}>
+                  <span>Pressure Bar</span>
+                  <span className={styles["pressure-markers"]}>
+                    R&nbsp;&nbsp;&nbsp;L
+                  </span>
+                </div>
+
+                <div className={styles["pressure-track"]}>
+                  <div className={styles["pressure-core"]} />
+                  <div className={styles["pressure-glow-left"]} />
+                  <div className={styles["pressure-glow-right"]} />
+
+                  <div className={styles["pressure-bars"]}>
+                    {pressureBars.map((height, index) => (
+                      <span
+                        key={`${height}-${index}`}
+                        className={`${styles["pressure-bar"]} ${index < 7 ? styles["pressure-bar-left"] : styles["pressure-bar-right"]}`}
+                        style={{ height: `${height}%` }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </section>
+            </>
+          ) : (
+            <div
+              className={`${styles["empty-state"]} ${styles["match-empty-state"]}`}
+              dir="rtl"
+            >
+              <strong>{liveStatusTitle}</strong>
+              <span>{liveStatusMessage}</span>
             </div>
-
-            <div className={styles["score-block"]}>
-              <div className={styles.score}>
-                <span>{renderScoreValue(displayedMatch.home.score)}</span>
-                <span className={styles.dash}>-</span>
-                <span>{renderScoreValue(displayedMatch.away.score)}</span>
-              </div>
-
-              <div className={styles.live}>
-                <span className={styles["live-dot"]} />
-                {displayedMatch.liveLabel}
-              </div>
-            </div>
-
-            <div className={styles.team}>
-              <div className={styles["team-logo-wrap"]}>
-                <img
-                  src={displayedMatch.away.logo || "/teams/alnassr.png"}
-                  alt={displayedMatch.away.name}
-                  className={styles["team-logo"]}
-                />
-              </div>
-              <span className={styles["team-name"]}>
-                {displayedMatch.away.name}
-              </span>
-            </div>
-          </section>
-
-          <section className={styles["pressure-section"]}>
-            <div className={styles["pressure-labels"]}>
-              <span>Pressure Bar</span>
-              <span className={styles["pressure-markers"]}>
-                R&nbsp;&nbsp;&nbsp;L
-              </span>
-            </div>
-
-            <div className={styles["pressure-track"]}>
-              <div className={styles["pressure-core"]} />
-              <div className={styles["pressure-glow-left"]} />
-              <div className={styles["pressure-glow-right"]} />
-
-              <div className={styles["pressure-bars"]}>
-                {pressureBars.map((height, index) => (
-                  <span
-                    key={`${height}-${index}`}
-                    className={`${styles["pressure-bar"]} ${index < 7 ? styles["pressure-bar-left"] : styles["pressure-bar-right"]}`}
-                    style={{ height: `${height}%` }}
-                  />
-                ))}
-              </div>
-            </div>
-          </section>
+          )}
 
           <footer className={styles.footer}>
             <button
@@ -530,22 +465,22 @@ export default function LeaguesPage() {
                   </strong>
                   <span>
                     {activeSheetTab === "lineup"
-                      ? liveMatch
+                      ? hasLiveMatch
                         ? liveLineupSummary
-                        : "4-2-3-1"
+                        : liveStatusTitle
                       : activeSheetTab === "events"
-                        ? liveMatch
+                        ? hasLiveMatch
                           ? displayedEvents.length
                             ? "أحداث حية مباشرة"
                             : "لا توجد أحداث بعد"
-                          : "ضغط وتبديلات"
+                          : liveStatusTitle
                         : "31.4 ألف مشاركة"}
                   </span>
                 </div>
               </header>
 
               {activeSheetTab === "lineup" ? (
-                liveMatch ? (
+                hasLiveMatch ? (
                   <div
                     className={`${styles["sheet-body"]} ${styles["lineup-view"]}`}
                   >
@@ -740,84 +675,9 @@ export default function LeaguesPage() {
                   <div
                     className={`${styles["sheet-body"]} ${styles["lineup-view"]}`}
                   >
-                    <div className={styles.pitch}>
-                      <span className={styles["pitch-half-line"]} />
-                      <span className={styles["pitch-center-circle"]} />
-                      <span
-                        className={`${styles["pitch-box"]} ${styles["pitch-box-top"]}`}
-                      />
-                      <span
-                        className={`${styles["pitch-box"]} ${styles["pitch-box-bottom"]}`}
-                      />
-                      <span
-                        className={`${styles["pitch-goal-box"]} ${styles["pitch-goal-box-top"]}`}
-                      />
-                      <span
-                        className={`${styles["pitch-goal-box"]} ${styles["pitch-goal-box-bottom"]}`}
-                      />
-                      <span
-                        className={`${styles["pitch-arc"]} ${styles["pitch-arc-top"]}`}
-                      />
-                      <span
-                        className={`${styles["pitch-arc"]} ${styles["pitch-arc-bottom"]}`}
-                      />
-
-                      {lineupPlayers.map((player) => (
-                        <div
-                          key={`${player.number}-${player.name}`}
-                          className={styles["player-marker"]}
-                          style={
-                            {
-                              top: player.top,
-                              left: player.left,
-                              "--player-primary": player.colors[0],
-                              "--player-secondary": player.colors[1],
-                            } as CSSProperties
-                          }
-                        >
-                          <span className={styles["player-disc"]}>
-                            <span className={styles["player-number"]}>
-                              {player.number}
-                            </span>
-
-                            <span className={styles["player-portrait"]}>
-                              <span className={styles["portrait-head"]} />
-                              <span className={styles["portrait-body"]} />
-                            </span>
-                          </span>
-
-                          <span className={styles["player-name"]}>
-                            {player.name}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className={styles["lineup-details"]}>
-                      <article className={styles["coach-card"]}>
-                        <span className={styles["details-label"]}>المدرب</span>
-                        <strong>{lineupCoach}</strong>
-                      </article>
-
-                      <section className={styles["bench-card"]}>
-                        <div className={styles["details-heading"]}>
-                          <span className={styles["details-label"]}>
-                            البدلاء
-                          </span>
-                          <strong>قائمة الدكة</strong>
-                        </div>
-
-                        <div className={styles["bench-list"]}>
-                          {lineupSubstitutes.map((substitute) => (
-                            <span
-                              key={substitute}
-                              className={styles["bench-chip"]}
-                            >
-                              {substitute}
-                            </span>
-                          ))}
-                        </div>
-                      </section>
+                    <div className={styles["empty-state"]}>
+                      <strong>{liveStatusTitle}</strong>
+                      <span>{liveStatusMessage}</span>
                     </div>
                   </div>
                 )
@@ -830,7 +690,7 @@ export default function LeaguesPage() {
                     <strong>الاحداث</strong>
                   </div>
 
-                  {displayedEvents.length ? (
+                  {hasLiveMatch && displayedEvents.length ? (
                     <div className={styles["events-list"]}>
                       {displayedEvents.map((event, index) => (
                         <article
@@ -858,9 +718,13 @@ export default function LeaguesPage() {
                     </div>
                   ) : (
                     <div className={styles["empty-state"]}>
-                      <strong>لا توجد أحداث بعد</strong>
+                      <strong>
+                        {hasLiveMatch ? "لا توجد أحداث بعد" : liveStatusTitle}
+                      </strong>
                       <span>
-                        سنحدث هذا القسم تلقائيًا مع أول حدث مباشر في المباراة.
+                        {hasLiveMatch
+                          ? "سنحدث هذا القسم تلقائيًا مع أول حدث مباشر في المباراة."
+                          : liveStatusMessage}
                       </span>
                     </div>
                   )}

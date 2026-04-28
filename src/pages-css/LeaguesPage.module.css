@@ -980,6 +980,12 @@
   line-height: 1.5;
 }
 
+.match-empty-state {
+  margin-top: 18px;
+  min-height: 116px;
+  align-content: center;
+}
+
 .coach-card,
 .bench-card {
   border-radius: 18px;
