@@ -162,18 +162,40 @@ export function normalizeXPosts(posts: unknown): XPost[] | null {
   return normalizedPosts.length ? normalizedPosts : null;
 }
 
-export function loadXPosts(): XPost[] {
-  if (typeof window === "undefined") return defaultXPosts;
+export function mergeXPosts(
+  ...collections: Array<XPost[] | null | undefined>
+): XPost[] {
+  const postsById = new Map<number, XPost>();
+
+  collections.forEach((collection) => {
+    (collection ?? []).forEach((post) => {
+      if (postsById.has(post.id)) {
+        return;
+      }
+
+      postsById.set(post.id, normalizePost(post));
+    });
+  });
+
+  return [...postsById.values()];
+}
+
+export function loadStoredXPosts(): XPost[] | null {
+  if (typeof window === "undefined") return null;
 
   try {
     const raw = window.localStorage.getItem(X_POSTS_STORAGE_KEY);
-    if (!raw) return defaultXPosts;
+    if (!raw) return null;
 
     const parsed = JSON.parse(raw);
-    return normalizeXPosts(parsed) ?? defaultXPosts;
+    return normalizeXPosts(parsed);
   } catch {
-    return defaultXPosts;
+    return null;
   }
+}
+
+export function loadXPosts(): XPost[] {
+  return loadStoredXPosts() ?? defaultXPosts;
 }
 
 export function saveXPosts(posts: XPost[]) {

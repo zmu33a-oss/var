@@ -14,7 +14,9 @@ import { AuthProvider, useAuth } from "./lib/AuthContext";
 import { canAccessAdmin, getAdminRole } from "./lib/admin";
 import { fetchXPostsFromDatabase, syncXPostsChange } from "./lib/socialTables";
 import {
+  mergeXPosts,
   loadXPosts,
+  loadStoredXPosts,
   normalizeXPosts,
   saveXPosts,
   type XPost,
@@ -41,6 +43,38 @@ function AppContent() {
   const xPostsRef = useRef<XPost[]>(xPosts);
   const xSyncRequestIdRef = useRef(0);
 
+  const resolveSynchronizedPosts = ({
+    previousPosts,
+    optimisticPosts,
+    persistedPosts,
+  }: {
+    previousPosts: XPost[];
+    optimisticPosts: XPost[];
+    persistedPosts: XPost[];
+  }) => {
+    const hasStructuralChange =
+      previousPosts.length !== optimisticPosts.length ||
+      previousPosts.some(
+        (post, index) => post.id !== optimisticPosts[index]?.id,
+      );
+
+    if (!hasStructuralChange) {
+      return mergeXPosts(persistedPosts, optimisticPosts);
+    }
+
+    if (persistedPosts.length === 0 && optimisticPosts.length > 0) {
+      return optimisticPosts;
+    }
+
+    const previousPostIds = new Set(previousPosts.map((post) => post.id));
+    const persistedPostIds = new Set(persistedPosts.map((post) => post.id));
+    const stableLocalOnlyPosts = optimisticPosts.filter(
+      (post) => previousPostIds.has(post.id) && !persistedPostIds.has(post.id),
+    );
+
+    return mergeXPosts(persistedPosts, stableLocalOnlyPosts);
+  };
+
   const updateXPosts = (updater: (currentPosts: XPost[]) => XPost[]) => {
     const previousPosts = xPostsRef.current;
     const optimisticPosts = updater(previousPosts);
@@ -63,9 +97,15 @@ function AppContent() {
       .then((persistedPosts) => {
         if (requestId !== xSyncRequestIdRef.current) return;
 
-        xPostsRef.current = persistedPosts;
-        setXPosts(persistedPosts);
-        saveXPosts(persistedPosts);
+        const resolvedPosts = resolveSynchronizedPosts({
+          previousPosts,
+          optimisticPosts,
+          persistedPosts,
+        });
+
+        xPostsRef.current = resolvedPosts;
+        setXPosts(resolvedPosts);
+        saveXPosts(resolvedPosts);
       })
       .catch(() => {
         // Keep the optimistic snapshot and local fallback if DB sync fails.
@@ -121,36 +161,26 @@ function AppContent() {
     let cancelled = false;
 
     const hydratePosts = async () => {
+      let databasePosts: XPost[] = [];
+
       try {
-        const databasePosts = await fetchXPostsFromDatabase(user.id);
+        databasePosts = await fetchXPostsFromDatabase(user.id);
 
         if (cancelled) return;
-
-        if (databasePosts.length > 0) {
-          xPostsRef.current = databasePosts;
-          setXPosts(databasePosts);
-          saveXPosts(databasePosts);
-          return;
-        }
       } catch {
         // Fall back to legacy sources below.
       }
 
       const legacyPosts = normalizeXPosts(user.user_metadata?.x_posts);
-      if (legacyPosts?.length) {
-        if (cancelled) return;
+      const localPosts = loadStoredXPosts();
+      const mergedPosts = mergeXPosts(databasePosts, legacyPosts, localPosts);
+      const nextPosts = mergedPosts.length ? mergedPosts : loadXPosts();
 
-        xPostsRef.current = legacyPosts;
-        setXPosts(legacyPosts);
-        saveXPosts(legacyPosts);
-        return;
-      }
-
-      const localPosts = loadXPosts();
       if (cancelled) return;
 
-      xPostsRef.current = localPosts;
-      setXPosts(localPosts);
+      xPostsRef.current = nextPosts;
+      setXPosts(nextPosts);
+      saveXPosts(nextPosts);
     };
 
     void hydratePosts();

@@ -314,6 +314,22 @@ export default function LeaguesPage() {
       <div className={styles["card-stack"]}>
         <article className={styles["match-card"]}>
           <header className={styles.header}>
+            <button
+              type="button"
+              aria-label="VAR X"
+              className={styles["var-x-button"]}
+            >
+              <span className={styles["var-x-button-wordmark-wrap"]}>
+                <img
+                  src="/VAR%20X.png"
+                  alt=""
+                  aria-hidden="true"
+                  draggable={false}
+                  className={styles["var-x-button-wordmark"]}
+                />
+              </span>
+            </button>
+
             <div className={styles["header-copy"]}>
               <h1>{displayedMatch.leagueName}</h1>
             </div>
@@ -757,10 +773,6 @@ export default function LeaguesPage() {
 
                         <div className={styles["poll-track"]}>
                           <span className={styles["poll-fill"]} />
-                        </div>
-
-                        <div className={styles["poll-votes"]}>
-                          {option.votes}
                         </div>
                       </article>
                     ))}
