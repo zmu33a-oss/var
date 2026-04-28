@@ -14,6 +14,7 @@ import { AuthProvider, useAuth } from "./lib/AuthContext";
 import { canAccessAdmin, getAdminRole } from "./lib/admin";
 import { fetchXPostsFromDatabase, syncXPostsChange } from "./lib/socialTables";
 import {
+  buildXHandle,
   mergeXPosts,
   loadXPosts,
   loadStoredXPosts,
@@ -241,6 +242,34 @@ function AppContent() {
     setTiktokCameraRequestKey((currentKey) => currentKey + 1);
   };
 
+  const appendXPost = (post: XPost) => {
+    updateXPosts((prev) => [post, ...prev]);
+  };
+
+  const createSharedXPost = (content: string, image?: string) => {
+    const displayName =
+      user?.user_metadata?.full_name?.trim() ||
+      user?.user_metadata?.name?.trim() ||
+      user?.email?.split("@")[0]?.trim() ||
+      "VAR X";
+
+    appendXPost({
+      id: Date.now(),
+      user: displayName,
+      handle: buildXHandle(displayName),
+      authorId: user?.id,
+      time: "الآن",
+      content,
+      image,
+      stats: {
+        replies: 0,
+        retweets: 0,
+        likes: 0,
+        shares: 0,
+      },
+    });
+  };
+
   // شاشة تحميل خفيفة ريثما يُحدد وضع الجلسة
   if (loading) {
     return (
@@ -314,7 +343,17 @@ function AppContent() {
           }}
         />
       )}
-      {visibleTab === "leagues" && <LeaguesPage />}
+      {visibleTab === "leagues" && (
+        <LeaguesPage
+          onShareVarXBoard={({ content, image }) => {
+            createSharedXPost(content, image);
+            setChatComposer(null);
+            setChatBaseTab("home");
+            setMode("x");
+            setTab("home");
+          }}
+        />
+      )}
       {visibleTab === "profile" && (
         <ProfilePage
           onSignOut={() => setTab("home")}
@@ -365,7 +404,7 @@ function AppContent() {
         <ChatPage
           initialComposer={chatComposer}
           onCreatePost={(post) => {
-            updateXPosts((prev) => [post, ...prev]);
+            appendXPost(post);
             setChatComposer(null);
             setTab(chatBaseTab);
           }}
