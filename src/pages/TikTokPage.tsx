@@ -101,6 +101,73 @@ function normalizeVideoItem(
   };
 }
 
+function mergeTikTokComments(
+  remoteComments: TikTokComment[],
+  localComments: TikTokComment[],
+) {
+  const commentsByKey = new Map<string, TikTokComment>();
+
+  [...localComments, ...remoteComments].forEach((comment) => {
+    const commentKey = `${comment.id}:${comment.userId}:${comment.createdAt}`;
+
+    if (!commentsByKey.has(commentKey)) {
+      commentsByKey.set(commentKey, comment);
+    }
+  });
+
+  return [...commentsByKey.values()].sort(
+    (left, right) =>
+      new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
+  );
+}
+
+function mergeVideoCollections(
+  remoteVideos: VideoItem[],
+  localVideos: VideoItem[],
+) {
+  const localVideosById = new Map(
+    localVideos.map((video) => [video.id, video]),
+  );
+  const mergedVideos = remoteVideos.map((remoteVideo) => {
+    const localVideo = localVideosById.get(remoteVideo.id);
+
+    if (!localVideo) {
+      return remoteVideo;
+    }
+
+    const mergedComments = mergeTikTokComments(
+      remoteVideo.comments,
+      localVideo.comments,
+    );
+
+    return normalizeVideoItem({
+      ...localVideo,
+      ...remoteVideo,
+      likedByMe: remoteVideo.likedByMe || localVideo.likedByMe,
+      savedByMe: remoteVideo.savedByMe || localVideo.savedByMe,
+      sharedByMe: remoteVideo.sharedByMe || localVideo.sharedByMe,
+      comments: mergedComments,
+      stats: {
+        likes: Math.max(remoteVideo.stats.likes, localVideo.stats.likes),
+        comments: Math.max(
+          remoteVideo.stats.comments,
+          localVideo.stats.comments,
+          mergedComments.length,
+        ),
+        saves: Math.max(remoteVideo.stats.saves, localVideo.stats.saves),
+        shares: Math.max(remoteVideo.stats.shares, localVideo.stats.shares),
+      },
+    });
+  });
+
+  const remoteVideoIds = new Set(remoteVideos.map((video) => video.id));
+  const localOnlyVideos = localVideos.filter(
+    (video) => !remoteVideoIds.has(video.id),
+  );
+
+  return [...mergedVideos, ...localOnlyVideos];
+}
+
 function loadCachedVideos(): VideoItem[] {
   if (typeof window === "undefined") return [];
 
@@ -164,7 +231,16 @@ export default function TikTokPage({ cameraRequestKey = 0 }: TikTokPageProps) {
   const [loadError, setLoadError] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [brokenVideoIds, setBrokenVideoIds] = useState<number[]>([]);
+  const [commentSheetVideoId, setCommentSheetVideoId] = useState<number | null>(
+    null,
+  );
+  const [commentDraft, setCommentDraft] = useState("");
   const fetchRequestIdRef = useRef(0);
+  const videosRef = useRef(videos);
+
+  useEffect(() => {
+    videosRef.current = videos;
+  }, [videos]);
 
   const rawEmail = profile?.email ?? user?.email ?? "";
   const displayName =
@@ -193,6 +269,23 @@ export default function TikTokPage({ cameraRequestKey = 0 }: TikTokPageProps) {
     .filter((vid) => !brokenVideoIds.includes(vid.id));
 
   const hasPlayableVideos = visibleVideos.length > 0;
+  const activeCommentVideo =
+    commentSheetVideoId === null
+      ? null
+      : (videos.find((video) => video.id === commentSheetVideoId) ?? null);
+  const activeCommentVideoUrl = activeCommentVideo
+    ? normalizeVideoUrl(activeCommentVideo.video_url || "")
+    : "";
+  const activeCommentCreatorName = activeCommentVideo
+    ? activeCommentVideo.creator_name?.trim() ||
+      (user?.id && activeCommentVideo.user_id === user.id
+        ? displayName
+        : "Xtik")
+    : "Xtik";
+  const activeCommentCreatorHandle = activeCommentVideo
+    ? activeCommentVideo.creator_handle?.trim() ||
+      (user?.id && activeCommentVideo.user_id === user.id ? handle : "@xtik")
+    : "@xtik";
   const statusMessage = loadError
     ? loadError
     : videos.length > 0
@@ -201,7 +294,11 @@ export default function TikTokPage({ cameraRequestKey = 0 }: TikTokPageProps) {
 
   const fetchVideos = async () => {
     const requestId = ++fetchRequestIdRef.current;
-    const hasExistingVideos = videos.length > 0;
+    const fallbackVideos = videosRef.current;
+    const hasExistingVideos = fallbackVideos.length > 0;
+    const cachedVideos = hasExistingVideos
+      ? fallbackVideos
+      : loadCachedVideos();
 
     if (!hasExistingVideos) {
       setLoading(true);
@@ -225,13 +322,25 @@ export default function TikTokPage({ cameraRequestKey = 0 }: TikTokPageProps) {
       const normalizedVideos = nextVideos.map((video) =>
         normalizeVideoItem(video),
       );
-      setVideos(normalizedVideos);
-      saveCachedVideos(normalizedVideos);
+      const mergedVideos = mergeVideoCollections(
+        normalizedVideos,
+        cachedVideos,
+      );
+
+      setVideos(mergedVideos);
+      saveCachedVideos(mergedVideos);
       setBrokenVideoIds([]);
     } catch (error) {
       if (requestId !== fetchRequestIdRef.current) return;
 
       console.log("فشل جلب فيديوهات تيك توك:", error);
+
+      if (cachedVideos.length > 0) {
+        setVideos(cachedVideos);
+        saveCachedVideos(cachedVideos);
+        return;
+      }
+
       setLoadError("تعذر تحميل الفيديوهات الآن");
     } finally {
       if (requestId === fetchRequestIdRef.current) {
@@ -263,6 +372,16 @@ export default function TikTokPage({ cameraRequestKey = 0 }: TikTokPageProps) {
       return Math.min(current, visibleVideos.length - 1);
     });
   }, [visibleVideos.length]);
+
+  useEffect(() => {
+    if (
+      commentSheetVideoId !== null &&
+      !videos.some((video) => video.id === commentSheetVideoId)
+    ) {
+      setCommentSheetVideoId(null);
+      setCommentDraft("");
+    }
+  }, [commentSheetVideoId, videos]);
 
   const updateVideoLocally = (
     videoId: number,
@@ -382,7 +501,11 @@ export default function TikTokPage({ cameraRequestKey = 0 }: TikTokPageProps) {
 
     void toggleTikTokVideoLike(video.id, user.id, nextLiked)
       .then(() => fetchVideos())
-      .catch(() => restoreVideosFromDatabase("تعذر تحديث الإعجاب الآن"));
+      .catch(() =>
+        restoreVideosFromDatabase(
+          "تعذر مزامنة الإعجاب الآن، وسيبقى محليًا مؤقتًا",
+        ),
+      );
   };
 
   const handleToggleSave = (video: VideoItem) => {
@@ -404,7 +527,11 @@ export default function TikTokPage({ cameraRequestKey = 0 }: TikTokPageProps) {
 
     void toggleTikTokVideoSave(video.id, user.id, nextSaved)
       .then(() => fetchVideos())
-      .catch(() => restoreVideosFromDatabase("تعذر تحديث الحفظ الآن"));
+      .catch(() =>
+        restoreVideosFromDatabase(
+          "تعذر مزامنة الحفظ الآن، وسيبقى محليًا مؤقتًا",
+        ),
+      );
   };
 
   const handleCommentVideo = (video: VideoItem) => {
@@ -413,19 +540,18 @@ export default function TikTokPage({ cameraRequestKey = 0 }: TikTokPageProps) {
       return;
     }
 
-    const existingComments = video.comments.length
-      ? video.comments
-          .slice(-3)
-          .map((comment) => `${comment.authorHandle}: ${comment.body}`)
-          .join("\n")
-      : "لا توجد تعليقات بعد.";
+    setCommentSheetVideoId(video.id);
+    setCommentDraft("");
+  };
 
-    const nextComment = window.prompt(
-      `${existingComments}\n\nاكتب تعليقك الجديد:`,
-      "",
-    );
+  const submitCommentForVideo = async () => {
+    if (!activeCommentVideo || !user?.id) {
+      return;
+    }
 
-    if (!nextComment?.trim()) {
+    const nextComment = commentDraft.trim();
+
+    if (!nextComment) {
       return;
     }
 
@@ -434,11 +560,11 @@ export default function TikTokPage({ cameraRequestKey = 0 }: TikTokPageProps) {
       userId: user.id,
       authorName: displayName,
       authorHandle: handle,
-      body: nextComment.trim(),
+      body: nextComment,
       createdAt: new Date().toISOString(),
     };
 
-    updateVideoLocally(video.id, (currentVideo) => ({
+    updateVideoLocally(activeCommentVideo.id, (currentVideo) => ({
       ...currentVideo,
       comments: [...currentVideo.comments, optimisticComment],
       stats: {
@@ -447,15 +573,21 @@ export default function TikTokPage({ cameraRequestKey = 0 }: TikTokPageProps) {
       },
     }));
 
+    setCommentDraft("");
+
     void addTikTokVideoComment({
-      videoId: video.id,
+      videoId: activeCommentVideo.id,
       userId: user.id,
       authorName: displayName,
       authorHandle: handle,
-      body: nextComment.trim(),
+      body: nextComment,
     })
       .then(() => fetchVideos())
-      .catch(() => restoreVideosFromDatabase("تعذر حفظ التعليق الآن"));
+      .catch(() =>
+        restoreVideosFromDatabase(
+          "تعذر مزامنة التعليق الآن، وسيبقى محليًا مؤقتًا",
+        ),
+      );
   };
 
   const handleShareVideo = async (video: VideoItem) => {
@@ -497,7 +629,11 @@ export default function TikTokPage({ cameraRequestKey = 0 }: TikTokPageProps) {
 
     void recordTikTokVideoShare(video.id, user.id, shareMode)
       .then(() => fetchVideos())
-      .catch(() => restoreVideosFromDatabase("تعذر تسجيل المشاركة الآن"));
+      .catch(() =>
+        restoreVideosFromDatabase(
+          "تعذر مزامنة المشاركة الآن، وستبقى محليًا مؤقتًا",
+        ),
+      );
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -664,6 +800,132 @@ export default function TikTokPage({ cameraRequestKey = 0 }: TikTokPageProps) {
             />
           );
         })
+      )}
+
+      {activeCommentVideo && (
+        <div
+          className={styles.commentSheetBackdrop}
+          onClick={() => {
+            setCommentSheetVideoId(null);
+            setCommentDraft("");
+          }}
+        >
+          <section
+            className={styles.commentSheet}
+            dir="rtl"
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <div className={styles.commentSheetPreview}>
+              {activeCommentVideoUrl ? (
+                <video
+                  className={styles.commentSheetPreviewVideo}
+                  src={activeCommentVideoUrl}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                />
+              ) : (
+                <div className={styles.commentSheetPreviewFallback}>
+                  الفيديو غير متاح للمعاينة الآن
+                </div>
+              )}
+
+              <div className={styles.commentSheetPreviewScrim} />
+
+              <button
+                type="button"
+                className={styles.commentSheetClose}
+                onClick={() => {
+                  setCommentSheetVideoId(null);
+                  setCommentDraft("");
+                }}
+              >
+                إغلاق
+              </button>
+
+              <div className={styles.commentSheetPreviewMeta}>
+                <strong className={styles.commentSheetPreviewHandle}>
+                  {activeCommentCreatorHandle}
+                </strong>
+                <span className={styles.commentSheetPreviewName}>
+                  {activeCommentCreatorName}
+                </span>
+                {activeCommentVideo.caption ? (
+                  <p className={styles.commentSheetPreviewCaption}>
+                    {activeCommentVideo.caption}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className={styles.commentSheetBody}>
+              <header className={styles.commentSheetHeader}>
+                <strong className={styles.commentSheetTitle}>التعليقات</strong>
+                <p className={styles.commentSheetSubtitle}>
+                  {activeCommentVideo.comments.length > 0
+                    ? `${activeCommentVideo.comments.length} تعليق`
+                    : "لا توجد تعليقات بعد"}
+                </p>
+              </header>
+
+              <div className={styles.commentSheetList}>
+                {activeCommentVideo.comments.length > 0 ? (
+                  [...activeCommentVideo.comments].reverse().map((comment) => (
+                    <article
+                      key={`${comment.id}-${comment.createdAt}`}
+                      className={styles.commentSheetItem}
+                    >
+                      <div className={styles.commentSheetAuthorRow}>
+                        <strong className={styles.commentSheetAuthor}>
+                          {comment.authorHandle}
+                        </strong>
+                        <span className={styles.commentSheetTime}>
+                          {new Date(comment.createdAt).toLocaleDateString(
+                            "ar-SA",
+                          )}
+                        </span>
+                      </div>
+                      <p className={styles.commentSheetBodyText}>
+                        {comment.body}
+                      </p>
+                    </article>
+                  ))
+                ) : (
+                  <p className={styles.commentSheetEmpty}>
+                    كن أول من يكتب تعليقًا على هذا الفيديو.
+                  </p>
+                )}
+              </div>
+
+              <form
+                className={styles.commentComposer}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void submitCommentForVideo();
+                }}
+              >
+                <input
+                  type="text"
+                  className={styles.commentInput}
+                  placeholder="اكتب تعليقك هنا"
+                  value={commentDraft}
+                  onChange={(event) => setCommentDraft(event.target.value)}
+                />
+                <button
+                  type="submit"
+                  className={styles.commentSubmit}
+                  disabled={!commentDraft.trim()}
+                >
+                  إرسال
+                </button>
+              </form>
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );

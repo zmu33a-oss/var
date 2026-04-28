@@ -8,6 +8,7 @@ import {
 import {
   BarChart3,
   Bell,
+  ChevronDown,
   Flag,
   LayoutGrid,
   RotateCcw,
@@ -54,6 +55,15 @@ type PollOption = {
   accent: string;
 };
 
+type BreakingNewsItem = {
+  id: string;
+  badge: string;
+  title: string;
+  summary: string;
+  time: string;
+  accent: string;
+};
+
 const pollOptions: PollOption[] = [
   {
     label: "فوز الهلال",
@@ -72,6 +82,54 @@ const pollOptions: PollOption[] = [
     percentage: 12,
     votes: "3.8 ألف صوت",
     accent: "#d68dff",
+  },
+];
+
+const breakingNewsItems: BreakingNewsItem[] = [
+  {
+    id: "hilal-shape",
+    badge: "عاجل",
+    title: "الهلال يراجع شكل الضغط قبل المواجهة القادمة",
+    summary:
+      "الطاقم الفني ركّز في الحصة الأخيرة على الضغط العكسي وسرعة التحول بعد افتكاك الكرة.",
+    time: "قبل 8 دقائق",
+    accent: "#69c8ff",
+  },
+  {
+    id: "nassr-recovery",
+    badge: "متابعة",
+    title: "النصر يجهّز خطة بديلة في الثلث الأخير",
+    summary:
+      "التركيز الحالي على زيادة الكثافة حول الصندوق وخلق حل ثالث خلف المهاجم الصريح.",
+    time: "قبل 14 دقيقة",
+    accent: "#ffb14a",
+  },
+  {
+    id: "league-window",
+    badge: "سوق",
+    title: "أندية الدوري تراقب نافذة الانتقالات الصيفية مبكرًا",
+    summary:
+      "العمل مستمر على تدعيم المراكز الحساسة مع أولوية واضحة للمحور وقلب الدفاع والظهير الأيسر.",
+    time: "قبل 31 دقيقة",
+    accent: "#d68dff",
+  },
+  {
+    id: "ittihad-form",
+    badge: "تقارير",
+    title: "الاتحاد يرفع نسق التحضير البدني في بداية الأسبوع",
+    summary:
+      "الجهاز الفني يريد استعادة الشراسة في الالتحامات القصيرة وتقليل المسافات بين الخطوط.",
+    time: "قبل 52 دقيقة",
+    accent: "#ffd66d",
+  },
+  {
+    id: "national-team",
+    badge: "المنتخب",
+    title: "قراءة أولية لقائمة المنتخب ترفع أسهم بعض الأسماء المحلية",
+    summary:
+      "الاستقرار على العناصر الأساسية قائم، لكن المنافسة اشتعلت على مركز الجناح والظهير.",
+    time: "قبل ساعة",
+    accent: "#7de4b0",
   },
 ];
 
@@ -468,6 +526,7 @@ function createVarXShareImage({
 }
 
 export default function LeaguesPage({ onShareVarXBoard }: LeaguesPageProps) {
+  const [isBreakingNewsOpen, setIsBreakingNewsOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [activeSheetTab, setActiveSheetTab] = useState<SheetTab>("lineup");
   const [activeLineupTeamKey, setActiveLineupTeamKey] =
@@ -527,6 +586,8 @@ export default function LeaguesPage({ onShareVarXBoard }: LeaguesPageProps) {
   }, []);
 
   const toggleSheet = (tab: SheetTab) => {
+    setIsBreakingNewsOpen(false);
+
     if (isSheetOpen && activeSheetTab === tab) {
       setIsSheetOpen(false);
       return;
@@ -538,6 +599,12 @@ export default function LeaguesPage({ onShareVarXBoard }: LeaguesPageProps) {
 
   const closeSheet = () => {
     setIsSheetOpen(false);
+  };
+
+  const toggleBreakingNews = () => {
+    setIsVarXOpen(false);
+    setIsSheetOpen(false);
+    setIsBreakingNewsOpen((currentValue) => !currentValue);
   };
 
   const getActionButtonClass = (tab: SheetTab) =>
@@ -703,6 +770,7 @@ export default function LeaguesPage({ onShareVarXBoard }: LeaguesPageProps) {
   }, [isVarXOpen]);
 
   const openVarXBoard = () => {
+    setIsBreakingNewsOpen(false);
     setVarXTeamKey(effectiveLiveLineupTeamKey);
     setIsVarXOpen(true);
   };
@@ -775,6 +843,85 @@ export default function LeaguesPage({ onShareVarXBoard }: LeaguesPageProps) {
   return (
     <section className={styles.page} dir="ltr">
       <div className={styles["card-stack"]}>
+        <div
+          className={`${styles["breaking-top-sheet"]} ${isBreakingNewsOpen ? styles["breaking-top-sheet-open"] : ""}`}
+          dir="rtl"
+        >
+          <div className={styles["breaking-top-sheet-body"]}>
+            <div className={styles["breaking-top-sheet-frame"]}>
+              <div className={styles["breaking-sheet-header"]}>
+                <div className={styles["breaking-sheet-header-copy"]}>
+                  <p className={styles["breaking-sheet-eyebrow"]}>
+                    آخر الأخبار الرياضية
+                  </p>
+                  <h3 className={styles["breaking-sheet-title"]}>
+                    موجز الأخبار السريعة
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  className={styles["breaking-sheet-close"]}
+                  aria-label="إغلاق الأخبار العاجلة"
+                  onClick={() => setIsBreakingNewsOpen(false)}
+                >
+                  <X size={14} strokeWidth={2.5} />
+                </button>
+              </div>
+
+              <div className={styles["breaking-news-list"]}>
+                {breakingNewsItems.map((item) => (
+                  <article
+                    key={item.id}
+                    className={styles["breaking-news-card"]}
+                    style={{ "--news-accent": item.accent } as CSSProperties}
+                  >
+                    <div className={styles["breaking-news-meta"]}>
+                      <span className={styles["breaking-news-badge"]}>
+                        {item.badge}
+                      </span>
+                      <span className={styles["breaking-news-time"]}>
+                        {item.time}
+                      </span>
+                    </div>
+
+                    <strong className={styles["breaking-news-title"]}>
+                      {item.title}
+                    </strong>
+
+                    <p className={styles["breaking-news-summary"]}>
+                      {item.summary}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className={styles["breaking-trigger-wrap"]}>
+            <button
+              type="button"
+              aria-expanded={isBreakingNewsOpen}
+              aria-label="عاجل"
+              className={styles["breaking-trigger"]}
+              onClick={toggleBreakingNews}
+            >
+              <span className={styles["breaking-trigger-chip"]}>عاجل</span>
+              <span className={styles["breaking-trigger-title"]}>
+                آخر الأخبار الرياضية
+              </span>
+              <span
+                className={styles["breaking-trigger-tail"]}
+                aria-hidden="true"
+              >
+                <ChevronDown
+                  className={`${styles["breaking-trigger-arrow"]} ${isBreakingNewsOpen ? styles["breaking-trigger-arrow-open"] : ""}`}
+                />
+              </span>
+            </button>
+          </div>
+        </div>
+
         <article className={styles["match-card"]}>
           <header className={styles.header}>
             <button
