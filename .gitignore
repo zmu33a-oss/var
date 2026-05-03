@@ -21,3 +21,17 @@ Package.resolved
 # Windows
 Thumbs.db
 Desktop.ini
+
+# Expo / Node
+node_modules/
+.expo/
+.expo-shared/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Native Swift reference app
+swift/
+WEBPLUSiOS/
+WEBPLUSiOS.xcodeproj/

@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "WEBPLUS Expo",
+    "slug": "webplus-expo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
