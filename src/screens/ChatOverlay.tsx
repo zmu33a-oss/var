@@ -71,6 +71,7 @@ export default function ChatOverlay(props: ChatOverlayProps) {
   const [messages, setMessages] = useState<OverlayMessage[]>(INITIAL_MESSAGES);
   const [messageDraft, setMessageDraft] = useState("");
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const panelOpacity = useRef(new Animated.Value(0)).current;
   const panelTranslateY = useRef(new Animated.Value(18)).current;
   const inputRef = useRef<TextInputHandle | null>(null);
@@ -125,8 +126,6 @@ export default function ChatOverlay(props: ChatOverlayProps) {
       window.scrollTo(0, currentScroll);
     };
   }, []);
-
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
     Animated.parallel([
