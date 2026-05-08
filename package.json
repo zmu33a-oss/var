@@ -4,6 +4,7 @@
   "private": true,
   "main": "expo/AppEntry",
   "scripts": {
+    "dev": "node scripts/expo-dev.cjs",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
@@ -13,17 +14,26 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@expo/metro-runtime": "~4.0.1",
-    "expo": "~52.0.38",
-    "expo-linear-gradient": "~14.0.2",
-    "expo-status-bar": "~2.0.1",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "react-native": "0.76.7",
-    "react-native-web": "~0.19.13"
+    "@expo/metro-runtime": "~55.0.10",
+    "expo": "~55.0.20",
+    "expo-blur": "~55.0.14",
+    "expo-font": "~55.0.7",
+    "expo-haptics": "~55.0.14",
+    "expo-image-picker": "~55.0.20",
+    "expo-linear-gradient": "~55.0.13",
+    "expo-local-authentication": "~55.0.13",
+    "expo-status-bar": "~55.0.5",
+    "nativewind": "^4.2.3",
+    "passkit-generator": "^3.5.7",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-native": "0.83.6",
+    "react-native-gesture-handler": "~2.30.0",
+    "react-native-web": "^0.21.0",
+    "tailwindcss": "^3.4.19"
   },
   "devDependencies": {
-    "@types/react": "~18.3.12",
-    "typescript": "~5.7.2"
+    "@types/react": "~19.2.10",
+    "typescript": "~5.9.2"
   }
 }

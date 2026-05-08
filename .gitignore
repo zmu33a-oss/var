@@ -1,14 +1,3 @@
-# Xcode
-DerivedData/
-build/
-*.xcuserstate
-*.xcworkspace/xcuserdata/
-*.xcodeproj/xcuserdata/
-
-# Swift Package Manager
-.build/
-Package.resolved
-
 # macOS
 .DS_Store
 
@@ -31,7 +20,5 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Native Swift reference app
-swift/
-WEBPLUSiOS/
-WEBPLUSiOS.xcodeproj/
+.vercel
+.env*.local
