@@ -80,50 +80,34 @@ export default function ChatOverlay(props: ChatOverlayProps) {
   const keyboardOpenRef = useRef(false);
   const viewportFrameRef = useRef<number | null>(null);
   const verticalInset = Math.max(20, Math.round(viewportHeight * 0.1));
-  const composerLift = Math.max(0, keyboardHeight - verticalInset);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
 
     const rootStyle = document.documentElement.style;
     const bodyStyle = document.body.style;
-    const appElement = document.getElementById("root") || document.body;
 
-    const previous = {
-      rootOverflow: rootStyle.overflow,
-      rootOverscroll: rootStyle.overscrollBehavior,
-      bodyOverflow: bodyStyle.overflow,
-      bodyPosition: bodyStyle.position,
-      bodyTop: bodyStyle.top,
-      bodyWidth: bodyStyle.width,
-      appPosition: appElement.style.position,
-      appTop: appElement.style.top,
-      appW: appElement.style.width,
-    };
+    const prevRootOverflow = rootStyle.overflow;
+    const prevRootOverscroll = rootStyle.overscrollBehavior;
+    const prevBodyOverflow = bodyStyle.overflow;
+    const prevBodyPosition = bodyStyle.position;
+    const prevBodyTop = bodyStyle.top;
+    const prevBodyWidth = bodyStyle.width;
 
-    // Completely lock both body and html and move the scroll to a fixed root element so background can't move
     rootStyle.overflow = "hidden";
     rootStyle.overscrollBehavior = "none";
     bodyStyle.overflow = "hidden";
     bodyStyle.position = "fixed";
-
-    const currentScroll = window.scrollY;
-
-    // Instead of pushing body up, we lock the body and let the chat overlay render absolutely over it
-    bodyStyle.top = `-${currentScroll}px`;
+    bodyStyle.top = "0px";
     bodyStyle.width = "100%";
 
     return () => {
-      rootStyle.overflow = previous.rootOverflow;
-      rootStyle.overscrollBehavior = previous.rootOverscroll;
-      bodyStyle.overflow = previous.bodyOverflow;
-      bodyStyle.position = previous.bodyPosition;
-      bodyStyle.top = previous.bodyTop;
-      bodyStyle.width = previous.bodyWidth;
-      appElement.style.position = previous.appPosition;
-      appElement.style.top = previous.appTop;
-      appElement.style.width = previous.appW;
-      window.scrollTo(0, currentScroll);
+      rootStyle.overflow = prevRootOverflow;
+      rootStyle.overscrollBehavior = prevRootOverscroll;
+      bodyStyle.overflow = prevBodyOverflow;
+      bodyStyle.position = prevBodyPosition;
+      bodyStyle.top = prevBodyTop;
+      bodyStyle.width = prevBodyWidth;
     };
   }, []);
 
@@ -177,10 +161,7 @@ export default function ChatOverlay(props: ChatOverlayProps) {
       const diff = Math.max(0, Math.round(windowHeight - vpHeight - offsetTop));
 
       applyKeyboardHeight(diff);
-
-      if (diff > 0) {
-        window.scrollTo(0, 0);
-      }
+      window.scrollTo(0, 0);
     };
 
     const scheduleMeasure = () => {
@@ -288,7 +269,7 @@ export default function ChatOverlay(props: ChatOverlayProps) {
   };
 
   return (
-    <View style={[styles.chatOverlayWrap]}>
+    <View style={[styles.chatOverlayWrap, { bottom: keyboardHeight }]}>
       <Pressable style={styles.chatBackdrop} onPress={dismissKeyboard} />
 
       <Animated.View
@@ -296,7 +277,7 @@ export default function ChatOverlay(props: ChatOverlayProps) {
           styles.chatShellWrap,
           {
             marginTop: verticalInset,
-            marginBottom: verticalInset + composerLift,
+            marginBottom: verticalInset,
             opacity: panelOpacity,
             transform: [{ translateY: panelTranslateY }],
           },
