@@ -71,13 +71,14 @@ export default function ChatOverlay(props: ChatOverlayProps) {
   const [messages, setMessages] = useState<OverlayMessage[]>(INITIAL_MESSAGES);
   const [messageDraft, setMessageDraft] = useState("");
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [vpTop, setVpTop] = useState(0);
+  const [vpHeight, setVpHeight] = useState(viewportHeight);
+  const prevVpHeightRef = useRef(viewportHeight);
   const panelOpacity = useRef(new Animated.Value(0)).current;
   const panelTranslateY = useRef(new Animated.Value(18)).current;
   const inputRef = useRef<TextInputHandle | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
-  const viewportFrameRef = useRef<number | null>(null);
-  const verticalInset = Math.max(20, Math.round(viewportHeight * 0.1));
+  const verticalInset = Math.max(20, Math.round(vpHeight * 0.1));
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -129,60 +130,30 @@ export default function ChatOverlay(props: ChatOverlayProps) {
   }, [messages]);
 
   useEffect(() => {
-    if (keyboardHeight <= 0) {
-      return;
+    // Scroll to end when keyboard opens (viewport shrinks)
+    if (vpHeight < prevVpHeightRef.current) {
+      scrollRef.current?.scrollToEnd({ animated: false });
     }
-
-    scrollRef.current?.scrollToEnd({ animated: false });
-  }, [keyboardHeight]);
+    prevVpHeightRef.current = vpHeight;
+  }, [vpHeight]);
 
   useEffect(() => {
     if (Platform.OS !== "web" || !window.visualViewport) return;
     const vp = window.visualViewport;
 
-    const applyKeyboardHeight = (nextHeight: number) => {
-      const normalizedHeight = nextHeight > 56 ? nextHeight : 0;
-      setKeyboardHeight((prev) => {
-        if (Math.abs(normalizedHeight - prev) <= 4) return prev;
-        return normalizedHeight;
-      });
+    const onResize = () => {
+      setVpTop(Math.round(vp.offsetTop));
+      setVpHeight(Math.round(vp.height));
     };
 
-    const measureViewport = () => {
-      const windowHeight = window.innerHeight;
-      const vpHeight = vp.height;
-      const offsetTop = vp.offsetTop;
-      const diff = Math.max(0, Math.round(windowHeight - vpHeight - offsetTop));
-      applyKeyboardHeight(diff);
-    };
+    vp.addEventListener("resize", onResize);
+    onResize();
 
-    const scheduleMeasure = () => {
-      if (viewportFrameRef.current !== null) {
-        cancelAnimationFrame(viewportFrameRef.current);
-      }
-      viewportFrameRef.current = requestAnimationFrame(() => {
-        viewportFrameRef.current = null;
-        measureViewport();
-      });
-    };
-
-    // Only listen to visualViewport resize — no scroll listener (scroll causes blur loop)
-    vp.addEventListener("resize", scheduleMeasure);
-
-    scheduleMeasure();
-
-    return () => {
-      if (viewportFrameRef.current !== null) {
-        cancelAnimationFrame(viewportFrameRef.current);
-        viewportFrameRef.current = null;
-      }
-      vp.removeEventListener("resize", scheduleMeasure);
-    };
+    return () => vp.removeEventListener("resize", onResize);
   }, []);
 
   const dismissKeyboard = () => {
     setIsInputFocused(false);
-    setKeyboardHeight(0);
     inputRef.current?.blur();
     Keyboard.dismiss();
 
@@ -217,7 +188,14 @@ export default function ChatOverlay(props: ChatOverlayProps) {
   };
 
   return (
-    <View style={[styles.chatOverlayWrap, { bottom: keyboardHeight }]}>
+    <View
+      style={[
+        styles.chatOverlayWrap,
+        Platform.OS === "web"
+          ? { top: vpTop, height: vpHeight, bottom: undefined as any }
+          : null,
+      ]}
+    >
       <Pressable style={styles.chatBackdrop} onPress={dismissKeyboard} />
 
       <Animated.View
