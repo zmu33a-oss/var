@@ -71,9 +71,7 @@ export default function ChatOverlay(props: ChatOverlayProps) {
   const [messages, setMessages] = useState<OverlayMessage[]>(INITIAL_MESSAGES);
   const [messageDraft, setMessageDraft] = useState("");
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const [vpTop, setVpTop] = useState(0);
   const [vpHeight, setVpHeight] = useState(viewportHeight);
-  const prevVpHeightRef = useRef(viewportHeight);
   const panelOpacity = useRef(new Animated.Value(0)).current;
   const panelTranslateY = useRef(new Animated.Value(18)).current;
   const inputRef = useRef<TextInputHandle | null>(null);
@@ -130,25 +128,12 @@ export default function ChatOverlay(props: ChatOverlayProps) {
   }, [messages]);
 
   useEffect(() => {
-    // Scroll to end when keyboard opens (viewport shrinks)
-    if (vpHeight < prevVpHeightRef.current) {
-      scrollRef.current?.scrollToEnd({ animated: false });
-    }
-    prevVpHeightRef.current = vpHeight;
-  }, [vpHeight]);
-
-  useEffect(() => {
     if (Platform.OS !== "web" || !window.visualViewport) return;
     const vp = window.visualViewport;
-
-    const onResize = () => {
-      setVpTop(Math.round(vp.offsetTop));
-      setVpHeight(Math.round(vp.height));
-    };
-
+    const onResize = () => setVpHeight(Math.round(vp.height));
     vp.addEventListener("resize", onResize);
-    onResize();
-
+    // Initialize with current visual height
+    setVpHeight(Math.round(vp.height));
     return () => vp.removeEventListener("resize", onResize);
   }, []);
 
@@ -192,7 +177,7 @@ export default function ChatOverlay(props: ChatOverlayProps) {
       style={[
         styles.chatOverlayWrap,
         Platform.OS === "web"
-          ? { top: vpTop, height: vpHeight, bottom: undefined as any }
+          ? { top: 0, height: vpHeight, bottom: undefined as any }
           : null,
       ]}
     >
