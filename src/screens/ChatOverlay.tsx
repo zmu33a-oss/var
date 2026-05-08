@@ -76,8 +76,6 @@ export default function ChatOverlay(props: ChatOverlayProps) {
   const panelTranslateY = useRef(new Animated.Value(18)).current;
   const inputRef = useRef<TextInputHandle | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
-  const keyboardHeightRef = useRef(0);
-  const keyboardOpenRef = useRef(false);
   const viewportFrameRef = useRef<number | null>(null);
   const verticalInset = Math.max(20, Math.round(viewportHeight * 0.1));
 
@@ -144,14 +142,10 @@ export default function ChatOverlay(props: ChatOverlayProps) {
 
     const applyKeyboardHeight = (nextHeight: number) => {
       const normalizedHeight = nextHeight > 56 ? nextHeight : 0;
-
-      if (Math.abs(normalizedHeight - keyboardHeightRef.current) <= 4) {
-        return;
-      }
-
-      keyboardHeightRef.current = normalizedHeight;
-      keyboardOpenRef.current = normalizedHeight > 0;
-      setKeyboardHeight(normalizedHeight);
+      setKeyboardHeight((prev) => {
+        if (Math.abs(normalizedHeight - prev) <= 4) return prev;
+        return normalizedHeight;
+      });
     };
 
     const measureViewport = () => {
@@ -159,81 +153,35 @@ export default function ChatOverlay(props: ChatOverlayProps) {
       const vpHeight = vp.height;
       const offsetTop = vp.offsetTop;
       const diff = Math.max(0, Math.round(windowHeight - vpHeight - offsetTop));
-
       applyKeyboardHeight(diff);
-      window.scrollTo(0, 0);
     };
 
     const scheduleMeasure = () => {
       if (viewportFrameRef.current !== null) {
         cancelAnimationFrame(viewportFrameRef.current);
       }
-
       viewportFrameRef.current = requestAnimationFrame(() => {
         viewportFrameRef.current = null;
         measureViewport();
       });
     };
 
-    let focusTimeout1: ReturnType<typeof setTimeout> | null = null;
-    let focusTimeout2: ReturnType<typeof setTimeout> | null = null;
-    let focusTimeout3: ReturnType<typeof setTimeout> | null = null;
-
-    const clearFocusTimers = () => {
-      if (focusTimeout1) clearTimeout(focusTimeout1);
-      if (focusTimeout2) clearTimeout(focusTimeout2);
-      if (focusTimeout3) clearTimeout(focusTimeout3);
-      focusTimeout1 = null;
-      focusTimeout2 = null;
-      focusTimeout3 = null;
-    };
-
-    const handleFocusIn = () => {
-      clearFocusTimers();
-      scheduleMeasure();
-
-      // Safari reports intermediate viewport sizes while the keyboard animates.
-      focusTimeout1 = setTimeout(scheduleMeasure, 120);
-      focusTimeout2 = setTimeout(scheduleMeasure, 260);
-      focusTimeout3 = setTimeout(scheduleMeasure, 420);
-    };
-
-    const handleFocusOut = () => {
-      clearFocusTimers();
-      keyboardOpenRef.current = false;
-      applyKeyboardHeight(0);
-      window.scrollTo(0, 0);
-
-      focusTimeout1 = setTimeout(scheduleMeasure, 80);
-      focusTimeout2 = setTimeout(scheduleMeasure, 180);
-    };
-
+    // Only listen to visualViewport resize — no scroll listener (scroll causes blur loop)
     vp.addEventListener("resize", scheduleMeasure);
-    vp.addEventListener("scroll", scheduleMeasure);
-    window.addEventListener("focusin", handleFocusIn);
-    window.addEventListener("focusout", handleFocusOut);
 
     scheduleMeasure();
 
     return () => {
-      clearFocusTimers();
-
       if (viewportFrameRef.current !== null) {
         cancelAnimationFrame(viewportFrameRef.current);
         viewportFrameRef.current = null;
       }
-
       vp.removeEventListener("resize", scheduleMeasure);
-      vp.removeEventListener("scroll", scheduleMeasure);
-      window.removeEventListener("focusin", handleFocusIn);
-      window.removeEventListener("focusout", handleFocusOut);
     };
   }, []);
 
   const dismissKeyboard = () => {
     setIsInputFocused(false);
-    keyboardOpenRef.current = false;
-    keyboardHeightRef.current = 0;
     setKeyboardHeight(0);
     inputRef.current?.blur();
     Keyboard.dismiss();
