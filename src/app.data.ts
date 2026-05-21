@@ -1,6 +1,4 @@
 import type {
-  ChatGroup,
-  ChatMessage,
   FanClub,
   FanClubId,
   HomeMode,
@@ -419,6 +417,8 @@ export const AWAY_BENCH: BenchPlayer[] = [
 ];
 
 export const INITIAL_PROFILE: ProfileData = {
+  varId: "",
+  displayVarId: "",
   displayName: "ناصر السبيعي",
   username: "@nasser",
   bio: "Software Engineer",
@@ -430,88 +430,24 @@ export const INITIAL_PROFILE: ProfileData = {
   birthDate: "15/05/1990",
   nationality: "سعودي",
   joinDate: "مايو 2026",
+  avatarUri: "",
   avatarFrameEnabled: false,
   isVerified: true,
+  earnedPoints: 0,
+  lockedPredictions: [],
+  socialMetrics: {
+    xPosts: 0,
+    xLikes: 0,
+    xReplies: 0,
+    xReposts: 0,
+    xShares: 0,
+    tiktokUploads: 0,
+    tiktokLikes: 0,
+    tiktokComments: 0,
+    tiktokSaves: 0,
+    tiktokShares: 0,
+    totalInteractions: 0,
+  },
   walletPassAdded: false,
   walletPassUrl: getConfiguredWalletPassUrl(),
 };
-
-export const INITIAL_CHAT_GROUPS: ChatGroup[] = [
-  {
-    id: "grp-hilal",
-    name: "رابطة الهلال",
-    lastMessage: "ثبتوا جملة التشجيع الأساسية قبل البداية.",
-    time: "2د",
-    unread: 1,
-    icon: "moon",
-  },
-  {
-    id: "grp-dev",
-    name: "عائلة البرمجة",
-    lastMessage: "تمت مزامنة صفحة Fans مع الهيكل الجديد.",
-    time: "15د",
-    unread: 0,
-    icon: "code-slash",
-  },
-  {
-    id: "grp-varx",
-    name: "غرفة VAR X",
-    lastMessage: "بطاقة المباراة جاهزة للمراجعة.",
-    time: "1س",
-    unread: 3,
-    icon: "chatbubbles",
-  },
-];
-
-export const INITIAL_CHAT_MESSAGES: Record<string, ChatMessage[]> = {
-  "grp-hilal": [
-    {
-      id: "m-1",
-      sender: "سلمان",
-      content: "ثبتوا جملة التشجيع الأساسية قبل البداية.",
-      time: "2د",
-      mine: false,
-    },
-    {
-      id: "m-2",
-      sender: "VAR X",
-      content: "تم تجهيز نسخة Expo بنفس الجو العام تقريبًا.",
-      time: "الآن",
-      mine: true,
-    },
-  ],
-  "grp-dev": [
-    {
-      id: "m-3",
-      sender: "WEBPLUS",
-      content: "خط النقل الحالي يركز على التصميم قبل توصيل المنطق التفصيلي.",
-      time: "12د",
-      mine: false,
-    },
-    {
-      id: "m-4",
-      sender: "VAR X",
-      content: "الـ profile والـ leagues صاروا أقرب بصريًا للشكل النهائي.",
-      time: "8د",
-      mine: true,
-    },
-  ],
-  "grp-varx": [
-    {
-      id: "m-5",
-      sender: "Room",
-      content: "راجعوا زر VAR X داخل بطاقة المباراة.",
-      time: "55د",
-      mine: false,
-    },
-    {
-      id: "m-6",
-      sender: "VAR X",
-      content: "تم ربطه الآن بمشاركة محلية إلى صفحة X داخل Expo.",
-      time: "48د",
-      mine: true,
-    },
-  ],
-};
-
-export const X_GROUP_PREVIEW = ["زميع :", "عائلة البرمجة", "مشروع X-New"];

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useFonts } from "expo-font";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   Animated,
@@ -15,11 +16,17 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
   type LayoutChangeEvent,
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import type { Post, ProfileData } from "../app.types";
+import {
+  createCompatStyleSheet,
+  getNativePointerEventsProps,
+  getWebPointerEventsStyle,
+} from "../lib/crossPlatformStyles";
 import { resolveWalletPassUrl } from "../wallet/pass-url";
 
 const SLIDE_HORIZONTAL_PADDING = 8;
@@ -30,16 +37,79 @@ const PORTRAIT_TAP_MAX_DISTANCE = 12;
 const DEFAULT_CLUB_NAME = "الهلال";
 const DEFAULT_PLAYER_AVATAR_URI =
   "https://api.dicebear.com/9.x/personas/png?seed=alhilal-player&backgroundColor=c0d7ff,dbeafe,e2e8f0";
+const KSA_EMBLEM = require("../../assets/icons/ksa.png");
 const SLIDE_SOUND = require("../../assets/audio/click.mp3.mp3");
 const PROFILE_ARABIC_FONT_FAMILY = "ProfileArabic";
 const PROFILE_ARABIC_FONT = require("../../assets/images/alfont_com_zainpcv2mob600-zainpcv2.ttf");
 const ARABIC_TEXT_PATTERN = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
+const ARABIC_DIACRITICS_PATTERN = /[\u064B-\u065F\u0670\u06D6-\u06ED]/g;
+const ARABIC_TATWEEL_PATTERN = /\u0640/g;
+
+const ARABIC_AUTO_ENGLISH_LABELS: Record<string, string> = {
+  الهلال: "AL HILAL",
+  النصر: "AL NASSR",
+  الأهلي: "AL AHLI",
+  الاهلي: "AL AHLI",
+  الاتحاد: "AL ITTIHAD",
+  الشباب: "AL SHABAB",
+  الاتفاق: "AL ETTIFAQ",
+};
+
+const ARABIC_TO_LATIN_MAP: Record<string, string> = {
+  ا: "a",
+  أ: "a",
+  إ: "i",
+  آ: "a",
+  ب: "b",
+  ت: "t",
+  ث: "th",
+  ج: "j",
+  ح: "h",
+  خ: "kh",
+  د: "d",
+  ذ: "dh",
+  ر: "r",
+  ز: "z",
+  س: "s",
+  ش: "sh",
+  ص: "s",
+  ض: "d",
+  ط: "t",
+  ظ: "z",
+  ع: "a",
+  غ: "gh",
+  ف: "f",
+  ق: "q",
+  ك: "k",
+  ل: "l",
+  م: "m",
+  ن: "n",
+  ه: "h",
+  و: "w",
+  ي: "y",
+  ى: "a",
+  ة: "a",
+  ؤ: "w",
+  ئ: "y",
+  ء: "a",
+  "٠": "0",
+  "١": "1",
+  "٢": "2",
+  "٣": "3",
+  "٤": "4",
+  "٥": "5",
+  "٦": "6",
+  "٧": "7",
+  "٨": "8",
+  "٩": "9",
+};
 
 type ProfileScreenProps = {
   canOpenAdmin: boolean;
+  onOpenAdmin: () => void;
   posts: Post[];
   profile: ProfileData;
-  onSaveProfile: (profile: ProfileData) => void;
+  onSaveProfile: (profile: ProfileData) => void | Promise<void>;
   onSignOut: () => void;
 };
 
@@ -54,15 +124,60 @@ type SwipeActionControlProps = {
   onReachedEnd: () => void | Promise<void>;
 };
 
-type ProfileFieldKey =
-  | "displayName"
-  | "username"
-  | "bio"
-  | "location"
-  | "email"
-  | "phoneNumber"
-  | "profession"
-  | "nationality";
+type ProfileFieldKey = "displayName" | "nationality" | "avatarUri";
+
+const NATIONALITY_LABELS: Record<string, { arabic: string; english: string }> =
+  {
+    سعودي: { arabic: "سعودي", english: "SAUDI" },
+    سعودية: { arabic: "سعودية", english: "SAUDI" },
+    محايد: { arabic: "محايد", english: "NEUTRAL" },
+    محايدة: { arabic: "محايدة", english: "NEUTRAL" },
+    saudi: { arabic: "سعودي", english: "SAUDI" },
+    "saudi arabian": { arabic: "سعودي", english: "SAUDI" },
+    ksa: { arabic: "سعودي", english: "SAUDI" },
+    neutral: { arabic: "محايد", english: "NEUTRAL" },
+  };
+
+function transliterateArabicToken(value: string): string {
+  const normalizedValue = value
+    .replace(ARABIC_DIACRITICS_PATTERN, "")
+    .replace(ARABIC_TATWEEL_PATTERN, "");
+
+  const mappedValue = ARABIC_AUTO_ENGLISH_LABELS[normalizedValue];
+
+  if (mappedValue) {
+    return mappedValue;
+  }
+
+  if (normalizedValue.startsWith("ال") && normalizedValue.length > 2) {
+    const remainder: string = transliterateArabicToken(normalizedValue.slice(2));
+    return remainder ? `AL ${remainder}` : "AL";
+  }
+
+  let result = "";
+
+  for (const char of normalizedValue) {
+    result += ARABIC_TO_LATIN_MAP[char] ?? char;
+  }
+
+  return result;
+}
+
+function getAutomaticEnglishLabel(value: string) {
+  return value
+    .trim()
+    .replace(ARABIC_DIACRITICS_PATTERN, "")
+    .replace(ARABIC_TATWEEL_PATTERN, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) =>
+      ARABIC_TEXT_PATTERN.test(token) ? transliterateArabicToken(token) : token,
+    )
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
 
 function getArabicFontStyle(fontFamily?: string, value?: string) {
   if (!fontFamily) {
@@ -76,12 +191,85 @@ function getArabicFontStyle(fontFamily?: string, value?: string) {
   return { fontFamily };
 }
 
+function getEnglishProfileName(displayName: string, fallbackValue: string) {
+  const trimmedDisplayName = displayName.trim();
+
+  if (!trimmedDisplayName) {
+    return fallbackValue;
+  }
+
+  if (/[A-Za-z]/.test(trimmedDisplayName)) {
+    return trimmedDisplayName;
+  }
+
+  return getAutomaticEnglishLabel(trimmedDisplayName) || fallbackValue;
+}
+
+function getEnglishProfileLine(profile: ProfileData) {
+  const emailAlias = profile.email
+    .split("@")[0]
+    ?.replace(/[._-]+/g, " ")
+    .trim();
+  const usernameAlias = profile.username.replace(/^@/, "").trim();
+
+  return getEnglishProfileName(
+    profile.displayName,
+    emailAlias || usernameAlias || "member profile",
+  );
+}
+
+function resolveProfileAvatarUri(avatarUri?: string) {
+  const normalizedAvatarUri = avatarUri?.trim();
+
+  return normalizedAvatarUri || DEFAULT_PLAYER_AVATAR_URI;
+}
+
+function readSelectedProfileAvatarUri(asset?: ImagePicker.ImagePickerAsset) {
+  if (!asset) {
+    return "";
+  }
+
+  if (asset.base64?.trim()) {
+    return `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`;
+  }
+
+  return asset.uri?.trim() || "";
+}
+
+function getNationalityLabels(nationality: string) {
+  const trimmedNationality = nationality.trim();
+
+  if (!trimmedNationality) {
+    return { arabic: "", english: "" };
+  }
+
+  const mappedLabels = NATIONALITY_LABELS[trimmedNationality.toLowerCase()];
+
+  if (mappedLabels) {
+    return mappedLabels;
+  }
+
+  if (/[A-Za-z]/.test(trimmedNationality)) {
+    return {
+      arabic: trimmedNationality,
+      english: trimmedNationality.toUpperCase(),
+    };
+  }
+
+  return {
+    arabic: trimmedNationality,
+    english: getAutomaticEnglishLabel(trimmedNationality) || trimmedNationality,
+  };
+}
+
 export default function ProfileScreen(props: ProfileScreenProps) {
-  const { posts, profile, onSaveProfile, onSignOut } = props;
+  const { posts, profile, onOpenAdmin, onSaveProfile, onSignOut } = props;
+  const { width: viewportWidth } = useWindowDimensions();
   const [message, setMessage] = useState("");
   const [isWalletBusy, setIsWalletBusy] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [isPickingAvatar, setIsPickingAvatar] = useState(false);
   const [draftProfile, setDraftProfile] = useState<ProfileData>({
     ...profile,
   });
@@ -139,7 +327,13 @@ export default function ProfileScreen(props: ProfileScreenProps) {
     [clubName, profile, totalLikes, totalPosts, totalReplies],
   );
   const englishMemberName = profile.username.replace(/^@/, "").toUpperCase();
-  const sportsCardNumber = profile.nationalId;
+  const englishProfileName = getEnglishProfileLine(profile);
+  const sportsCardNumber =
+    profile.displayVarId || profile.varId || profile.nationalId;
+  const nationalityLabels = getNationalityLabels(profile.nationality);
+  const profileAvatarUri = resolveProfileAvatarUri(profile.avatarUri);
+  const idCardWidth = Math.min(Math.max(viewportWidth - 20, 300), 404);
+  const useNarrowIdCardLayout = viewportWidth <= 430 || idCardWidth <= 404;
 
   const playSlideSound = async () => {
     const sound = slideSoundRef.current;
@@ -225,6 +419,54 @@ export default function ProfileScreen(props: ProfileScreenProps) {
     handleEditProfile();
   };
 
+  const handlePickProfileAvatar = async () => {
+    if (isPickingAvatar) {
+      return;
+    }
+
+    setMessage("");
+    setIsPickingAvatar(true);
+
+    try {
+      const pickerResult = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.35,
+        base64: true,
+      });
+
+      if (pickerResult.canceled) {
+        return;
+      }
+
+      const nextAvatarUri = readSelectedProfileAvatarUri(
+        pickerResult.assets[0],
+      );
+
+      if (!nextAvatarUri) {
+        setMessage("تعذر قراءة الصورة المختارة.");
+        return;
+      }
+
+      setDraftProfile((currentProfile) => ({
+        ...currentProfile,
+        avatarUri: nextAvatarUri,
+      }));
+
+      void onSaveProfile({
+        ...profile,
+        avatarUri: nextAvatarUri,
+      });
+
+      setMessage("تم تحديث الصورة الشخصية وستظهر مباشرة على البطاقة.");
+    } catch {
+      setMessage("تعذر فتح مكتبة الصور على هذا الجهاز.");
+    } finally {
+      setIsPickingAvatar(false);
+    }
+  };
+
   const handleSignOut = () => {
     setIsEditModalOpen(false);
     setIsPreviewModalOpen(false);
@@ -239,8 +481,13 @@ export default function ProfileScreen(props: ProfileScreenProps) {
   };
 
   const handleSaveProfileEdits = () => {
+    const nextDisplayName = draftProfile.displayName.trim();
+    const nextNationality = draftProfile.nationality.trim();
+
     onSaveProfile({
       ...draftProfile,
+      displayName: nextDisplayName || profile.displayName,
+      nationality: nextNationality || profile.nationality,
     });
     setIsEditModalOpen(false);
     setMessage("تم حفظ تعديل الملف الشخصي.");
@@ -272,7 +519,13 @@ export default function ProfileScreen(props: ProfileScreenProps) {
 
   return (
     <View style={styles.profileRoot}>
-      <View pointerEvents="none" style={styles.profileBackgroundLayer}>
+      <View
+        {...getNativePointerEventsProps("none")}
+        style={[
+          styles.profileBackgroundLayer,
+          getWebPointerEventsStyle("none"),
+        ]}
+      >
         <LinearGradient
           colors={["#03060E", "#050A14", "#02040A"]}
           style={StyleSheet.absoluteFillObject}
@@ -286,144 +539,109 @@ export default function ProfileScreen(props: ProfileScreenProps) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.profileContent}
       >
-        <View style={styles.headerCopy}>
-          <Text style={styles.headerEyebrow}>DIGITAL ID</Text>
-          <Text style={[styles.headerTitle, staticArabicTextStyle]}>
-            الهوية الرياضية
-          </Text>
-        </View>
-
         <GestureDetector gesture={portraitTapGesture}>
-          <View collapsable={false} style={styles.idCardShadow}>
+          <View
+            collapsable={false}
+            style={[styles.idCardShadow, { width: idCardWidth }]}
+          >
             <LinearGradient
-              colors={["#D2F5C6", "#73BA85", "#2F6F4A"]}
+              colors={["#0F766E", "#0B1823", "#05080F"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.idCardFrame}
             >
+              <View style={styles.idCardGlow} />
+              <View style={styles.idCardGlowSecondary} />
+
               <View style={styles.idCardSurface}>
                 <View style={styles.idCardWatermark}>
-                  <View style={styles.idCardWatermarkRingOuter} />
-                  <View style={styles.idCardWatermarkRingInner} />
-                  <View style={styles.idCardWatermarkCore} />
+                  <Image
+                    source={KSA_EMBLEM}
+                    resizeMode="contain"
+                    style={styles.idCardWatermarkImage}
+                  />
                 </View>
 
-                <LinearGradient
-                  colors={["#BFE7B6", "#E2F7D8"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.idTopBand}
+                <View style={styles.idCardBadgeRow}>
+                  <View style={styles.idCardBadge}>
+                    <Ionicons
+                      name="card-outline"
+                      size={14}
+                      color="rgba(255,255,255,0.88)"
+                    />
+                    <Text style={styles.idCardBadgeText}>WEBPLUS PASS</Text>
+                  </View>
+
+                  <View style={styles.idCardStatusPill}>
+                    <View style={styles.idCardStatusDot} />
+                    <Text style={styles.idCardStatusText}>PRIVATE</Text>
+                  </View>
+                </View>
+
+                <View
+                  style={[
+                    styles.idNameBand,
+                    useNarrowIdCardLayout ? styles.idNameBandNarrow : null,
+                  ]}
                 >
-                  <View style={styles.idTopBandBlockLeft}>
-                    <Text
-                      style={[styles.idTopBandTitle, staticArabicTextStyle]}
-                    >
-                      الهوية الرياضية
-                    </Text>
-                    <Text
-                      style={[styles.idTopBandSubtitle, staticArabicTextStyle]}
-                    >
-                      رقم النسخة 1
-                    </Text>
-                  </View>
-
-                  <SaudiEmblem />
-
-                  <View style={styles.idTopBandBlockRight}>
-                    <Text
-                      style={[styles.idTopBandOverline, staticArabicTextStyle]}
-                    >
-                      المملكة العربية السعودية
-                    </Text>
-                    <Text
-                      style={[styles.idTopBandTitle, staticArabicTextStyle]}
-                    >
-                      المنصة الرياضية السعودية
-                    </Text>
-                    <Text
-                      style={[styles.idTopBandSubtitle, staticArabicTextStyle]}
-                    >
-                      بطاقة العضوية
-                    </Text>
-                  </View>
-                </LinearGradient>
+                  <Text numberOfLines={1} style={styles.idArabicPrimaryName}>
+                    {profile.displayName}
+                  </Text>
+                  <Text numberOfLines={1} style={styles.idEnglishProfileName}>
+                    {englishProfileName}
+                  </Text>
+                </View>
 
                 <View style={styles.idCardBody}>
-                  <View style={styles.idPortraitColumn}>
-                    <IdentityPortrait />
-                    <Text style={styles.idEnglishBadge}>
-                      SPORTS MEMBER CARD
-                    </Text>
-                    <Text style={styles.idEnglishName}>
-                      {englishMemberName}
-                    </Text>
+                  <View
+                    style={[
+                      styles.idPortraitColumn,
+                      useNarrowIdCardLayout
+                        ? styles.idPortraitColumnNarrow
+                        : null,
+                    ]}
+                  >
+                    <IdentityPortrait uri={profileAvatarUri} />
                     <IdentityBarcode value={sportsCardNumber} />
                     <Text style={styles.idBarcodeValue}>
                       {sportsCardNumber}
                     </Text>
                   </View>
 
-                  <View style={styles.idCenterColumn}>
-                    <IdentityEnglishInfoRow
-                      label="ID NO"
-                      value={sportsCardNumber}
+                  <View
+                    style={[
+                      styles.idDetailsColumn,
+                      useNarrowIdCardLayout
+                        ? styles.idDetailsColumnNarrow
+                        : null,
+                    ]}
+                  >
+                    <IdentityPairedInfoRow
+                      englishLabel="ID NO"
+                      englishValue={sportsCardNumber}
+                      arabicLabel="الرقم"
+                      arabicValue={sportsCardNumber}
+                      isIdRow
+                      narrow={useNarrowIdCardLayout}
                     />
-                    <IdentityEnglishInfoRow
-                      label="DOB"
-                      value={profile.birthDate}
+                    <IdentityPairedInfoRow
+                      englishLabel="JOIN"
+                      englishValue={profile.joinDate}
+                      arabicLabel="الانضمام"
+                      arabicValue={profile.joinDate}
+                      englishValueTight
+                      narrow={useNarrowIdCardLayout}
                     />
-                    <IdentityEnglishInfoRow
-                      label="JOINED"
-                      value={profile.joinDate}
-                    />
-                    <IdentityEnglishInfoRow label="CLUB" value={clubName} />
-                    <IdentityEnglishInfoRow
-                      label="PHONE"
-                      value={profile.phoneNumber}
-                    />
-                  </View>
-
-                  <View style={styles.idArabicColumn}>
-                    <View style={styles.idArabicHeaderRow}>
-                      <View style={styles.idMiniPortraitWrap}>
-                        <IdentityPortrait compact />
-                      </View>
-
-                      <Text style={styles.idArabicName} numberOfLines={2}>
-                        {profile.displayName}
-                      </Text>
-                    </View>
-
-                    <IdentityArabicInfoRow
-                      label="الرقم"
-                      value={sportsCardNumber}
-                    />
-                    <IdentityArabicInfoRow
-                      label="تاريخ الميلاد"
-                      value={profile.birthDate}
-                    />
-                    <IdentityArabicInfoRow
-                      label="تاريخ الانضمام"
-                      value={profile.joinDate}
-                    />
-                    <IdentityArabicInfoRow
-                      label="الجنسية"
-                      value={profile.nationality}
-                    />
-                    <IdentityArabicInfoRow
-                      label="مكان الإقامة"
-                      value={profile.location}
+                    <IdentityPairedInfoRow
+                      englishLabel="NATIONALITY"
+                      englishValue={nationalityLabels.english}
+                      arabicLabel="الجنسية"
+                      arabicValue={nationalityLabels.arabic}
+                      compactEnglishLabel
+                      emphasizeValue
+                      narrow={useNarrowIdCardLayout}
                     />
                   </View>
-                </View>
-
-                <View style={styles.idCardFooter}>
-                  <Text style={[styles.idFooterTitle, staticArabicTextStyle]}>
-                    الهوية الرياضية
-                  </Text>
-                  <Text style={styles.idFooterMeta}>
-                    VAR SPORTS MEMBER PROFILE
-                  </Text>
                 </View>
               </View>
             </LinearGradient>
@@ -437,6 +655,25 @@ export default function ProfileScreen(props: ProfileScreenProps) {
             من الهوية كاملة.
           </Text>
         </View>
+
+        {props.canOpenAdmin ? (
+          <Pressable style={styles.adminConsoleButton} onPress={onOpenAdmin}>
+            <View style={styles.adminConsoleCopy}>
+              <Text style={styles.adminConsoleEyebrow}>VAR CONTROL</Text>
+              <Text style={[styles.adminConsoleTitle, staticArabicTextStyle]}>
+                افتح لوحة التحكم
+              </Text>
+              <Text style={[styles.adminConsoleHint, staticArabicTextStyle]}>
+                ادخل إلى مركز الإدارة لمراجعة Appwrite والمنشورات وحالة تجهيز
+                النظام من داخل Expo.
+              </Text>
+            </View>
+
+            <View style={styles.adminConsoleIconWrap}>
+              <Ionicons name="grid-outline" size={22} color="#09111C" />
+            </View>
+          </Pressable>
+        ) : null}
 
         <View style={styles.slidersStack}>
           <SwipeActionControl
@@ -495,6 +732,8 @@ export default function ProfileScreen(props: ProfileScreenProps) {
           arabicFontFamily={profileArabicFontFamily}
           draftProfile={draftProfile}
           onChangeField={updateDraftProfile}
+          onPickAvatar={handlePickProfileAvatar}
+          isPickingAvatar={isPickingAvatar}
           onClose={() => setIsEditModalOpen(false)}
           onSave={handleSaveProfileEdits}
         />
@@ -607,7 +846,10 @@ function SwipeActionControl(props: SwipeActionControlProps) {
         </Text>
       </View>
 
-      <View pointerEvents="none" style={styles.sliderTrailIcons}>
+      <View
+        {...getNativePointerEventsProps("none")}
+        style={[styles.sliderTrailIcons, getWebPointerEventsStyle("none")]}
+      >
         <Ionicons
           name="chevron-forward"
           size={14}
@@ -647,7 +889,7 @@ function SwipeActionControl(props: SwipeActionControlProps) {
   );
 }
 
-function IdentityPortrait(props: { compact?: boolean }) {
+function IdentityPortrait(props: { uri?: string; compact?: boolean }) {
   return (
     <View
       style={[
@@ -656,7 +898,7 @@ function IdentityPortrait(props: { compact?: boolean }) {
       ]}
     >
       <Image
-        source={{ uri: DEFAULT_PLAYER_AVATAR_URI }}
+        source={{ uri: resolveProfileAvatarUri(props.uri) }}
         style={styles.portraitImage}
       />
     </View>
@@ -666,26 +908,11 @@ function IdentityPortrait(props: { compact?: boolean }) {
 function SaudiEmblem() {
   return (
     <View style={styles.idTopBandSeal}>
-      <View style={styles.saudiPalmLeafRowTop}>
-        <View style={[styles.saudiPalmLeaf, styles.saudiPalmLeafWide]} />
-        <View style={[styles.saudiPalmLeaf, styles.saudiPalmLeafWide]} />
-      </View>
-      <View style={styles.saudiPalmLeafRowMid}>
-        <View style={styles.saudiPalmLeaf} />
-        <View style={[styles.saudiPalmLeaf, styles.saudiPalmLeafCenter]} />
-        <View style={styles.saudiPalmLeaf} />
-      </View>
-      <View style={styles.saudiPalmTrunk} />
-      <View style={styles.saudiSwordWrap}>
-        <View style={[styles.saudiSword, styles.saudiSwordLeft]}>
-          <View style={styles.saudiSwordBlade} />
-          <View style={styles.saudiSwordHandle} />
-        </View>
-        <View style={[styles.saudiSword, styles.saudiSwordRight]}>
-          <View style={styles.saudiSwordBlade} />
-          <View style={styles.saudiSwordHandle} />
-        </View>
-      </View>
+      <Image
+        source={KSA_EMBLEM}
+        resizeMode="contain"
+        style={styles.idTopBandSealImage}
+      />
     </View>
   );
 }
@@ -693,10 +920,10 @@ function SaudiEmblem() {
 function IdentityEnglishInfoRow(props: { label: string; value: string }) {
   return (
     <View style={styles.idEnglishInfoRow}>
+      <Text style={styles.idEnglishInfoLabel}>{props.label}:</Text>
       <Text numberOfLines={1} style={styles.idEnglishInfoValue}>
         {props.value}
       </Text>
-      <Text style={styles.idEnglishInfoLabel}>{props.label}:</Text>
     </View>
   );
 }
@@ -724,6 +951,144 @@ function IdentityArabicInfoRow(props: {
   );
 }
 
+function IdentityPairedInfoRow(props: {
+  englishLabel: string;
+  englishValue: string;
+  arabicLabel: string;
+  arabicValue: string;
+  englishValueTight?: boolean;
+  emphasizeValue?: boolean;
+  compactEnglishLabel?: boolean;
+  isIdRow?: boolean;
+  narrow?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.idPairedInfoRow,
+        props.narrow ? styles.idPairedInfoRowNarrow : null,
+      ]}
+    >
+      <View
+        style={[
+          styles.idPairedInfoEnglishBlock,
+          props.narrow ? styles.idPairedInfoEnglishBlockNarrow : null,
+        ]}
+      >
+        <Text
+          style={[
+            styles.idPairedInfoEnglishLabel,
+            props.compactEnglishLabel
+              ? styles.idPairedInfoEnglishLabelCompact
+              : null,
+            props.isIdRow ? styles.idPairedInfoEnglishLabelIdRow : null,
+          ]}
+        >
+          {props.englishLabel} :
+        </Text>
+        <Text
+          numberOfLines={1}
+          style={[
+            styles.idPairedInfoEnglishValue,
+            props.emphasizeValue
+              ? styles.idPairedInfoEnglishValueEmphasis
+              : null,
+            props.englishValueTight
+              ? styles.idPairedInfoEnglishValueTight
+              : null,
+            props.narrow ? styles.idPairedInfoEnglishValueNarrow : null,
+            props.isIdRow ? styles.idPairedInfoEnglishValueIdRow : null,
+          ]}
+        >
+          {props.englishValue}
+        </Text>
+      </View>
+
+      <View
+        style={[
+          styles.idPairedInfoArabicBlock,
+          props.narrow ? styles.idPairedInfoArabicBlockNarrow : null,
+        ]}
+      >
+        <Text
+          numberOfLines={1}
+          style={[
+            styles.idPairedInfoArabicLabel,
+            props.isIdRow ? styles.idPairedInfoArabicLabelIdRow : null,
+          ]}
+        >
+          {props.arabicLabel} :
+        </Text>
+        <Text
+          numberOfLines={1}
+          style={[
+            styles.idPairedInfoArabicValue,
+            props.emphasizeValue
+              ? styles.idPairedInfoArabicValueEmphasis
+              : null,
+            props.narrow ? styles.idPairedInfoArabicValueNarrow : null,
+            props.isIdRow ? styles.idPairedInfoArabicValueIdRow : null,
+          ]}
+        >
+          {props.arabicValue}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function IdentityBilingualInfoRow(props: {
+  arabicLabel: string;
+  englishLabel: string;
+  arabicValue: string;
+  englishValue: string;
+  arabicFontFamily?: string;
+  compact?: boolean;
+}) {
+  const labelArabicStyle = getArabicFontStyle(
+    props.arabicFontFamily,
+    props.arabicLabel,
+  );
+  const valueArabicStyle = getArabicFontStyle(
+    props.arabicFontFamily,
+    props.arabicValue,
+  );
+
+  return (
+    <View
+      style={[
+        styles.identityBilingualInfoRow,
+        props.compact ? styles.identityBilingualInfoRowCompact : null,
+      ]}
+    >
+      <View style={styles.identityBilingualInfoHeader}>
+        <Text
+          style={[styles.identityBilingualInfoLabelArabic, labelArabicStyle]}
+        >
+          {props.arabicLabel}
+        </Text>
+        <Text style={styles.identityBilingualInfoLabelEnglish}>
+          {props.englishLabel}
+        </Text>
+      </View>
+      <View style={styles.identityBilingualInfoValues}>
+        <Text
+          numberOfLines={1}
+          style={[styles.identityBilingualInfoValueArabic, valueArabicStyle]}
+        >
+          {props.arabicValue}
+        </Text>
+        <Text
+          numberOfLines={1}
+          style={styles.identityBilingualInfoValueEnglish}
+        >
+          {props.englishValue}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function IdentityBarcode(props: { value: string }) {
   const bars = props.value
     .replace(/\D/g, "")
@@ -746,7 +1111,9 @@ function IdentityBarcode(props: { value: string }) {
             styles.barcodeBar,
             {
               width: bar.width * 2,
-              backgroundColor: bar.filled ? "#1E1E1E" : "transparent",
+              backgroundColor: bar.filled
+                ? "rgba(255,255,255,0.92)"
+                : "transparent",
             },
           ]}
         />
@@ -765,6 +1132,22 @@ function ProfilePreviewModal(props: {
   onClose: () => void;
 }) {
   const staticArabicTextStyle = getArabicFontStyle(props.arabicFontFamily);
+  const sportsCardNumber =
+    props.profile.displayVarId ||
+    props.profile.varId ||
+    props.profile.nationalId;
+  const xInteractionTotal =
+    props.profile.socialMetrics.xPosts +
+    props.profile.socialMetrics.xLikes +
+    props.profile.socialMetrics.xReplies +
+    props.profile.socialMetrics.xReposts +
+    props.profile.socialMetrics.xShares;
+  const tiktokInteractionTotal =
+    props.profile.socialMetrics.tiktokUploads +
+    props.profile.socialMetrics.tiktokLikes +
+    props.profile.socialMetrics.tiktokComments +
+    props.profile.socialMetrics.tiktokSaves +
+    props.profile.socialMetrics.tiktokShares;
 
   return (
     <View style={styles.modalRoot}>
@@ -798,7 +1181,7 @@ function ProfilePreviewModal(props: {
         >
           <View style={styles.previewPortraitRing}>
             <Image
-              source={{ uri: DEFAULT_PLAYER_AVATAR_URI }}
+              source={{ uri: resolveProfileAvatarUri(props.profile.avatarUri) }}
               style={styles.previewPortraitImage}
             />
           </View>
@@ -835,27 +1218,87 @@ function ProfilePreviewModal(props: {
         <View style={styles.previewStatsGrid}>
           <PreviewStatCard
             arabicFontFamily={props.arabicFontFamily}
-            label="الرابطة"
-            value={props.clubName}
+            label="VAR ID"
+            value={sportsCardNumber}
           />
           <PreviewStatCard
             arabicFontFamily={props.arabicFontFamily}
-            label="المشاركات"
-            value={String(props.totalPosts)}
+            label="النقاط"
+            value={String(props.profile.earnedPoints)}
           />
           <PreviewStatCard
             arabicFontFamily={props.arabicFontFamily}
-            label="الردود"
-            value={String(props.totalReplies)}
+            label="التوقعات المقفلة"
+            value={String(props.profile.lockedPredictions.length)}
           />
           <PreviewStatCard
             arabicFontFamily={props.arabicFontFamily}
-            label="الإعجابات"
-            value={String(props.totalLikes)}
+            label="إجمالي التفاعلات"
+            value={String(props.profile.socialMetrics.totalInteractions)}
           />
         </View>
 
         <View style={styles.previewDetailsCard}>
+          <PreviewDetailRow
+            arabicFontFamily={props.arabicFontFamily}
+            label="VAR ID"
+            value={sportsCardNumber}
+          />
+          <PreviewDetailRow
+            arabicFontFamily={props.arabicFontFamily}
+            label="النقاط المكتسبة"
+            value={String(props.profile.earnedPoints)}
+          />
+          <PreviewDetailRow
+            arabicFontFamily={props.arabicFontFamily}
+            label="إجمالي تفاعلات X"
+            value={String(xInteractionTotal)}
+          />
+          <PreviewDetailRow
+            arabicFontFamily={props.arabicFontFamily}
+            label="إجمالي تفاعلات TikTok"
+            value={String(tiktokInteractionTotal)}
+          />
+          <PreviewDetailRow
+            arabicFontFamily={props.arabicFontFamily}
+            label="مشاركات X"
+            value={String(props.profile.socialMetrics.xPosts)}
+          />
+          <PreviewDetailRow
+            arabicFontFamily={props.arabicFontFamily}
+            label="ردود X"
+            value={String(props.profile.socialMetrics.xReplies)}
+          />
+          <PreviewDetailRow
+            arabicFontFamily={props.arabicFontFamily}
+            label="منشورات TikTok"
+            value={String(props.profile.socialMetrics.tiktokUploads)}
+          />
+          <PreviewDetailRow
+            arabicFontFamily={props.arabicFontFamily}
+            label="تعليقات TikTok"
+            value={String(props.profile.socialMetrics.tiktokComments)}
+          />
+          <PreviewDetailRow
+            arabicFontFamily={props.arabicFontFamily}
+            label="الرابطة"
+            value={props.clubName}
+          />
+          <PreviewDetailRow
+            arabicFontFamily={props.arabicFontFamily}
+            label="المشاركات المحلية"
+            value={String(props.totalPosts)}
+          />
+          <PreviewDetailRow
+            arabicFontFamily={props.arabicFontFamily}
+            label="الردود المحلية"
+            value={String(props.totalReplies)}
+          />
+          <PreviewDetailRow
+            arabicFontFamily={props.arabicFontFamily}
+            label="الإعجابات المحلية"
+            value={String(props.totalLikes)}
+          />
           <PreviewDetailRow
             arabicFontFamily={props.arabicFontFamily}
             label="البريد"
@@ -887,6 +1330,81 @@ function ProfilePreviewModal(props: {
             value={props.profile.joinDate}
           />
         </View>
+
+        <View style={styles.previewPredictionsCard}>
+          <Text style={[styles.previewPredictionsTitle, staticArabicTextStyle]}>
+            التوقعات المقفلة
+          </Text>
+
+          {props.profile.lockedPredictions.length ? (
+            props.profile.lockedPredictions.map((prediction) => {
+              const predictionMeta = [prediction.choice, prediction.competition]
+                .filter(Boolean)
+                .join(" • ");
+              const predictionPointsLabel = prediction.pointsAwarded
+                ? `+${prediction.pointsAwarded}`
+                : prediction.status;
+
+              return (
+                <View key={prediction.id} style={styles.previewPredictionRow}>
+                  <View style={styles.previewPredictionMetaColumn}>
+                    <Text style={styles.previewPredictionPoints}>
+                      {predictionPointsLabel}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.previewPredictionLockedAt,
+                        getArabicFontStyle(
+                          props.arabicFontFamily,
+                          prediction.lockedAt,
+                        ),
+                      ]}
+                    >
+                      {prediction.lockedAt}
+                    </Text>
+                  </View>
+
+                  <View style={styles.previewPredictionCopyColumn}>
+                    <Text
+                      style={[
+                        styles.previewPredictionTitle,
+                        getArabicFontStyle(
+                          props.arabicFontFamily,
+                          prediction.title,
+                        ),
+                      ]}
+                    >
+                      {prediction.title}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.previewPredictionMeta,
+                        getArabicFontStyle(
+                          props.arabicFontFamily,
+                          predictionMeta || prediction.status,
+                        ),
+                      ]}
+                    >
+                      {predictionMeta || prediction.status}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })
+          ) : (
+            <Text
+              style={[
+                styles.previewPredictionsEmpty,
+                getArabicFontStyle(
+                  props.arabicFontFamily,
+                  "لا توجد توقعات مقفلة بعد.",
+                ),
+              ]}
+            >
+              لا توجد توقعات مقفلة بعد.
+            </Text>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -896,6 +1414,8 @@ function ProfileEditModal(props: {
   arabicFontFamily?: string;
   draftProfile: ProfileData;
   onChangeField: (field: ProfileFieldKey, value: string) => void;
+  onPickAvatar: () => void;
+  isPickingAvatar: boolean;
   onClose: () => void;
   onSave: () => void;
 }) {
@@ -935,6 +1455,43 @@ function ProfileEditModal(props: {
         </View>
 
         <View style={styles.editPanel}>
+          <View style={styles.editAvatarSection}>
+            <Text style={[styles.fieldLabel, staticArabicTextStyle]}>
+              الصورة الشخصية
+            </Text>
+
+            <View style={styles.editAvatarCard}>
+              <View style={styles.editAvatarPreviewWrap}>
+                <Image
+                  source={{
+                    uri: resolveProfileAvatarUri(props.draftProfile.avatarUri),
+                  }}
+                  style={styles.editAvatarPreview}
+                />
+              </View>
+
+              <View style={styles.editAvatarCopy}>
+                <Text style={[styles.editAvatarTitle, staticArabicTextStyle]}>
+                  واجهة البطاقة
+                </Text>
+                <Text style={[styles.editAvatarHint, staticArabicTextStyle]}>
+                  الصورة تنعكس مباشرة على وجه البطاقة بعد اختيارها.
+                </Text>
+              </View>
+
+              <Pressable
+                style={styles.editAvatarButton}
+                onPress={props.onPickAvatar}
+                disabled={props.isPickingAvatar}
+              >
+                <Ionicons name="image-outline" size={18} color="#09111C" />
+                <Text style={styles.editAvatarButtonText}>
+                  {props.isPickingAvatar ? "جارٍ التحميل" : "تحميل صورة"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
           <ProfileFieldInput
             arabicFontFamily={props.arabicFontFamily}
             label="الاسم"
@@ -943,51 +1500,14 @@ function ProfileEditModal(props: {
           />
           <ProfileFieldInput
             arabicFontFamily={props.arabicFontFamily}
-            label="اسم المستخدم"
-            value={props.draftProfile.username}
-            onChangeText={(value) => props.onChangeField("username", value)}
-            autoCapitalize="none"
-          />
-          <ProfileFieldInput
-            arabicFontFamily={props.arabicFontFamily}
-            label="النبذة"
-            value={props.draftProfile.bio}
-            onChangeText={(value) => props.onChangeField("bio", value)}
-            multiline
-          />
-          <ProfileFieldInput
-            arabicFontFamily={props.arabicFontFamily}
-            label="الموقع"
-            value={props.draftProfile.location}
-            onChangeText={(value) => props.onChangeField("location", value)}
-          />
-          <ProfileFieldInput
-            arabicFontFamily={props.arabicFontFamily}
-            label="البريد الإلكتروني"
-            value={props.draftProfile.email}
-            onChangeText={(value) => props.onChangeField("email", value)}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-          <ProfileFieldInput
-            arabicFontFamily={props.arabicFontFamily}
-            label="رقم الجوال"
-            value={props.draftProfile.phoneNumber}
-            onChangeText={(value) => props.onChangeField("phoneNumber", value)}
-            keyboardType="phone-pad"
-          />
-          <ProfileFieldInput
-            arabicFontFamily={props.arabicFontFamily}
-            label="المهنة"
-            value={props.draftProfile.profession}
-            onChangeText={(value) => props.onChangeField("profession", value)}
-          />
-          <ProfileFieldInput
-            arabicFontFamily={props.arabicFontFamily}
             label="الجنسية"
             value={props.draftProfile.nationality}
             onChangeText={(value) => props.onChangeField("nationality", value)}
           />
+
+          <Text style={[styles.editInfoNote, staticArabicTextStyle]}>
+            المسموح تعديله هنا فقط: الاسم، الجنسية، والصورة الشخصية.
+          </Text>
         </View>
       </ScrollView>
     </View>
@@ -1081,7 +1601,7 @@ function PreviewDetailRow(props: {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createCompatStyleSheet({
   profileRoot: {
     flex: 1,
   },
@@ -1132,73 +1652,118 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   idCardShadow: {
-    marginTop: 14,
+    marginTop: 8,
+    alignSelf: "center",
   },
   idCardFrame: {
-    borderRadius: 24,
-    padding: 2,
-    shadowColor: "#67B878",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    elevation: 8,
+    overflow: "hidden",
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.24,
+    shadowRadius: 24,
+    elevation: 12,
   },
   idCardSurface: {
     overflow: "hidden",
-    borderRadius: 22,
-    backgroundColor: "#EAF7DB",
-    borderWidth: 1,
-    borderColor: "rgba(56,113,69,0.18)",
+    borderRadius: 28,
+    backgroundColor: "transparent",
+  },
+  idCardGlow: {
+    position: "absolute",
+    top: -24,
+    left: -18,
+    width: 148,
+    height: 148,
+    borderRadius: 74,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  idCardGlowSecondary: {
+    position: "absolute",
+    bottom: -92,
+    right: -36,
+    width: 210,
+    height: 210,
+    borderRadius: 105,
+    backgroundColor: "rgba(15,118,110,0.20)",
   },
   idCardWatermark: {
     position: "absolute",
-    top: 86,
+    top: 18,
     left: 0,
     right: 0,
+    bottom: 0,
     alignItems: "center",
     justifyContent: "center",
-    opacity: 0.16,
+    opacity: 0.06,
   },
-  idCardWatermarkRingOuter: {
-    position: "absolute",
-    width: 172,
-    height: 172,
-    borderRadius: 86,
-    borderWidth: 10,
-    borderColor: "rgba(132,196,140,0.16)",
+  idCardWatermarkImage: {
+    width: 264,
+    height: 196,
+    transform: [{ translateX: 16 }, { translateY: 10 }],
   },
-  idCardWatermarkRingInner: {
-    position: "absolute",
-    width: 118,
-    height: 118,
-    borderRadius: 59,
-    borderWidth: 6,
-    borderColor: "rgba(132,196,140,0.20)",
-  },
-  idCardWatermarkCore: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+  idCardBadgeRow: {
+    flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderWidth: 1,
-    borderColor: "rgba(77,134,90,0.18)",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingTop: 18,
+  },
+  idCardBadge: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+  },
+  idCardBadgeText: {
+    color: "rgba(255,255,255,0.88)",
+    fontSize: 11,
+    fontWeight: "900",
+    marginRight: 6,
+    letterSpacing: 0.6,
+  },
+  idCardStatusPill: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  idCardStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#34D399",
+  },
+  idCardStatusText: {
+    marginRight: 8,
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
   },
   idTopBand: {
-    minHeight: 88,
+    minHeight: 74,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   idTopBandBlockLeft: {
-    width: 110,
+    flex: 1,
+    minWidth: 0,
     alignItems: "flex-start",
   },
   idTopBandBlockRight: {
-    width: 130,
+    flex: 1,
+    minWidth: 0,
+    alignItems: "flex-end",
+  },
+  idTopBandBlockRightNarrow: {
+    flex: 1.14,
+    minWidth: 0,
     alignItems: "flex-end",
   },
   idTopBandOverline: {
@@ -1210,28 +1775,40 @@ const styles = StyleSheet.create({
   },
   idTopBandTitle: {
     color: "#2D6E47",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "900",
     textAlign: "right",
     lineHeight: 18,
+    flexShrink: 1,
+  },
+  idTopBandTitleRightNarrow: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  idTopBandTitleLeft: {
+    textAlign: "left",
   },
   idTopBandSubtitle: {
     color: "rgba(45,110,71,0.82)",
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "800",
     textAlign: "right",
-    marginTop: 3,
+    marginTop: 2,
+    flexShrink: 1,
+  },
+  idTopBandSubtitleLeft: {
+    textAlign: "left",
   },
   idTopBandSeal: {
-    width: 74,
+    width: 90,
     height: 64,
-    borderRadius: 30,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(49,110,74,0.10)",
-    borderWidth: 2,
-    borderColor: "rgba(49,110,74,0.20)",
     marginHorizontal: 6,
+  },
+  idTopBandSealImage: {
+    width: 88,
+    height: 62,
   },
   idTopBandSealText: {
     color: "#2D6E47",
@@ -1303,31 +1880,62 @@ const styles = StyleSheet.create({
     backgroundColor: "#2D6E47",
     marginLeft: 2,
   },
+  idNameBand: {
+    alignItems: "flex-end",
+    paddingHorizontal: 18,
+    paddingTop: 20,
+    paddingBottom: 0,
+  },
+  idNameBandNarrow: {
+    paddingTop: 18,
+    paddingBottom: 0,
+  },
+  idArabicPrimaryName: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "900",
+    textAlign: "right",
+    lineHeight: 28,
+  },
+  idEnglishProfileName: {
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "right",
+    marginTop: 5,
+    letterSpacing: 0.3,
+  },
   idCardBody: {
+    position: "relative",
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingTop: 14,
-    paddingBottom: 14,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 18,
   },
   idPortraitColumn: {
-    width: 104,
-    alignItems: "flex-start",
+    width: 88,
+    alignItems: "center",
+  },
+  idPortraitColumnNarrow: {
+    width: 78,
+    marginTop: 0,
+    marginLeft: 0,
   },
   portraitFrame: {
-    width: 92,
-    height: 112,
-    borderRadius: 16,
+    width: 70,
+    height: 92,
+    borderRadius: 12,
     overflow: "hidden",
-    borderWidth: 2,
-    borderColor: "rgba(57,113,73,0.28)",
-    backgroundColor: "rgba(255,255,255,0.58)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.10)",
   },
   portraitFrameCompact: {
-    width: 44,
-    height: 54,
-    borderRadius: 10,
+    width: 40,
+    height: 52,
+    borderRadius: 8,
     borderWidth: 1,
   },
   portraitImage: {
@@ -1335,45 +1943,242 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   idEnglishBadge: {
-    color: "rgba(24,56,31,0.78)",
+    color: "rgba(255,255,255,0.68)",
     fontSize: 8,
     fontWeight: "900",
     letterSpacing: 0.9,
     marginTop: 7,
   },
   idEnglishName: {
-    color: "#102F18",
+    color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "900",
     marginTop: 4,
   },
   idCenterColumn: {
-    width: 88,
-    marginLeft: 8,
-    marginRight: 8,
-    paddingTop: 10,
+    paddingTop: 2,
+    alignItems: "center",
+    position: "absolute",
+    right: 20,
+    top: 4,
+  },
+  idCenterColumnNarrow: {
+    left: 0,
+    right: 0,
+    top: -5,
+    alignItems: "center",
+    opacity: 0.6,
+  },
+  idCompactPortraitScaleWrap: {
+    transform: [{ scale: 0.8 }],
+  },
+  idDetailsColumn: {
+    flex: 1,
+    marginLeft: 18,
+    minHeight: 0,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    justifyContent: "flex-start",
+  },
+  idDetailsColumnNarrow: {
+    minHeight: 0,
+    marginLeft: 12,
+    marginTop: 0,
+    paddingTop: 12,
+    paddingBottom: 8,
+    justifyContent: "flex-start",
   },
   idEnglishInfoRow: {
-    alignItems: "flex-start",
-    marginBottom: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
   },
   idEnglishInfoLabel: {
     color: "rgba(45,90,58,0.66)",
     fontSize: 9,
     fontWeight: "900",
-    marginBottom: 2,
+    marginRight: 6,
   },
   idEnglishInfoValue: {
     color: "#14301B",
     fontSize: 10,
     fontWeight: "800",
     lineHeight: 13,
+    flex: 1,
   },
   idArabicColumn: {
     flex: 1,
     alignItems: "flex-end",
     minWidth: 128,
+    paddingTop: 6,
     paddingLeft: 2,
+  },
+  idPairedInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  idPairedInfoRowNarrow: {
+    marginBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  idPairedInfoEnglishBlock: {
+    flex: 0.96,
+    flexDirection: "row",
+    alignItems: "center",
+    minWidth: 0,
+    marginRight: 4,
+  },
+  idPairedInfoEnglishBlockNarrow: {
+    flex: 1.08,
+    marginRight: 0,
+    marginTop: 0,
+    transform: [{ translateX: -8 }],
+  },
+  idPairedInfoEnglishLabel: {
+    color: "rgba(255,255,255,0.54)",
+    fontSize: 10,
+    fontWeight: "900",
+    marginRight: 4,
+    letterSpacing: 0.1,
+  },
+  idPairedInfoEnglishLabelCompact: {
+    fontSize: 8,
+    marginRight: 3,
+    letterSpacing: 0,
+  },
+  idPairedInfoEnglishLabelIdRow: {
+    fontSize: 9,
+  },
+  idPairedInfoEnglishValue: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "900",
+    lineHeight: 14,
+  },
+  idPairedInfoEnglishValueEmphasis: {
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  idPairedInfoEnglishValueIdRow: {
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  idPairedInfoEnglishValueNarrow: {
+    flexShrink: 1,
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  idPairedInfoEnglishValueTight: {
+    flexGrow: 0,
+    flexShrink: 1,
+    flexBasis: "auto",
+    minWidth: 0,
+    textAlign: "left",
+  },
+  idPairedInfoArabicValueTight: {
+    flexGrow: 0,
+    flexShrink: 1,
+    flexBasis: "auto",
+    minWidth: 0,
+    textAlign: "right",
+  },
+  idPairedInfoArabicBlock: {
+    flex: 1.04,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    minWidth: 0,
+  },
+  idPairedInfoArabicBlockNarrow: {
+    flex: 0.95,
+    marginRight: 0,
+  },
+  idPairedInfoArabicLabel: {
+    color: "rgba(255,255,255,0.54)",
+    fontSize: 8,
+    fontWeight: "800",
+    textAlign: "right",
+    marginLeft: 4,
+    flexShrink: 0,
+  },
+  idPairedInfoArabicLabelIdRow: {
+    fontSize: 9,
+  },
+  idPairedInfoArabicValue: {
+    color: "#FFFFFF",
+    flex: 1,
+    fontSize: 10,
+    fontWeight: "900",
+    textAlign: "right",
+    lineHeight: 14,
+  },
+  idPairedInfoArabicValueEmphasis: {
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  idPairedInfoArabicValueIdRow: {
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  idPairedInfoArabicValueNarrow: {
+    flexShrink: 1,
+  },
+  identityBilingualInfoRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(57,113,73,0.12)",
+    paddingBottom: 8,
+    marginBottom: 8,
+  },
+  identityBilingualInfoRowCompact: {
+    flex: 1,
+    borderBottomWidth: 0,
+    marginBottom: 0,
+    paddingBottom: 0,
+  },
+  identityBilingualInfoHeader: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  identityBilingualInfoLabelArabic: {
+    color: "#315A3C",
+    fontSize: 10,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  identityBilingualInfoLabelEnglish: {
+    color: "rgba(45,90,58,0.64)",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
+  identityBilingualInfoValues: {
+    flexDirection: "row-reverse",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+  identityBilingualInfoValueArabic: {
+    color: "#14301B",
+    flex: 1,
+    fontSize: 11,
+    fontWeight: "900",
+    textAlign: "right",
+    lineHeight: 16,
+    marginLeft: 10,
+  },
+  identityBilingualInfoValueEnglish: {
+    color: "#14301B",
+    flex: 1,
+    fontSize: 10,
+    fontWeight: "800",
+    textAlign: "left",
+    lineHeight: 15,
   },
   idArabicHeaderRow: {
     width: "100%",
@@ -1396,10 +2201,10 @@ const styles = StyleSheet.create({
   },
   identityArabicInfoRow: {
     flexDirection: "row-reverse",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
     width: "100%",
-    marginBottom: 6,
+    marginBottom: 10,
   },
   identityArabicInfoLabel: {
     color: "#315A3C",
@@ -1407,11 +2212,11 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textAlign: "right",
     marginLeft: 8,
-    minWidth: 58,
+    minWidth: 88,
   },
   identityArabicInfoValue: {
     color: "#14301B",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "800",
     textAlign: "right",
     flex: 1,
@@ -1442,14 +2247,14 @@ const styles = StyleSheet.create({
   barcodeWrap: {
     flexDirection: "row",
     alignItems: "flex-end",
-    height: 30,
-    width: "100%",
-    paddingHorizontal: 8,
+    height: 21,
+    width: 70,
+    paddingHorizontal: 5,
     paddingVertical: 2,
     borderWidth: 1,
-    borderColor: "rgba(57,113,73,0.20)",
-    backgroundColor: "rgba(250,252,245,0.96)",
-    marginTop: 10,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    marginTop: 7,
     alignSelf: "center",
     justifyContent: "center",
   },
@@ -1458,11 +2263,11 @@ const styles = StyleSheet.create({
     marginRight: 1,
   },
   idBarcodeValue: {
-    color: "#17311E",
-    fontSize: 11,
+    color: "rgba(255,255,255,0.76)",
+    fontSize: 8.5,
     fontWeight: "900",
-    letterSpacing: 1.1,
-    marginTop: 4,
+    letterSpacing: 0.7,
+    marginTop: 3,
   },
   gestureHintPanel: {
     marginTop: 12,
@@ -1487,6 +2292,53 @@ const styles = StyleSheet.create({
   slidersStack: {
     marginTop: 18,
     gap: 12,
+  },
+  adminConsoleButton: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 18,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: "rgba(99,198,255,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(99,198,255,0.20)",
+  },
+  adminConsoleCopy: {
+    flex: 1,
+    alignItems: "flex-end",
+    marginLeft: 14,
+  },
+  adminConsoleEyebrow: {
+    color: "rgba(99,198,255,0.82)",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.2,
+    textAlign: "right",
+  },
+  adminConsoleTitle: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "900",
+    textAlign: "right",
+    marginTop: 4,
+  },
+  adminConsoleHint: {
+    color: "rgba(255,255,255,0.70)",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 20,
+    textAlign: "right",
+    marginTop: 6,
+  },
+  adminConsoleIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#63C6FF",
   },
   sliderTrack: {
     height: 62,
@@ -1694,6 +2546,70 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
   },
+  previewPredictionsCard: {
+    marginTop: 16,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  previewPredictionsTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "right",
+    marginBottom: 12,
+  },
+  previewPredictionRow: {
+    flexDirection: "row-reverse",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+  },
+  previewPredictionCopyColumn: {
+    flex: 1,
+    alignItems: "flex-end",
+    marginLeft: 14,
+  },
+  previewPredictionMetaColumn: {
+    minWidth: 74,
+    alignItems: "flex-start",
+  },
+  previewPredictionTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  previewPredictionMeta: {
+    color: "rgba(255,255,255,0.62)",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "right",
+    marginTop: 6,
+  },
+  previewPredictionPoints: {
+    color: "#F4C565",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  previewPredictionLockedAt: {
+    color: "rgba(255,255,255,0.52)",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 6,
+    textAlign: "left",
+  },
+  previewPredictionsEmpty: {
+    color: "rgba(255,255,255,0.68)",
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "right",
+  },
   previewDetailRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -1724,6 +2640,63 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
   },
+  editAvatarSection: {
+    marginBottom: 16,
+  },
+  editAvatarCard: {
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    alignItems: "center",
+  },
+  editAvatarPreviewWrap: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    padding: 3,
+    backgroundColor: "rgba(244,197,101,0.18)",
+  },
+  editAvatarPreview: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 53,
+  },
+  editAvatarCopy: {
+    alignItems: "center",
+    marginTop: 12,
+    marginBottom: 14,
+  },
+  editAvatarTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  editAvatarHint: {
+    color: "rgba(255,255,255,0.68)",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+    lineHeight: 18,
+    marginTop: 6,
+  },
+  editAvatarButton: {
+    minHeight: 44,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    backgroundColor: "#F4C565",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editAvatarButtonText: {
+    color: "#09111C",
+    fontSize: 13,
+    fontWeight: "900",
+    marginRight: 8,
+  },
   fieldGroup: {
     marginBottom: 14,
   },
@@ -1749,5 +2722,13 @@ const styles = StyleSheet.create({
   fieldInputMultiline: {
     minHeight: 110,
     textAlignVertical: "top",
+  },
+  editInfoNote: {
+    color: "rgba(255,255,255,0.58)",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+    lineHeight: 18,
+    marginTop: 4,
   },
 });

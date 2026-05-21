@@ -1,611 +1,698 @@
+/**
+ * ChatOverlay — محادثة خاصة (واتساب / تلغرام)
+ * الهيدر ثابت · الشات يتمرر · شريط الإدخال يرتفع مع الكيبورد
+ */
+
 import { useEffect, useRef, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+  cancelAnimation,
+} from "react-native-reanimated";
 import {
-  Animated,
   Image,
   Keyboard,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   type TextInput as TextInputHandle,
-  useWindowDimensions,
   View,
+  type ImageStyle,
 } from "react-native";
-import type { ChatMessage } from "../app.types";
+import type { MessageThreadEntry, PrivateMessageEntry } from "./x-feed/x-feed.types";
 
-const SHELL_WIDTH = 430;
-const COMPOSER_HEIGHT = 58;
-const VAR_CHAT_ICON = require("../../assets/icons/black.png");
-const HILAL_ICON = require("../../assets/icons/alhilal.png.png");
-
-type OverlayMessage = ChatMessage & {
-  tone: "paper" | "highlight";
-  width: string;
-  offset: number;
-  status?: string;
-};
-
-const INITIAL_MESSAGES: OverlayMessage[] = [
-  {
-    id: "bb-1",
-    sender: "VAR",
-    content: "يقول لي سيريزز يا أبوك شيء غيري\nيتكلم ❤️",
-    time: "الآن",
-    mine: false,
-    tone: "paper",
-    width: "82%",
-    offset: 12,
-    status: "✓",
-  },
-  {
-    id: "bb-2",
-    sender: "VAR",
-    content: "أبو نواف: من الليلة قروب صرت ؟؟",
-    time: "الآن",
-    mine: false,
-    tone: "paper",
-    width: "74%",
-    offset: 18,
-    status: "✓",
-  },
-  {
-    id: "bb-3",
-    sender: "VAR",
-    content: "جاك أبي أنا كنت مشغول",
-    time: "الآن",
-    mine: true,
-    tone: "highlight",
-    width: "64%",
-    offset: 42,
-  },
-];
-
-type ChatOverlayProps = {
+export type ChatOverlayProps = {
+  thread: MessageThreadEntry | null;
+  isSending: boolean;
+  draft: string;
+  onDraftChange: (text: string) => void;
+  onSend: () => Promise<void>;
   onClose: () => void;
 };
 
-export default function ChatOverlay(props: ChatOverlayProps) {
-  const { height: viewportHeight } = useWindowDimensions();
-  const [messages, setMessages] = useState<OverlayMessage[]>(INITIAL_MESSAGES);
-  const [messageDraft, setMessageDraft] = useState("");
-  const [isInputFocused, setIsInputFocused] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const panelOpacity = useRef(new Animated.Value(0)).current;
-  const panelTranslateY = useRef(new Animated.Value(18)).current;
-  const inputRef = useRef<TextInputHandle | null>(null);
-  const scrollRef = useRef<ScrollView | null>(null);
-  const keyboardHeightRef = useRef(0);
-  const keyboardOpenRef = useRef(false);
-  const viewportFrameRef = useRef<number | null>(null);
-  const verticalInset = Math.max(20, Math.round(viewportHeight * 0.1));
-  const composerLift = Math.max(0, keyboardHeight - verticalInset);
+type DisplayMessage = PrivateMessageEntry & { mine: boolean };
+
+const HEADER_H = 58;
+const COMPOSER_BLOCK_H = 96;
+
+function BlinkingCursor({ visible }: { visible: boolean }) {
+  const opacity = useSharedValue(1);
 
   useEffect(() => {
-    if (Platform.OS !== "web") return;
-
-    const rootStyle = document.documentElement.style;
-    const bodyStyle = document.body.style;
-    const appElement = document.getElementById("root") || document.body;
-
-    const previous = {
-      rootOverflow: rootStyle.overflow,
-      rootOverscroll: rootStyle.overscrollBehavior,
-      bodyOverflow: bodyStyle.overflow,
-      bodyPosition: bodyStyle.position,
-      bodyTop: bodyStyle.top,
-      bodyWidth: bodyStyle.width,
-      appPosition: appElement.style.position,
-      appTop: appElement.style.top,
-      appW: appElement.style.width,
-    };
-
-    // Completely lock both body and html and move the scroll to a fixed root element so background can't move
-    rootStyle.overflow = "hidden";
-    rootStyle.overscrollBehavior = "none";
-    bodyStyle.overflow = "hidden";
-    bodyStyle.position = "fixed";
-
-    const currentScroll = window.scrollY;
-
-    // Instead of pushing body up, we lock the body and let the chat overlay render absolutely over it
-    bodyStyle.top = `-${currentScroll}px`;
-    bodyStyle.width = "100%";
-
-    return () => {
-      rootStyle.overflow = previous.rootOverflow;
-      rootStyle.overscrollBehavior = previous.rootOverscroll;
-      bodyStyle.overflow = previous.bodyOverflow;
-      bodyStyle.position = previous.bodyPosition;
-      bodyStyle.top = previous.bodyTop;
-      bodyStyle.width = previous.bodyWidth;
-      appElement.style.position = previous.appPosition;
-      appElement.style.top = previous.appTop;
-      appElement.style.width = previous.appW;
-      window.scrollTo(0, currentScroll);
-    };
-  }, []);
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(panelOpacity, {
-        toValue: 1,
-        duration: 220,
-        useNativeDriver: false,
-      }),
-      Animated.timing(panelTranslateY, {
-        toValue: 0,
-        duration: 220,
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [panelOpacity, panelTranslateY]);
-
-  useEffect(() => {
-    scrollRef.current?.scrollToEnd({ animated: true });
-  }, [messages]);
-
-  useEffect(() => {
-    if (keyboardHeight <= 0) {
-      return;
+    if (visible) {
+      opacity.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 0 }),
+          withTiming(1, { duration: 520, easing: Easing.steps(1) }),
+          withTiming(0, { duration: 0 }),
+          withTiming(0, { duration: 520, easing: Easing.steps(1) }),
+        ),
+        -1,
+        false,
+      );
+    } else {
+      cancelAnimation(opacity);
+      opacity.value = 1;
     }
+  }, [visible, opacity]);
 
-    scrollRef.current?.scrollToEnd({ animated: false });
-  }, [keyboardHeight]);
+  const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
 
-  useEffect(() => {
-    if (Platform.OS !== "web" || !window.visualViewport) return;
-    const vp = window.visualViewport;
+  if (!visible) return null;
 
-    const applyKeyboardHeight = (nextHeight: number) => {
-      const normalizedHeight = nextHeight > 56 ? nextHeight : 0;
+  return <Animated.View style={[styles.cursor, style]} />;
+}
 
-      if (Math.abs(normalizedHeight - keyboardHeightRef.current) <= 4) {
-        return;
-      }
-
-      keyboardHeightRef.current = normalizedHeight;
-      keyboardOpenRef.current = normalizedHeight > 0;
-      setKeyboardHeight(normalizedHeight);
-    };
-
-    const measureViewport = () => {
-      const windowHeight = window.innerHeight;
-      const vpHeight = vp.height;
-      const offsetTop = vp.offsetTop;
-      const diff = Math.max(0, Math.round(windowHeight - vpHeight - offsetTop));
-
-      applyKeyboardHeight(diff);
-
-      if (diff > 0) {
-        window.scrollTo(0, 0);
-      }
-    };
-
-    const scheduleMeasure = () => {
-      if (viewportFrameRef.current !== null) {
-        cancelAnimationFrame(viewportFrameRef.current);
-      }
-
-      viewportFrameRef.current = requestAnimationFrame(() => {
-        viewportFrameRef.current = null;
-        measureViewport();
-      });
-    };
-
-    let focusTimeout1: ReturnType<typeof setTimeout> | null = null;
-    let focusTimeout2: ReturnType<typeof setTimeout> | null = null;
-    let focusTimeout3: ReturnType<typeof setTimeout> | null = null;
-
-    const clearFocusTimers = () => {
-      if (focusTimeout1) clearTimeout(focusTimeout1);
-      if (focusTimeout2) clearTimeout(focusTimeout2);
-      if (focusTimeout3) clearTimeout(focusTimeout3);
-      focusTimeout1 = null;
-      focusTimeout2 = null;
-      focusTimeout3 = null;
-    };
-
-    const handleFocusIn = () => {
-      clearFocusTimers();
-      scheduleMeasure();
-
-      // Safari reports intermediate viewport sizes while the keyboard animates.
-      focusTimeout1 = setTimeout(scheduleMeasure, 120);
-      focusTimeout2 = setTimeout(scheduleMeasure, 260);
-      focusTimeout3 = setTimeout(scheduleMeasure, 420);
-    };
-
-    const handleFocusOut = () => {
-      clearFocusTimers();
-      keyboardOpenRef.current = false;
-      applyKeyboardHeight(0);
-      window.scrollTo(0, 0);
-
-      focusTimeout1 = setTimeout(scheduleMeasure, 80);
-      focusTimeout2 = setTimeout(scheduleMeasure, 180);
-    };
-
-    vp.addEventListener("resize", scheduleMeasure);
-    vp.addEventListener("scroll", scheduleMeasure);
-    window.addEventListener("focusin", handleFocusIn);
-    window.addEventListener("focusout", handleFocusOut);
-
-    scheduleMeasure();
-
-    return () => {
-      clearFocusTimers();
-
-      if (viewportFrameRef.current !== null) {
-        cancelAnimationFrame(viewportFrameRef.current);
-        viewportFrameRef.current = null;
-      }
-
-      vp.removeEventListener("resize", scheduleMeasure);
-      vp.removeEventListener("scroll", scheduleMeasure);
-      window.removeEventListener("focusin", handleFocusIn);
-      window.removeEventListener("focusout", handleFocusOut);
-    };
-  }, []);
-
-  const dismissKeyboard = () => {
-    setIsInputFocused(false);
-    keyboardOpenRef.current = false;
-    keyboardHeightRef.current = 0;
-    setKeyboardHeight(0);
-    inputRef.current?.blur();
-    Keyboard.dismiss();
-
-    if (Platform.OS === "web") {
-      const activeElement = document.activeElement;
-      if (activeElement instanceof HTMLElement) {
-        activeElement.blur();
-      }
-    }
-  };
-
-  const sendMessage = () => {
-    const trimmedMessage = messageDraft.trim();
-    if (!trimmedMessage) {
-      return;
-    }
-
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      {
-        id: `chat-${Date.now()}`,
-        sender: "VAR",
-        content: trimmedMessage,
-        time: "الآن",
-        mine: true,
-        tone: "highlight",
-        width: "68%",
-        offset: 56,
-      },
-    ]);
-    setMessageDraft("");
-  };
-
+function MessageBubble({ message }: { message: DisplayMessage }) {
   return (
-    <View style={[styles.chatOverlayWrap]}>
-      <Pressable style={styles.chatBackdrop} onPress={dismissKeyboard} />
-
-      <Animated.View
+    <View
+      style={[
+        styles.bubbleRow,
+        message.mine ? styles.bubbleRowMe : styles.bubbleRowPeer,
+      ]}
+    >
+      <View
         style={[
-          styles.chatShellWrap,
-          {
-            marginTop: verticalInset,
-            marginBottom: verticalInset + composerLift,
-            opacity: panelOpacity,
-            transform: [{ translateY: panelTranslateY }],
-          },
+          styles.bubble,
+          message.mine ? styles.bubbleMe : styles.bubblePeer,
         ]}
       >
-        <View style={styles.chatShell}>
-          <View style={styles.chatHeader}>
-            <Pressable
-              style={styles.chatHeaderLogoButton}
-              onPress={props.onClose}
-            >
-              <Image
-                source={VAR_CHAT_ICON}
-                resizeMode="contain"
-                style={styles.chatHeaderLogo}
-              />
-            </Pressable>
-
-            <Text style={styles.chatHeaderTitle}>قروب الهلال</Text>
-
-            <View style={styles.chatHeaderAvatarWrap}>
-              <Image
-                source={HILAL_ICON}
-                resizeMode="contain"
-                style={styles.chatHeaderAvatar}
-              />
-            </View>
-          </View>
-
-          <View style={styles.chatBody}>
-            <ScrollView
-              ref={scrollRef}
-              showsVerticalScrollIndicator={false}
-              keyboardDismissMode="on-drag"
-              keyboardShouldPersistTaps="handled"
-              style={styles.chatConversationScroll}
-              contentContainerStyle={[
-                styles.chatConversation,
-                {
-                  paddingBottom: 16,
-                },
-              ]}
-            >
-              {messages.map((message) => (
-                <View
-                  key={message.id}
-                  style={[
-                    styles.chatBubbleRow,
-                    {
-                      width: message.width,
-                      marginLeft: message.offset,
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.chatBubble,
-                      message.tone === "highlight"
-                        ? styles.chatBubbleHighlight
-                        : styles.chatBubblePaper,
-                    ]}
-                  >
-                    {message.status ? (
-                      <Text style={styles.chatBubbleStatus}>
-                        {message.status}
-                      </Text>
-                    ) : null}
-                    <Text style={styles.chatBubbleText}>{message.content}</Text>
-                    <View
-                      style={[
-                        styles.chatBubbleTail,
-                        message.tone === "highlight"
-                          ? styles.chatBubbleTailHighlight
-                          : styles.chatBubbleTailPaper,
-                      ]}
-                    />
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-
-            <View style={styles.chatComposerDock}>
-              <View style={styles.chatComposer}>
-                <Pressable
-                  style={styles.chatEmojiButton}
-                  onPress={dismissKeyboard}
-                >
-                  <Text style={styles.chatEmojiText}>🙂</Text>
-                </Pressable>
-
-                <View
-                  style={[
-                    styles.chatComposerInputWrap,
-                    isInputFocused ? styles.chatComposerInputWrapFocused : null,
-                  ]}
-                >
-                  <TextInput
-                    ref={inputRef}
-                    value={messageDraft}
-                    onChangeText={setMessageDraft}
-                    onFocus={() => {
-                      setIsInputFocused(true);
-                    }}
-                    onBlur={() => setIsInputFocused(false)}
-                    onSubmitEditing={sendMessage}
-                    returnKeyType="send"
-                    blurOnSubmit={false}
-                    autoCorrect={false}
-                    spellCheck={false}
-                    placeholder=""
-                    placeholderTextColor="rgba(0,0,0,0.32)"
-                    selectionColor="#0E63D7"
-                    style={styles.chatComposerInput}
-                    textAlign="right"
-                  />
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Animated.View>
+        <Text
+          style={[
+            styles.bubbleText,
+            message.mine ? styles.bubbleTextMe : styles.bubbleTextPeer,
+          ]}
+        >
+          {message.content}
+        </Text>
+        {message.timeLabel ? (
+          <Text
+            style={[
+              styles.bubbleTime,
+              message.mine ? styles.bubbleTimeMe : styles.bubbleTimePeer,
+            ]}
+          >
+            {message.timeLabel}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 }
 
+export default function ChatOverlay(props: ChatOverlayProps) {
+  const { thread, isSending, draft, onDraftChange, onSend, onClose } = props;
+
+  const [isFocused, setIsFocused] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  const inputRef = useRef<TextInputHandle | null>(null);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const keyboardHRef = useRef(0);
+  const vpFrameRef = useRef<number | null>(null);
+  const wasSendingRef = useRef(false);
+
+  const messages: DisplayMessage[] = thread
+    ? thread.messages.map((m) => ({ ...m, mine: m.sender === "me" }))
+    : [];
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => setKeyboardHeight(e.endCoordinates.height),
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardHeight(0),
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    if (!thread) return;
+    if (typeof window === "undefined" || !window.visualViewport) return;
+
+    const vp = window.visualViewport;
+
+    const measure = () => {
+      if (vpFrameRef.current !== null) cancelAnimationFrame(vpFrameRef.current);
+      vpFrameRef.current = requestAnimationFrame(() => {
+        vpFrameRef.current = null;
+        const diff = Math.max(
+          0,
+          Math.round(window.innerHeight - vp.height - vp.offsetTop),
+        );
+        const next = diff > 48 ? diff : 0;
+        if (Math.abs(next - keyboardHRef.current) > 4) {
+          keyboardHRef.current = next;
+          setKeyboardHeight(next);
+        }
+      });
+    };
+
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName !== "INPUT" && target?.tagName !== "TEXTAREA") return;
+      measure();
+      setTimeout(measure, 120);
+      setTimeout(measure, 280);
+    };
+
+    const onFocusOut = () => {
+      keyboardHRef.current = 0;
+      setKeyboardHeight(0);
+    };
+
+    vp.addEventListener("resize", measure);
+    window.addEventListener("focusin", onFocusIn);
+    window.addEventListener("focusout", onFocusOut);
+
+    return () => {
+      if (vpFrameRef.current !== null) cancelAnimationFrame(vpFrameRef.current);
+      vp.removeEventListener("resize", measure);
+      window.removeEventListener("focusin", onFocusIn);
+      window.removeEventListener("focusout", onFocusOut);
+    };
+  }, [thread]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollToEnd({ animated: true });
+  }, [messages.length]);
+
+  useEffect(() => {
+    if (keyboardHeight > 0) {
+      scrollRef.current?.scrollToEnd({ animated: false });
+    }
+  }, [keyboardHeight]);
+
+  useEffect(() => {
+    if (wasSendingRef.current && !isSending) {
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 40);
+      wasSendingRef.current = isSending;
+      return () => clearTimeout(timer);
+    }
+
+    wasSendingRef.current = isSending;
+  }, [isSending]);
+
+  const dismissKeyboard = () => {
+    inputRef.current?.blur();
+    if (Platform.OS !== "web") {
+      Keyboard.dismiss();
+      return;
+    }
+
+    if (typeof document !== "undefined") {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) {
+        active.blur();
+      }
+    }
+  };
+
+  const handleSend = () => {
+    if (!draft.trim() || isSending) return;
+    void onSend();
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 60);
+  };
+
+  // المؤشر يعمل فور فتح المحادثة ولا يتوقف إلا أثناء الإرسال
+  const showCursor = !isSending;
+  const canSend = Boolean(draft.trim()) && !isSending;
+
+  if (!thread) {
+    return (
+      <Modal visible={false} animationType="slide" presentationStyle="fullScreen">
+        <View />
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal
+      visible
+      animationType="slide"
+      presentationStyle="fullScreen"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
+      <View style={styles.root}>
+        {/* هيدر ثابت — لا يتحرك مع الكيبورد */}
+        <View style={styles.header}>
+          <Pressable style={styles.cancelPill} onPress={onClose} hitSlop={10}>
+            <Text style={styles.cancelPillText}>إلغاء</Text>
+          </Pressable>
+
+          <View style={styles.headerIdentity}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {thread.displayVarId} {thread.displayName}
+            </Text>
+          </View>
+
+          <View style={styles.headerAvatar}>
+            {thread.avatarUri ? (
+              <Image
+                source={{ uri: thread.avatarUri }}
+                style={styles.headerAvatarImg as ImageStyle}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.headerAvatarFallback}>
+                <Text style={styles.headerAvatarLetter}>
+                  {thread.displayName.charAt(0).toUpperCase() || "V"}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* منطقة الشات — تتقلص عند فتح الكيبورد */}
+        <View style={styles.chatColumn}>
+          <ScrollView
+            ref={scrollRef}
+            style={styles.messageScroll}
+            contentContainerStyle={[
+              styles.messageContent,
+              { paddingBottom: COMPOSER_BLOCK_H + 12 },
+            ]}
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="never"
+            onTouchEnd={dismissKeyboard}
+          >
+            {messages.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>
+                  ابدأ محادثتك مع{" "}
+                  <Text style={styles.emptyName}>{thread.displayName}</Text>
+                </Text>
+              </View>
+            ) : (
+              messages.map((m) => <MessageBubble key={m.id} message={m} />)
+            )}
+          </ScrollView>
+
+          {/* شريط الإدخال — يرتفع فوق الكيبورد */}
+          <View
+            style={[
+              styles.composerDock,
+              { paddingBottom: Math.max(keyboardHeight, 14) },
+            ]}
+          >
+            <View style={styles.brandRow}>
+              <Text style={styles.brandVar}>VAR</Text>
+              <Text style={styles.brandPost}> POST</Text>
+            </View>
+
+            <View
+              style={[
+                styles.inputWrap,
+                isFocused && styles.inputWrapFocused,
+              ]}
+            >
+              <Pressable
+                style={[
+                  styles.sendBtn,
+                  canSend && styles.sendBtnActive,
+                ]}
+                onPress={handleSend}
+                disabled={!canSend}
+                hitSlop={6}
+                focusable={false}
+              >
+                <Text style={styles.sendBtnText}>ارسال</Text>
+              </Pressable>
+
+              <Pressable style={styles.attachBtn} hitSlop={8}>
+                <Ionicons
+                  name="attach"
+                  size={22}
+                  color="#FFFFFF"
+                  style={styles.attachIcon}
+                />
+              </Pressable>
+
+              <View style={styles.inputFieldArea}>
+                <View style={styles.inputVisual} pointerEvents="none">
+                  <View style={styles.textAndCursor}>
+                    <BlinkingCursor visible={showCursor} />
+                    {draft.length > 0 ? (
+                      <Text
+                        style={styles.inputDisplayText}
+                        numberOfLines={4}
+                      >
+                        {draft}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                <TextInput
+                  ref={inputRef}
+                  value={draft}
+                  onChangeText={onDraftChange}
+                  onFocus={() => setIsFocused(true)}
+                  onBlur={() => setIsFocused(false)}
+                  onSubmitEditing={handleSend}
+                  returnKeyType="send"
+                  blurOnSubmit={false}
+                  multiline
+                  autoCorrect={false}
+                  editable
+                  caretHidden
+                  style={styles.inputOverlay}
+                  textAlign="right"
+                  placeholder=""
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
-  chatOverlayWrap: {
-    ...Platform.select({
-      web: { position: "fixed" as any },
-      default: StyleSheet.absoluteFillObject,
-    }),
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 12,
-  },
-  chatBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.84)",
-  },
-  chatShellWrap: {
+  root: {
     flex: 1,
-    width: "100%",
-    maxWidth: SHELL_WIDTH,
-    alignSelf: "center",
+    backgroundColor: "#000000",
   },
-  chatShell: {
-    flex: 1,
-    backgroundColor: "#030303",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.46)",
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-    overflow: "hidden",
-  },
-  chatHeader: {
-    minHeight: 52,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.3)",
+
+  header: {
+    height: HEADER_H,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 10,
-    backgroundColor: "#020202",
+    paddingHorizontal: 12,
+    backgroundColor: "#000000",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.14)",
+    zIndex: 20,
   },
-  chatHeaderLogoButton: {
-    width: 42,
-    height: 30,
+  cancelPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#FFFFFF",
+    minWidth: 64,
     alignItems: "center",
-    justifyContent: "center",
   },
-  chatHeaderLogo: {
-    width: 30,
-    height: 30,
+  cancelPillText: {
+    color: "#000000",
+    fontSize: 13,
+    fontWeight: "700",
   },
-  chatHeaderTitle: {
+  headerIdentity: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 8,
+  },
+  headerTitle: {
     color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: 14,
+    fontWeight: "700",
     textAlign: "center",
   },
-  chatHeaderAvatarWrap: {
-    width: 38,
-    height: 32,
-    borderWidth: 0,
-    borderRadius: 0,
-    backgroundColor: "transparent",
+  headerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  headerAvatarImg: {
+    width: "100%",
+    height: "100%",
+  },
+  headerAvatarFallback: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
   },
-  chatHeaderAvatar: {
-    width: 32,
-    height: 32,
+  headerAvatarLetter: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "800",
   },
-  chatBody: {
+
+  chatColumn: {
     flex: 1,
-    position: "relative",
+    backgroundColor: "#000000",
   },
-  chatConversationScroll: {
+
+  messageScroll: {
     flex: 1,
   },
-  chatConversation: {
+  messageContent: {
     flexGrow: 1,
-    paddingHorizontal: 8,
-    paddingTop: 10,
-    paddingBottom: 16,
-    backgroundColor: "#030303",
+    paddingHorizontal: 14,
+    paddingTop: 14,
   },
-  chatBubbleRow: {
+  emptyState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 48,
+  },
+  emptyText: {
+    color: "rgba(255,255,255,0.35)",
+    fontSize: 14,
+    textAlign: "center",
+  },
+  emptyName: {
+    color: "rgba(255,255,255,0.65)",
+    fontWeight: "700",
+  },
+
+  bubbleRow: {
     marginBottom: 8,
+    flexDirection: "row",
   },
-  chatBubble: {
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 10,
-    borderWidth: 1,
-    position: "relative",
+  bubbleRowMe: {
+    justifyContent: "flex-end",
   },
-  chatBubblePaper: {
-    backgroundColor: "#E8E9E2",
-    borderColor: "#BFC1B8",
+  bubbleRowPeer: {
+    justifyContent: "flex-start",
   },
-  chatBubbleHighlight: {
-    backgroundColor: "#CBEAF8",
-    borderColor: "#94BFCD",
+  bubble: {
+    maxWidth: "78%",
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  chatBubbleStatus: {
-    position: "absolute",
-    top: 4,
-    right: 6,
-    color: "#545454",
-    fontSize: 11,
-    fontWeight: "900",
+  bubbleMe: {
+    backgroundColor: "#1D4ED8",
+    borderBottomRightRadius: 4,
   },
-  chatBubbleText: {
-    color: "#111111",
+  bubblePeer: {
+    backgroundColor: "#141414",
+    borderBottomLeftRadius: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  bubbleText: {
     fontSize: 15,
     lineHeight: 22,
     textAlign: "right",
   },
-  chatBubbleTail: {
-    position: "absolute",
-    left: 10,
-    bottom: -5,
-    width: 10,
-    height: 10,
-    transform: [{ rotate: "45deg" }],
-    borderLeftWidth: 1,
-    borderBottomWidth: 1,
+  bubbleTextMe: {
+    color: "#FFFFFF",
   },
-  chatBubbleTailPaper: {
-    backgroundColor: "#E8E9E2",
-    borderLeftColor: "#BFC1B8",
-    borderBottomColor: "#BFC1B8",
+  bubbleTextPeer: {
+    color: "#F2F2F2",
   },
-  chatBubbleTailHighlight: {
-    backgroundColor: "#CBEAF8",
-    borderLeftColor: "#94BFCD",
-    borderBottomColor: "#94BFCD",
+  bubbleTime: {
+    fontSize: 10,
+    marginTop: 4,
+    textAlign: "right",
   },
-  chatComposer: {
-    minHeight: COMPOSER_HEIGHT,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.26)",
-    backgroundColor: "#020202",
+  bubbleTimeMe: {
+    color: "rgba(255,255,255,0.5)",
+  },
+  bubbleTimePeer: {
+    color: "rgba(255,255,255,0.35)",
+  },
+
+  composerDock: {
+    paddingHorizontal: 14,
+    paddingTop: 4,
+    backgroundColor: "#000000",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.12)",
+  },
+  brandRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "baseline",
+    marginBottom: 8,
+  },
+  brandVar: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 2.4,
+  },
+  brandPost: {
+    color: "#F97316",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 2.2,
+  },
+
+  inputWrap: {
+    minHeight: 50,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.72)",
+    backgroundColor: "#000000",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#FFFFFF",
+        shadowOpacity: 0.1,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 1 },
+      },
+      android: {
+        elevation: 2,
+      },
+      default: {},
+    }),
+    ...(Platform.OS === "web"
+      ? ({
+          boxShadow: "0 1px 10px rgba(255,255,255,0.1)",
+        } as object)
+      : null),
   },
-  chatComposerDock: {
-    marginTop: "auto",
+  inputWrapFocused: {
+    borderColor: "rgba(255,255,255,0.9)",
   },
-  chatEmojiButton: {
-    width: 34,
-    height: 34,
+
+  sendBtn: {
+    minWidth: 58,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.72)",
+    backgroundColor: "#000000",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 8,
-  },
-  chatEmojiText: {
-    fontSize: 28,
-    lineHeight: 30,
-  },
-  chatComposerInputWrap: {
-    flex: 1,
-    minHeight: 38,
-    backgroundColor: "#FCFCFC",
-    borderWidth: 1,
-    borderColor: "#C3C6CC",
-    borderRadius: 7,
-    justifyContent: "center",
     paddingHorizontal: 8,
+    marginRight: 6,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#FFFFFF",
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 1 },
+      },
+      android: {
+        elevation: 1,
+      },
+      default: {},
+    }),
+    ...(Platform.OS === "web"
+      ? ({
+          boxShadow: "0 1px 8px rgba(255,255,255,0.08)",
+        } as object)
+      : null),
   },
-  chatComposerInputWrapFocused: {
-    borderColor: "#0F63D7",
-    borderWidth: 2,
+  sendBtnActive: {
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
-  chatComposerInput: {
+  sendBtnText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  attachBtn: {
+    width: 32,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 4,
+  },
+  attachIcon: {
+    transform: [{ rotate: "90deg" }],
+  },
+
+  inputFieldArea: {
     flex: 1,
-    minHeight: 30,
-    color: "#111111",
-    paddingHorizontal: 0,
+    minHeight: 36,
+    justifyContent: "center",
+  },
+  inputVisual: {
+    minHeight: 28,
+    justifyContent: "center",
+    paddingRight: 4,
+    paddingLeft: 2,
+  },
+  textAndCursor: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    alignSelf: "stretch",
+    width: "100%",
+    minHeight: 28,
+  },
+  cursor: {
+    width: 6,
+    height: 26,
+    borderRadius: 1,
+    backgroundColor: "#FFFFFF",
+    marginRight: 3,
+    flexShrink: 0,
+  },
+  inputDisplayText: {
+    color: "#FFFFFF",
     fontSize: 16,
+    lineHeight: 22,
+    textAlign: "right",
+    flexShrink: 1,
+  },
+  inputOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    color: "transparent",
+    fontSize: 16,
+    lineHeight: 22,
+    paddingHorizontal: 4,
     paddingVertical: 4,
+    textAlign: "right",
+    ...(Platform.OS === "web"
+      ? ({
+          outlineStyle: "none",
+          caretColor: "transparent",
+        } as object)
+      : null),
   },
 });
