@@ -6,6 +6,7 @@ import {
   Animated,
   Easing,
   type GestureResponderEvent,
+  type TextInputProps,
   Modal,
   Platform,
   Pressable,
@@ -13,19 +14,330 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import type { AuthMode, IconName } from "../app.types";
+import {
+  APPWRITE_CONFIG,
+  clearAppwriteRecoveryChallenge,
+  completeAppwritePasswordRecovery,
+  getAppwriteConfigurationError,
+  loginAppwriteWithGoogle,
+  loginAppwriteUser,
+  readAppwriteRecoveryChallenge,
+  requestAppwritePasswordRecovery,
+  signupAppwriteUser,
+  type AppwriteAuthUser,
+} from "../lib/appwrite";
+import {
+  createCompatStyleSheet,
+  getNativePointerEventsProps,
+  getWebPointerEventsStyle,
+} from "../lib/crossPlatformStyles";
 
 const MONO_FONT = Platform.OS === "ios" ? "Courier" : "monospace";
+const FULL_NAME_PATTERN = /^[A-Za-z\u0600-\u06FF\s'-]+$/;
+const USERNAME_PATTERN = /^[a-z0-9._]{3,20}$/;
+const LOGIN_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+$/;
+const VAR_ADMIN_USERNAME = "var";
 
 type ApplePayConfirmState = "idle" | "armed" | "processing";
+type PasswordRecoveryView = "request" | "reset";
+type AuthErrorCandidate = {
+  code?: unknown;
+  type?: unknown;
+  message?: unknown;
+  name?: unknown;
+  response?: unknown;
+};
 
 type AuthScreenProps = {
   authMode: AuthMode;
   onChangeMode: (mode: AuthMode) => void;
-  onSuccess: () => void;
+  onStartGoogleLogin?: () => void;
+  onSuccess: (user: AppwriteAuthUser) => void;
 };
+
+function readAuthErrorSourceLabel(
+  candidate: AuthErrorCandidate,
+  rawMessage: string,
+) {
+  const normalizedMessage = rawMessage.toLowerCase();
+  const errorType =
+    typeof candidate.type === "string" ? candidate.type.trim() : "";
+
+  if (
+    normalizedMessage.includes("origin") ||
+    normalizedMessage.includes("hostname") ||
+    normalizedMessage.includes("domain") ||
+    normalizedMessage.includes("platform") ||
+    normalizedMessage.includes("whitelist")
+  ) {
+    return "Appwrite Platforms > Web";
+  }
+
+  if (
+    normalizedMessage.includes("load failed") ||
+    normalizedMessage.includes("failed to fetch") ||
+    normalizedMessage.includes("network request failed")
+  ) {
+    return "المتصفح أو الشبكة";
+  }
+
+  if (
+    normalizedMessage.includes("redirect") &&
+    normalizedMessage.includes("url")
+  ) {
+    return "Appwrite redirect URL";
+  }
+
+  if (
+    normalizedMessage.includes("session") &&
+    normalizedMessage.includes("active")
+  ) {
+    return "جلسة Appwrite الحالية";
+  }
+
+  if (errorType.startsWith("user_")) {
+    return "Appwrite Account";
+  }
+
+  if (
+    typeof candidate.type === "string" ||
+    typeof candidate.code === "number" ||
+    typeof candidate.code === "string"
+  ) {
+    return "Appwrite";
+  }
+
+  return "";
+}
+
+function readAuthErrorResponseLines(response: unknown) {
+  if (!response || typeof response !== "object") {
+    return [] as string[];
+  }
+
+  const candidate = response as {
+    status?: unknown;
+    statusText?: unknown;
+    url?: unknown;
+    message?: unknown;
+  };
+  const lines: string[] = [];
+  const statusValue =
+    typeof candidate.status === "number" || typeof candidate.status === "string"
+      ? String(candidate.status)
+      : "";
+  const statusText =
+    typeof candidate.statusText === "string" ? candidate.statusText.trim() : "";
+
+  if (statusValue) {
+    lines.push(
+      `HTTP status: ${statusText ? `${statusValue} ${statusText}` : statusValue}`,
+    );
+  }
+
+  if (typeof candidate.url === "string" && candidate.url.trim()) {
+    lines.push(`URL: ${candidate.url.trim()}`);
+  }
+
+  if (typeof candidate.message === "string" && candidate.message.trim()) {
+    lines.push(`تفاصيل الاستجابة: ${candidate.message.trim()}`);
+  }
+
+  return lines;
+}
+
+function isNetworkLikeAuthError(
+  candidate: AuthErrorCandidate,
+  rawMessage: string,
+) {
+  const normalizedMessage = rawMessage.toLowerCase();
+  const errorName =
+    typeof candidate.name === "string" ? candidate.name.trim() : "";
+
+  return (
+    normalizedMessage.includes("load failed") ||
+    normalizedMessage.includes("failed to fetch") ||
+    normalizedMessage.includes("network request failed") ||
+    (errorName === "TypeError" && !candidate.response)
+  );
+}
+
+function readWebRuntimeContextLines() {
+  if (Platform.OS !== "web" || typeof window === "undefined") {
+    return [] as string[];
+  }
+
+  const lines: string[] = [];
+
+  if (window.location.origin) {
+    lines.push(`الصفحة الحالية: ${window.location.origin}`);
+  }
+
+  return lines;
+}
+
+function readWebPlatformOriginHintLines(
+  candidate: AuthErrorCandidate,
+  rawMessage: string,
+  sourceLabel: string,
+) {
+  if (Platform.OS !== "web" || typeof window === "undefined") {
+    return [] as string[];
+  }
+
+  if (
+    !(
+      sourceLabel === "المتصفح أو الشبكة" ||
+      sourceLabel === "Appwrite Platforms > Web" ||
+      isNetworkLikeAuthError(candidate, rawMessage)
+    )
+  ) {
+    return [] as string[];
+  }
+
+  const hostname = window.location.hostname?.trim();
+
+  if (!hostname) {
+    return [] as string[];
+  }
+
+  return [
+    `Hostname المطلوب في Appwrite Platforms > Web: ${hostname}`,
+    "أدخله بدون http:// وبدون رقم المنفذ.",
+  ];
+}
+
+function readAuthErrorContextLines(
+  candidate: AuthErrorCandidate,
+  rawMessage: string,
+  sourceLabel: string,
+) {
+  const lines: string[] = [];
+
+  if (
+    sourceLabel === "المتصفح أو الشبكة" ||
+    sourceLabel === "Appwrite Platforms > Web" ||
+    sourceLabel === "Appwrite redirect URL" ||
+    isNetworkLikeAuthError(candidate, rawMessage)
+  ) {
+    lines.push(...readWebRuntimeContextLines());
+
+    if (APPWRITE_CONFIG.endpoint) {
+      lines.push(`Appwrite endpoint: ${APPWRITE_CONFIG.endpoint}`);
+    }
+
+    if (APPWRITE_CONFIG.projectId) {
+      lines.push(`Appwrite project: ${APPWRITE_CONFIG.projectId}`);
+    }
+  }
+
+  lines.push(
+    ...readWebPlatformOriginHintLines(candidate, rawMessage, sourceLabel),
+  );
+
+  return lines;
+}
+
+function readInvalidCredentialsHintLines(candidate: AuthErrorCandidate) {
+  const errorType =
+    typeof candidate.type === "string" ? candidate.type.trim() : "";
+
+  if (errorType !== "user_invalid_credentials") {
+    return [] as string[];
+  }
+
+  return [
+    "تأكد أنك تستخدم البريد الإلكتروني المسجل في Appwrite، وليس اسم المستخدم أو VAR ID.",
+    'إذا نسيت كلمة المرور فاستخدم "نسيت كلمة المرور".',
+  ];
+}
+
+function getAppwriteAuthErrorMessage(error: unknown, fallback: string) {
+  if (typeof error === "string") {
+    const rawMessage = error.trim();
+    return rawMessage
+      ? `${fallback}\nالرسالة الفعلية: ${rawMessage}`
+      : fallback;
+  }
+
+  if (!error || typeof error !== "object") {
+    return fallback;
+  }
+
+  const candidate = error as AuthErrorCandidate;
+  const rawMessage =
+    typeof candidate.message === "string" ? candidate.message.trim() : "";
+  const lines = [fallback];
+  const sourceLabel = readAuthErrorSourceLabel(candidate, rawMessage);
+
+  if (sourceLabel) {
+    lines.push(`المصدر: ${sourceLabel}`);
+  }
+
+  if (
+    typeof candidate.code === "number" ||
+    typeof candidate.code === "string"
+  ) {
+    lines.push(`الكود: ${String(candidate.code)}`);
+  }
+
+  if (typeof candidate.type === "string" && candidate.type.trim()) {
+    lines.push(`النوع: ${candidate.type.trim()}`);
+  }
+
+  if (typeof candidate.name === "string" && candidate.name.trim()) {
+    lines.push(`الفئة: ${candidate.name.trim()}`);
+  }
+
+  if (rawMessage) {
+    lines.push(`الرسالة الفعلية: ${rawMessage}`);
+  }
+
+  if (
+    candidate.type === "project_not_found" ||
+    rawMessage.toLowerCase().includes("project with the requested id could not be found")
+  ) {
+    lines.push(
+      "الحل: افتح Appwrite Console → Project Settings → General وانسخ Project ID الحقيقي إلى EXPO_PUBLIC_APPWRITE_PROJECT_ID داخل ملف .env ثم أعد تشغيل npm run web.",
+    );
+  }
+
+  lines.push(...readInvalidCredentialsHintLines(candidate));
+  lines.push(...readAuthErrorResponseLines(candidate.response));
+  lines.push(...readAuthErrorContextLines(candidate, rawMessage, sourceLabel));
+
+  return lines.join("\n");
+}
+
+function normalizeSignupUsername(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^@+/, "")
+    .replace(/[^a-z0-9._]/g, "");
+}
+
+function isValidLoginEmail(value: string) {
+  return LOGIN_EMAIL_PATTERN.test(value.trim().toLowerCase());
+}
+
+function hasValidDisplayName(value: string) {
+  const trimmedValue = value.trim();
+
+  if (!FULL_NAME_PATTERN.test(trimmedValue)) {
+    return false;
+  }
+
+  return trimmedValue.replace(/\s+/g, "").length >= 2;
+}
+
+function hasStrongPassword(value: string) {
+  return /^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(value);
+}
 
 function getApplePayAccountLabel(email: string) {
   const trimmedEmail = email.trim();
@@ -53,15 +365,30 @@ function getBiometricLabel(
 }
 
 export default function AuthScreen(props: AuthScreenProps) {
-  const { authMode, onChangeMode, onSuccess } = props;
+  const { authMode, onChangeMode, onStartGoogleLogin, onSuccess } = props;
+  const { height: windowHeight } = useWindowDimensions();
   const [audioOn, setAudioOn] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
   const [message, setMessage] = useState("");
+  const [isAuthBusy, setIsAuthBusy] = useState(false);
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
+  const [recoveryView, setRecoveryView] =
+    useState<PasswordRecoveryView>("request");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryPassword, setRecoveryPassword] = useState("");
+  const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState("");
+  const [showRecoveryPassword, setShowRecoveryPassword] = useState(false);
+  const [showRecoveryConfirm, setShowRecoveryConfirm] = useState(false);
+  const [recoveryUserId, setRecoveryUserId] = useState("");
+  const [recoverySecret, setRecoverySecret] = useState("");
+  const [recoveryMessage, setRecoveryMessage] = useState("");
+  const [isRecoveryBusy, setIsRecoveryBusy] = useState(false);
   const [isVarPassActionBusy, setIsVarPassActionBusy] = useState(false);
   const [isVarPassStepOpen, setIsVarPassStepOpen] = useState(false);
   const [isVarPassStepArmed, setIsVarPassStepArmed] = useState(false);
@@ -119,6 +446,23 @@ export default function AuthScreen(props: AuthScreenProps) {
       : applePayConfirmState === "armed"
         ? "اضغط مرة ثانية الآن ليبدأ طلب Face ID أو المعاينة على الويب."
         : "الضغطة الأولى تجهز العملية، والثانية تحاكي تأكيد Apple Pay الحقيقي.";
+  const normalizedAdminCandidate = normalizeSignupUsername(username);
+
+  const loginWithEnteredCredentials = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!trimmedEmail || !password.trim()) {
+      throw new Error("أدخل بريد الحساب وكلمة المرور أولاً.");
+    }
+
+    if (!isValidLoginEmail(trimmedEmail)) {
+      throw new Error(
+        "تسجيل الدخول هنا يتم بالبريد الإلكتروني المسجل في Appwrite، وليس باسم المستخدم أو VAR ID. إذا كان اسم المستخدم لديك var فادخل البريد الذي أنشأت به الحساب.",
+      );
+    }
+
+    return loginAppwriteUser(trimmedEmail, password);
+  };
   const applePayStatusLabel =
     applePayConfirmState === "processing"
       ? "VERIFYING"
@@ -141,6 +485,7 @@ export default function AuthScreen(props: AuthScreenProps) {
     inputRange: [0, 1],
     outputRange: [0.12, 0],
   });
+  const isCompactAuthLayout = windowHeight < 860;
 
   useEffect(() => {
     return () => {
@@ -153,6 +498,26 @@ export default function AuthScreen(props: AuthScreenProps) {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const recoveryChallenge = readAppwriteRecoveryChallenge();
+
+    if (!recoveryChallenge) {
+      return;
+    }
+
+    onChangeMode("login");
+    setRecoveryView("reset");
+    setRecoveryUserId(recoveryChallenge.userId);
+    setRecoverySecret(recoveryChallenge.secret);
+    setRecoveryEmail(recoveryChallenge.email);
+    setRecoveryMessage("");
+    setRecoveryPassword("");
+    setRecoveryConfirmPassword("");
+    setShowRecoveryPassword(false);
+    setShowRecoveryConfirm(false);
+    setIsRecoveryModalOpen(true);
+  }, [onChangeMode]);
 
   useEffect(() => {
     if (!isVarPassStepOpen) {
@@ -268,8 +633,216 @@ export default function AuthScreen(props: AuthScreenProps) {
     introTitleTranslateY,
   ]);
 
-  const handleGoogleLogin = (_event: GestureResponderEvent) => {
-    setMessage("تم تجهيز تسجيل Google بصريًا داخل نسخة Expo.");
+  const handleGoogleLogin = async (_event: GestureResponderEvent) => {
+    setMessage("");
+    const configurationError = getAppwriteConfigurationError();
+
+    if (configurationError) {
+      setMessage(configurationError);
+      return;
+    }
+
+    setIsAuthBusy(true);
+
+    try {
+      onStartGoogleLogin?.();
+      await loginAppwriteWithGoogle();
+      setIsAuthBusy(false);
+    } catch (error) {
+      setMessage(
+        getAppwriteAuthErrorMessage(error, "تعذر بدء تسجيل الدخول عبر Google."),
+      );
+      setIsAuthBusy(false);
+    }
+  };
+
+  const handleEmailLogin = async () => {
+    setMessage("");
+    const configurationError = getAppwriteConfigurationError();
+
+    if (configurationError) {
+      setMessage(configurationError);
+      return;
+    }
+
+    setIsAuthBusy(true);
+
+    try {
+      const user = await loginWithEnteredCredentials();
+      onSuccess(user);
+    } catch (error) {
+      setMessage(getAppwriteAuthErrorMessage(error, "فشل تسجيل الدخول."));
+    } finally {
+      setIsAuthBusy(false);
+    }
+  };
+
+  const handleSignup = async () => {
+    const trimmedFullName = fullName.trim();
+    const trimmedEmail = email.trim().toLowerCase();
+    const normalizedUsername = normalizeSignupUsername(username);
+
+    if (
+      !trimmedFullName ||
+      !trimmedEmail ||
+      !normalizedUsername ||
+      !password.trim()
+    ) {
+      setMessage("أكمل البيانات أولاً.");
+      return;
+    }
+
+    if (!hasValidDisplayName(trimmedFullName)) {
+      setMessage("اكتب اسمًا صالحًا بدون أرقام أو رموز غريبة.");
+      return;
+    }
+
+    if (!USERNAME_PATTERN.test(normalizedUsername)) {
+      setMessage(
+        "اسم المستخدم يجب أن يكون 3-20 حرفًا إنجليزيًا أو أرقامًا أو نقطة أو _.",
+      );
+      return;
+    }
+
+    if (!hasStrongPassword(password)) {
+      setMessage(
+        "كلمة المرور يجب أن تكون 8 أحرف على الأقل وتحتوي على حرف ورقم.",
+      );
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setMessage("كلمتا المرور غير متطابقتين.");
+      return;
+    }
+
+    setMessage("");
+    setIsAuthBusy(true);
+
+    try {
+      const user = await signupAppwriteUser({
+        name: trimmedFullName,
+        email: trimmedEmail,
+        password,
+        username: normalizedUsername,
+      });
+      onSuccess(user);
+    } catch (error) {
+      setMessage(getAppwriteAuthErrorMessage(error, "فشل إنشاء الحساب."));
+    } finally {
+      setIsAuthBusy(false);
+    }
+  };
+
+  const openPasswordRecovery = () => {
+    const recoveryChallenge = readAppwriteRecoveryChallenge();
+
+    setRecoveryMessage("");
+    setShowRecoveryPassword(false);
+    setShowRecoveryConfirm(false);
+    setRecoveryPassword("");
+    setRecoveryConfirmPassword("");
+
+    if (recoveryChallenge) {
+      setRecoveryView("reset");
+      setRecoveryUserId(recoveryChallenge.userId);
+      setRecoverySecret(recoveryChallenge.secret);
+      setRecoveryEmail(recoveryChallenge.email || email.trim().toLowerCase());
+    } else {
+      setRecoveryView("request");
+      setRecoveryUserId("");
+      setRecoverySecret("");
+      setRecoveryEmail(email.trim().toLowerCase());
+    }
+
+    setIsRecoveryModalOpen(true);
+  };
+
+  const closePasswordRecovery = () => {
+    if (isRecoveryBusy) {
+      return;
+    }
+
+    setRecoveryMessage("");
+    setShowRecoveryPassword(false);
+    setShowRecoveryConfirm(false);
+    setRecoveryPassword("");
+    setRecoveryConfirmPassword("");
+    setIsRecoveryModalOpen(false);
+  };
+
+  const handleSendRecoveryLink = async () => {
+    const trimmedRecoveryEmail = recoveryEmail.trim().toLowerCase();
+
+    if (!trimmedRecoveryEmail) {
+      setRecoveryMessage("اكتب بريد الحساب أولاً.");
+      return;
+    }
+
+    setRecoveryMessage("");
+    setIsRecoveryBusy(true);
+
+    try {
+      await requestAppwritePasswordRecovery(trimmedRecoveryEmail);
+      setEmail(trimmedRecoveryEmail);
+      setRecoveryMessage(
+        "تم إرسال رابط استعادة كلمة المرور إلى بريدك. افتح الرسالة ثم عد عبر الرابط لتعيين كلمة مرور جديدة.",
+      );
+    } catch (error) {
+      setRecoveryMessage(
+        getAppwriteAuthErrorMessage(error, "فشل إرسال رابط الاستعادة."),
+      );
+    } finally {
+      setIsRecoveryBusy(false);
+    }
+  };
+
+  const handleCompleteRecovery = async () => {
+    if (!recoveryUserId || !recoverySecret) {
+      setRecoveryMessage(
+        "رابط الاستعادة الحالي غير مكتمل. اطلب رابطًا جديدًا.",
+      );
+      return;
+    }
+
+    if (!hasStrongPassword(recoveryPassword)) {
+      setRecoveryMessage(
+        "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل وتحتوي على حرف ورقم.",
+      );
+      return;
+    }
+
+    if (recoveryPassword !== recoveryConfirmPassword) {
+      setRecoveryMessage("كلمتا المرور الجديدتان غير متطابقتين.");
+      return;
+    }
+
+    setRecoveryMessage("");
+    setIsRecoveryBusy(true);
+
+    try {
+      await completeAppwritePasswordRecovery(
+        recoveryUserId,
+        recoverySecret,
+        recoveryPassword,
+      );
+
+      clearAppwriteRecoveryChallenge();
+      setPassword("");
+      setRecoveryPassword("");
+      setRecoveryConfirmPassword("");
+      setRecoveryUserId("");
+      setRecoverySecret("");
+      setIsRecoveryModalOpen(false);
+      onChangeMode("login");
+      setMessage("تم تحديث كلمة المرور. سجل دخولك الآن بكلمة المرور الجديدة.");
+    } catch (error) {
+      setRecoveryMessage(
+        getAppwriteAuthErrorMessage(error, "فشل تحديث كلمة المرور."),
+      );
+    } finally {
+      setIsRecoveryBusy(false);
+    }
   };
 
   const clearApplePayConfirmTimeout = () => {
@@ -353,6 +926,8 @@ export default function AuthScreen(props: AuthScreenProps) {
     setIsVarPassActionBusy(true);
 
     try {
+      const appwriteUserPromise = loginWithEnteredCredentials();
+
       await triggerHaptic("impact");
 
       if (Platform.OS === "ios") {
@@ -399,20 +974,22 @@ export default function AuthScreen(props: AuthScreenProps) {
         }
 
         closeVarPassStep();
+        const user = await appwriteUserPromise;
         await triggerHaptic("success");
-        setMessage(`تم تأكيد Apple Pay عبر ${biometricLabel}.`);
-        onSuccess();
+        onSuccess(user);
         return;
       }
 
       await new Promise((resolve) => setTimeout(resolve, 950));
       closeVarPassStep();
+      const user = await appwriteUserPromise;
       await triggerHaptic("success");
-      setMessage("تمت محاكاة Apple Pay داخل الويب، وتم تسجيل الدخول.");
-      onSuccess();
-    } catch {
+      onSuccess(user);
+    } catch (error) {
       closeVarPassStep();
-      setMessage("تعذر إكمال تأكيد Apple Pay الآن.");
+      setMessage(
+        getAppwriteAuthErrorMessage(error, "فشل إكمال تأكيد Apple Pay."),
+      );
     } finally {
       setApplePayConfirmState("idle");
       setIsVarPassActionBusy(false);
@@ -422,12 +999,20 @@ export default function AuthScreen(props: AuthScreenProps) {
   return (
     <ScrollView
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.authScreenContent}
+      contentContainerStyle={[
+        styles.authScreenContent,
+        isCompactAuthLayout ? styles.authScreenContentCompact : null,
+      ]}
     >
       <ScanlineOverlay />
 
       {authMode === "login" ? (
-        <View style={styles.authSurface}>
+        <View
+          style={[
+            styles.authSurface,
+            isCompactAuthLayout ? styles.authSurfaceCompact : null,
+          ]}
+        >
           {showLoginIntro ? (
             <Animated.View
               style={[
@@ -508,9 +1093,10 @@ export default function AuthScreen(props: AuthScreenProps) {
           </View>
 
           <NeonField
-            placeholder="Email"
+            placeholder="Appwrite Email"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(value) => setEmail(value.trim().toLowerCase())}
+            keyboardType="email-address"
           />
           <NeonField
             placeholder="Password"
@@ -521,14 +1107,22 @@ export default function AuthScreen(props: AuthScreenProps) {
             onIconPress={() => setShowPassword((value) => !value)}
           />
 
+          <Text style={styles.loginHintText}>
+            الدخول هنا ببريد Appwrite فقط. اسم المستخدم مثل var أو VAR ID لا
+            يعملان في هذه الخانة.
+          </Text>
+
           <Pressable
-            style={styles.neonPrimaryButton}
-            onPress={() => {
-              setMessage("تمت المصادقة محليًا داخل نسخة Expo.");
-              onSuccess();
-            }}
+            style={[
+              styles.neonPrimaryButton,
+              isAuthBusy ? styles.neonButtonDisabled : null,
+            ]}
+            onPress={handleEmailLogin}
+            disabled={isAuthBusy}
           >
-            <Text style={styles.neonPrimaryButtonText}>Login</Text>
+            <Text style={styles.neonPrimaryButtonText}>
+              {isAuthBusy ? "Connecting..." : "Login"}
+            </Text>
           </Pressable>
 
           <Pressable style={styles.neonGhostButton} onPress={handleGoogleLogin}>
@@ -546,10 +1140,12 @@ export default function AuthScreen(props: AuthScreenProps) {
           <Pressable
             style={[
               styles.neonGhostButton,
-              isVarPassActionBusy ? styles.neonGhostButtonDisabled : null,
+              isVarPassActionBusy || isAuthBusy
+                ? styles.neonGhostButtonDisabled
+                : null,
             ]}
             onPress={handleDigitalIdLogin}
-            disabled={isVarPassActionBusy}
+            disabled={isVarPassActionBusy || isAuthBusy}
           >
             <View style={styles.neonGhostButtonRow}>
               <Ionicons
@@ -569,11 +1165,7 @@ export default function AuthScreen(props: AuthScreenProps) {
           {message ? <Text style={styles.authMessage}>{message}</Text> : null}
 
           <View style={styles.authLinksRow}>
-            <Pressable
-              onPress={() =>
-                setMessage("تم تجهيز مسار استعادة محلي بشكل بصري فقط.")
-              }
-            >
+            <Pressable onPress={openPasswordRecovery}>
               <Text style={styles.authLinkText}>نسيت كلمة المرور</Text>
             </Pressable>
             <Pressable onPress={() => onChangeMode("signup")}>
@@ -680,23 +1272,25 @@ export default function AuthScreen(props: AuthScreenProps) {
                   <View style={styles.applePayFaceIdRow}>
                     <View style={styles.applePayFaceIdVisual}>
                       <Animated.View
-                        pointerEvents="none"
+                        {...getNativePointerEventsProps("none")}
                         style={[
                           styles.applePayFaceIdPulseRing,
                           {
                             opacity: applePayPulseOpacity,
                             transform: [{ scale: applePayPulseScale }],
                           },
+                          getWebPointerEventsStyle("none"),
                         ]}
                       />
                       <Animated.View
-                        pointerEvents="none"
+                        {...getNativePointerEventsProps("none")}
                         style={[
                           styles.applePayFaceIdPulseRingSecondary,
                           {
                             opacity: applePayPulseOpacitySecondary,
                             transform: [{ scale: applePayPulseScaleSecondary }],
                           },
+                          getWebPointerEventsStyle("none"),
                         ]}
                       />
 
@@ -791,7 +1385,12 @@ export default function AuthScreen(props: AuthScreenProps) {
           </Modal>
         </View>
       ) : (
-        <View style={styles.authSurface}>
+        <View
+          style={[
+            styles.authSurface,
+            isCompactAuthLayout ? styles.authSurfaceCompact : null,
+          ]}
+        >
           <View style={styles.signupStatusBar}>
             <View style={styles.signupStatusDot} />
             <Text style={styles.signupStatusText}>
@@ -813,11 +1412,22 @@ export default function AuthScreen(props: AuthScreenProps) {
             placeholder="Full Name"
             value={fullName}
             onChangeText={setFullName}
+            autoCapitalize="words"
+          />
+          <NeonField
+            placeholder="Username"
+            value={username}
+            onChangeText={(value) =>
+              setUsername(normalizeSignupUsername(value))
+            }
+            autoCapitalize="none"
+            maxLength={20}
           />
           <NeonField
             placeholder="Email"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(value) => setEmail(value.trim().toLowerCase())}
+            keyboardType="email-address"
           />
           <NeonField
             placeholder="Password"
@@ -836,27 +1446,31 @@ export default function AuthScreen(props: AuthScreenProps) {
             onIconPress={() => setShowConfirm((value) => !value)}
           />
 
+          <Text style={styles.signupHintText}>
+            التسجيل هنا بالإيميل وكلمة المرور، أو عبر Google عند ربطه. وإذا كان
+            هذا أول حساب إداري لك فاستخدم اسم المستخدم var.
+          </Text>
+
+          {normalizedAdminCandidate === VAR_ADMIN_USERNAME ? (
+            <Text style={styles.adminBootstrapHintText}>
+              هذا الحساب سيُعامل كحساب VAR الإداري داخل التطبيق.
+            </Text>
+          ) : null}
+
           <Pressable
-            style={styles.neonPrimaryButton}
-            onPress={() => {
-              if (!fullName.trim() || !email.trim() || !password.trim()) {
-                setMessage("أكمل البيانات أولاً.");
-                return;
-              }
-
-              if (password !== confirmPassword) {
-                setMessage("كلمتا المرور غير متطابقتين.");
-                return;
-              }
-
-              setMessage("تم إنشاء الحساب محليًا داخل نسخة Expo.");
-              onSuccess();
-            }}
+            style={[
+              styles.neonPrimaryButton,
+              isAuthBusy ? styles.neonButtonDisabled : null,
+            ]}
+            onPress={handleSignup}
+            disabled={isAuthBusy}
           >
-            <Text style={styles.neonPrimaryButtonText}>Create Account</Text>
+            <Text style={styles.neonPrimaryButtonText}>
+              {isAuthBusy ? "Creating..." : "Create Account"}
+            </Text>
           </Pressable>
 
-          <Pressable style={styles.neonGhostButton}>
+          <Pressable style={styles.neonGhostButton} onPress={handleGoogleLogin}>
             <Text style={styles.neonGhostButtonText}>G with Google</Text>
           </Pressable>
 
@@ -869,6 +1483,117 @@ export default function AuthScreen(props: AuthScreenProps) {
           </View>
         </View>
       )}
+
+      <Modal
+        visible={isRecoveryModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closePasswordRecovery}
+      >
+        <View style={styles.recoveryOverlay}>
+          <View style={styles.recoveryPanel}>
+            <Text style={styles.recoveryEyebrow}>
+              {recoveryView === "reset"
+                ? "[ RESET PASSWORD ]"
+                : "[ PASSWORD RECOVERY ]"}
+            </Text>
+            <Text style={styles.recoveryTitle}>
+              {recoveryView === "reset"
+                ? "تعيين كلمة مرور جديدة"
+                : "استعادة كلمة المرور"}
+            </Text>
+            <Text style={styles.recoverySubtitle}>
+              {recoveryView === "reset"
+                ? "أدخل كلمة مرور جديدة ثم أكمل الاستعادة من نفس هذا الرابط."
+                : "أدخل بريد حسابك وسنرسل لك رابط استعادة صالحًا لمدة ساعة."}
+            </Text>
+
+            {recoveryView === "reset" ? (
+              <>
+                {recoveryEmail ? (
+                  <Text style={styles.recoveryTargetText}>{recoveryEmail}</Text>
+                ) : null}
+
+                <NeonField
+                  placeholder="New Password"
+                  value={recoveryPassword}
+                  onChangeText={setRecoveryPassword}
+                  secureTextEntry={!showRecoveryPassword}
+                  icon={
+                    showRecoveryPassword ? "eye-off-outline" : "eye-outline"
+                  }
+                  onIconPress={() => setShowRecoveryPassword((value) => !value)}
+                />
+                <NeonField
+                  placeholder="Confirm New Password"
+                  value={recoveryConfirmPassword}
+                  onChangeText={setRecoveryConfirmPassword}
+                  secureTextEntry={!showRecoveryConfirm}
+                  icon={showRecoveryConfirm ? "eye-off-outline" : "eye-outline"}
+                  onIconPress={() => setShowRecoveryConfirm((value) => !value)}
+                />
+
+                <Text style={styles.recoveryMetaText}>
+                  استخدم كلمة مرور قوية تحتوي على حرف ورقم على الأقل.
+                </Text>
+
+                <Pressable
+                  style={[
+                    styles.neonPrimaryButton,
+                    isRecoveryBusy ? styles.neonButtonDisabled : null,
+                  ]}
+                  onPress={handleCompleteRecovery}
+                  disabled={isRecoveryBusy}
+                >
+                  <Text style={styles.neonPrimaryButtonText}>
+                    {isRecoveryBusy ? "Updating..." : "Update Password"}
+                  </Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <NeonField
+                  placeholder="Email"
+                  value={recoveryEmail}
+                  onChangeText={(value) =>
+                    setRecoveryEmail(value.trim().toLowerCase())
+                  }
+                  keyboardType="email-address"
+                />
+
+                <Text style={styles.recoveryMetaText}>
+                  سيصلك رابط إلى نفس واجهة التطبيق حتى تكمل تغيير كلمة المرور.
+                </Text>
+
+                <Pressable
+                  style={[
+                    styles.neonPrimaryButton,
+                    isRecoveryBusy ? styles.neonButtonDisabled : null,
+                  ]}
+                  onPress={handleSendRecoveryLink}
+                  disabled={isRecoveryBusy}
+                >
+                  <Text style={styles.neonPrimaryButtonText}>
+                    {isRecoveryBusy ? "Sending..." : "Send Recovery Link"}
+                  </Text>
+                </Pressable>
+              </>
+            )}
+
+            {recoveryMessage ? (
+              <Text style={styles.recoveryMessage}>{recoveryMessage}</Text>
+            ) : null}
+
+            <Pressable
+              style={styles.neonGhostButton}
+              onPress={closePasswordRecovery}
+              disabled={isRecoveryBusy}
+            >
+              <Text style={styles.neonGhostButtonText}>إغلاق</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -880,6 +1605,9 @@ function NeonField(props: {
   secureTextEntry?: boolean;
   icon?: IconName;
   onIconPress?: () => void;
+  keyboardType?: TextInputProps["keyboardType"];
+  autoCapitalize?: TextInputProps["autoCapitalize"];
+  maxLength?: number;
 }) {
   return (
     <View style={styles.neonFieldWrap}>
@@ -896,8 +1624,10 @@ function NeonField(props: {
         placeholderTextColor="rgba(0,255,107,0.5)"
         style={styles.neonFieldInput}
         secureTextEntry={props.secureTextEntry}
-        autoCapitalize="none"
+        autoCapitalize={props.autoCapitalize ?? "none"}
         autoCorrect={false}
+        keyboardType={props.keyboardType}
+        maxLength={props.maxLength}
         value={props.value}
         onChangeText={props.onChangeText}
       />
@@ -975,7 +1705,10 @@ function TerminalLine(props: { text: string; startDelay?: number }) {
 
 function ScanlineOverlay() {
   return (
-    <View pointerEvents="none" style={styles.scanlineOverlay}>
+    <View
+      {...getNativePointerEventsProps("none")}
+      style={[styles.scanlineOverlay, getWebPointerEventsStyle("none")]}
+    >
       {Array.from({ length: 22 }).map((_, index) => (
         <View key={index} style={[styles.scanline, { top: index * 28 }]} />
       ))}
@@ -983,13 +1716,18 @@ function ScanlineOverlay() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createCompatStyleSheet({
   authScreenContent: {
     minHeight: "100%",
     paddingHorizontal: 20,
     paddingTop: 82,
     paddingBottom: 130,
     justifyContent: "center",
+  },
+  authScreenContentCompact: {
+    paddingTop: 56,
+    paddingBottom: 220,
+    justifyContent: "flex-start",
   },
   authSurface: {
     minHeight: 640,
@@ -1000,6 +1738,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     paddingHorizontal: 20,
     paddingVertical: 24,
+  },
+  authSurfaceCompact: {
+    minHeight: 0,
+    paddingBottom: 34,
   },
   loginIntroOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1366,6 +2108,67 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontFamily: MONO_FONT,
   },
+  recoveryOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    backgroundColor: "rgba(0,0,0,0.78)",
+  },
+  recoveryPanel: {
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(0,255,107,0.22)",
+    backgroundColor: "rgba(0,0,0,0.94)",
+    paddingHorizontal: 20,
+    paddingVertical: 22,
+  },
+  recoveryEyebrow: {
+    color: "rgba(0,255,107,0.78)",
+    fontSize: 12,
+    fontWeight: "800",
+    fontFamily: MONO_FONT,
+    textAlign: "center",
+  },
+  recoveryTitle: {
+    color: "#00FF6B",
+    fontSize: 24,
+    fontWeight: "900",
+    fontFamily: MONO_FONT,
+    textAlign: "center",
+    marginTop: 12,
+  },
+  recoverySubtitle: {
+    color: "rgba(0,255,107,0.74)",
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
+    fontFamily: MONO_FONT,
+    marginTop: 10,
+    marginBottom: 16,
+  },
+  recoveryTargetText: {
+    color: "#F4C565",
+    fontSize: 13,
+    textAlign: "center",
+    fontFamily: MONO_FONT,
+    marginBottom: 12,
+  },
+  recoveryMetaText: {
+    color: "rgba(0,255,107,0.62)",
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+    fontFamily: MONO_FONT,
+    marginTop: 10,
+  },
+  recoveryMessage: {
+    color: "#00FF6B",
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+    fontFamily: MONO_FONT,
+    marginTop: 14,
+  },
   loginIntroGlow: {
     position: "absolute",
     width: 260,
@@ -1498,6 +2301,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,255,107,0.12)",
     marginTop: 10,
   },
+  neonButtonDisabled: {
+    opacity: 0.6,
+  },
   neonPrimaryButtonText: {
     color: "#00FF6B",
     fontSize: 18,
@@ -1527,6 +2333,30 @@ const styles = StyleSheet.create({
     color: "#00FF6B",
     fontSize: 18,
     fontFamily: MONO_FONT,
+  },
+  loginHintText: {
+    color: "rgba(0,255,107,0.62)",
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+    fontFamily: MONO_FONT,
+    marginTop: 8,
+  },
+  signupHintText: {
+    color: "rgba(0,255,107,0.72)",
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
+    fontFamily: MONO_FONT,
+    marginTop: 12,
+  },
+  adminBootstrapHintText: {
+    color: "#F4C565",
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
+    fontFamily: MONO_FONT,
+    marginTop: 8,
   },
   authMessage: {
     color: "#00FF6B",

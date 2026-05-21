@@ -3,12 +3,29 @@ import { Ionicons } from "@expo/vector-icons";
 
 export type GradientPair = [string, string];
 export type MainTab = "home" | "fans" | "leagues" | "account";
-export type Tab = MainTab | "chat";
+export type Tab = MainTab;
 export type HomeMode = "tiktok" | "x";
 export type AuthMode = "login" | "signup";
-export type LeagueTab = "events" | "lineup" | "poll" | null;
+export type LeagueTab = "events" | "lineup" | "predictions" | "live" | null;
 export type FanClubId = "hilal" | "nassr" | "ittihad";
 export type IconName = ComponentProps<typeof Ionicons>["name"];
+
+export type ChatMessage = {
+  id: string;
+  sender: string;
+  content: string;
+  time: string;
+  mine?: boolean;
+};
+
+export type PendingAuthIntent =
+  | { type: "open-x-post" }
+  | { type: "reply-post"; postId: number }
+  | { type: "toggle-post-like"; postId: number }
+  | { type: "toggle-post-repost"; postId: number }
+  | { type: "share-post"; postId: number }
+  | { type: "toggle-follow-author"; authorVarId: string }
+  | { type: "toggle-support"; clubId: FanClubId };
 
 export type Palette = {
   accent: string;
@@ -36,15 +53,42 @@ export type Video = {
 
 export type Post = {
   id: number;
+  sourceId?: string;
+  title?: string;
+  authorId?: string;
   author: string;
+  authorAvatarUri?: string;
+  authorVerified?: boolean;
   handle: string;
   time: string;
   content: string;
+  replyItems?: PostReply[];
   likes: number;
   replies: number;
   reposts: number;
   shares: number;
   likedByMe: boolean;
+  repostedByMe?: boolean;
+  sharedByMe?: boolean;
+};
+
+export type PostReply = {
+  id: number;
+  author: string;
+  authorAvatarUri?: string;
+  authorVerified?: boolean;
+  handle: string;
+  time: string;
+  content: string;
+};
+
+export type FollowingProfileCard = {
+  varId: string;
+  displayVarId: string;
+  displayName: string;
+  username: string;
+  avatarUri: string;
+  role: "admin" | "member";
 };
 
 export type FanClub = {
@@ -88,7 +132,33 @@ export type MatchEvent = {
   detail: string;
 };
 
+export type LockedPredictionSummary = {
+  id: string;
+  title: string;
+  choice: string;
+  competition: string;
+  status: string;
+  lockedAt: string;
+  pointsAwarded: number;
+};
+
+export type ProfileSocialMetrics = {
+  xPosts: number;
+  xLikes: number;
+  xReplies: number;
+  xReposts: number;
+  xShares: number;
+  tiktokUploads: number;
+  tiktokLikes: number;
+  tiktokComments: number;
+  tiktokSaves: number;
+  tiktokShares: number;
+  totalInteractions: number;
+};
+
 export type ProfileData = {
+  varId: string;
+  displayVarId: string;
   displayName: string;
   username: string;
   bio: string;
@@ -100,8 +170,12 @@ export type ProfileData = {
   birthDate: string;
   nationality: string;
   joinDate: string;
+  avatarUri: string;
   avatarFrameEnabled: boolean;
   isVerified: boolean;
+  earnedPoints: number;
+  lockedPredictions: LockedPredictionSummary[];
+  socialMetrics: ProfileSocialMetrics;
   walletPassAdded: boolean;
   walletPassUrl?: string;
 };
@@ -112,21 +186,4 @@ export type MetricTile = {
   value: string;
   color: string;
   icon: IconName;
-};
-
-export type ChatGroup = {
-  id: string;
-  name: string;
-  lastMessage: string;
-  time: string;
-  unread: number;
-  icon: IconName;
-};
-
-export type ChatMessage = {
-  id: string;
-  sender: string;
-  content: string;
-  time: string;
-  mine: boolean;
 };

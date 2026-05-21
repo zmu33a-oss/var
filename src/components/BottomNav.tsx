@@ -25,14 +25,15 @@ export default function BottomNav(props: BottomNavProps) {
   const chromeScale = Math.max(0.84, Math.min(1, layoutWidth / SHELL_WIDTH));
   const bottomItemMinHeight = Math.round(50 * chromeScale);
   const bottomLabelFontSize = Math.max(9, Math.round(10 * chromeScale));
-  const bottomIconSize = Math.round(17 * chromeScale);
+  const bottomIconSize = Math.round(20.33 * chromeScale);
+  const bottomIconFrameSize = Math.round(25.68 * chromeScale);
   const bottomBarRadius = Math.round(24 * chromeScale);
   const bottomBarPaddingHorizontal = Math.round(6 * chromeScale);
   const bottomBarPaddingVertical = Math.round(6 * chromeScale);
   const centerActionWidth = Math.round(88 * chromeScale);
   const centerActionHeight = Math.round(44 * chromeScale);
-  const centerActionIconWidth = Math.round(102 * chromeScale);
-  const centerActionIconHeight = Math.round(60 * chromeScale);
+  const centerActionIconWidth = Math.round(109.14 * chromeScale);
+  const centerActionIconHeight = Math.round(64.2 * chromeScale);
 
   return (
     <View
@@ -51,6 +52,7 @@ export default function BottomNav(props: BottomNavProps) {
         active={props.current === "account"}
         onPress={() => props.onSelect("account")}
         iconSize={bottomIconSize}
+        iconFrameSize={bottomIconFrameSize}
         labelSize={bottomLabelFontSize}
         minHeight={bottomItemMinHeight}
       />
@@ -60,6 +62,7 @@ export default function BottomNav(props: BottomNavProps) {
         active={props.current === "leagues"}
         onPress={() => props.onSelect("leagues")}
         iconSize={bottomIconSize}
+        iconFrameSize={bottomIconFrameSize}
         labelSize={bottomLabelFontSize}
         minHeight={bottomItemMinHeight}
       />
@@ -94,6 +97,7 @@ export default function BottomNav(props: BottomNavProps) {
         active={props.current === "fans"}
         onPress={() => props.onSelect("fans")}
         iconSize={bottomIconSize}
+        iconFrameSize={bottomIconFrameSize}
         labelSize={bottomLabelFontSize}
         minHeight={bottomItemMinHeight}
       />
@@ -103,6 +107,7 @@ export default function BottomNav(props: BottomNavProps) {
         active={props.current === "home"}
         onPress={() => props.onSelect("home")}
         iconSize={bottomIconSize}
+        iconFrameSize={bottomIconFrameSize}
         labelSize={bottomLabelFontSize}
         minHeight={bottomItemMinHeight}
       />
@@ -112,12 +117,13 @@ export default function BottomNav(props: BottomNavProps) {
 
 function BottomItem(props: {
   label: string;
-  icon: IconName;
   active: boolean;
   onPress: () => void;
   iconSize: number;
+  iconFrameSize: number;
   labelSize: number;
   minHeight: number;
+  icon?: IconName;
 }) {
   const iconColor = props.active ? "#FFFFFF" : "rgba(255,255,255,0.64)";
 
@@ -126,7 +132,18 @@ function BottomItem(props: {
       style={[styles.bottomItem, { minHeight: props.minHeight }]}
       onPress={props.onPress}
     >
-      <Ionicons name={props.icon} size={props.iconSize} color={iconColor} />
+      <View
+        style={[
+          styles.bottomItemIconFrame,
+          { width: props.iconFrameSize, height: props.iconFrameSize },
+        ]}
+      >
+        <Ionicons
+          name={props.icon ?? "ellipse-outline"}
+          size={props.iconSize}
+          color={iconColor}
+        />
+      </View>
       <Text
         style={[
           styles.bottomItemLabel,
@@ -157,11 +174,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  bottomItemIconFrame: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
   bottomItemLabel: {
     color: "rgba(255,255,255,0.64)",
     fontSize: 10,
     fontWeight: "700",
-    marginTop: 4,
+    marginTop: 3,
   },
   bottomItemLabelActive: {
     color: "#FFFFFF",

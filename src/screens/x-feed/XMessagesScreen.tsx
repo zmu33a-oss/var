@@ -1,9 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import SealCheckIcon from "../../components/SealCheckIcon";
-import type { MessageThreadEntry } from "./x-feed.types";
+import type { MessageThreadEntry, XNotificationEntry } from "./x-feed.types";
 
-export default function XMessagesScreen(props: {
+export function XMessagesScreen(props: {
   isLoggedIn: boolean;
   threads: MessageThreadEntry[];
   onOpenThread: (thread: MessageThreadEntry) => void;
@@ -114,7 +121,201 @@ export default function XMessagesScreen(props: {
   );
 }
 
+export function XNotificationsScreen(props: {
+  isLoggedIn: boolean;
+  notifications: Array<XNotificationEntry & { unread: boolean }>;
+  onClose: () => void;
+  onOpenNotification: (notification: XNotificationEntry) => void;
+  onRequireAuth: () => void;
+}) {
+  return (
+    <View style={styles.xDetailScreen}>
+      <View style={styles.xNotificationHeader}>
+        <Pressable style={styles.xDetailCloseButton} onPress={props.onClose}>
+          <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
+        </Pressable>
+
+        <View style={styles.xNotificationHeaderTextBlock}>
+          <Text style={styles.xNotificationHeaderTitle}>الإشعارات</Text>
+          <Text style={styles.xNotificationHeaderSubtitle}>
+            {!props.isLoggedIn
+              ? "سجل الدخول لعرض الإشعارات المرتبطة بالرسائل والردود والنشاط داخل X."
+              : props.notifications.length
+                ? `${props.notifications.length} تحديث داخل X بين الرسائل والردود والنشاط.`
+                : "أي رسالة خاصة أو رد أو نشاط جديد داخل X سيظهر هنا تلقائيًا."}
+          </Text>
+        </View>
+
+        <View style={styles.xNotificationHeaderBadge}>
+          <Ionicons name="notifications-outline" size={18} color="#FFFFFF" />
+        </View>
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={styles.xDetailScrollArea}
+        contentContainerStyle={styles.xNotificationContent}
+      >
+        {!props.isLoggedIn ? (
+          <View style={styles.xMessagesEmptyCard}>
+            <Text style={styles.xMessagesEmptyTitle}>سجل الدخول أولاً</Text>
+            <Text style={styles.xMessagesEmptyText}>
+              افتح الإشعارات بعد تسجيل الدخول لتصلك الرسائل الخاصة والردود وكل
+              نشاط جديد داخل صفحة X.
+            </Text>
+            <Pressable
+              style={styles.xFollowingAuthButton}
+              onPress={props.onRequireAuth}
+            >
+              <Text style={styles.xFollowingAuthButtonText}>تسجيل الدخول</Text>
+            </Pressable>
+          </View>
+        ) : props.notifications.length ? (
+          props.notifications.map((notification) => (
+            <Pressable
+              key={notification.id}
+              style={[
+                styles.xNotificationCard,
+                notification.unread ? styles.xNotificationCardUnread : null,
+              ]}
+              onPress={() => props.onOpenNotification(notification)}
+            >
+              <View style={styles.xNotificationCardHeader}>
+                {notification.avatarUri ? (
+                  <View style={styles.xNotificationAvatarWrap}>
+                    <Image
+                      source={{ uri: notification.avatarUri }}
+                      style={styles.xNotificationAvatarImage}
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.xNotificationIconWrap}>
+                    <Ionicons
+                      name={notification.iconName}
+                      size={18}
+                      color={notification.accentColor}
+                    />
+                  </View>
+                )}
+
+                <View style={styles.xNotificationTextBlock}>
+                  <View style={styles.xNotificationTitleRow}>
+                    <Text style={styles.xNotificationTitle}>
+                      {notification.title}
+                    </Text>
+                    {notification.verified ? (
+                      <SealCheckIcon
+                        size={13}
+                        style={styles.xNotificationVerifiedIcon}
+                      />
+                    ) : null}
+                    {notification.unread ? (
+                      <View style={styles.xNotificationUnreadDot} />
+                    ) : null}
+                  </View>
+
+                  <Text numberOfLines={2} style={styles.xNotificationBody}>
+                    {notification.body}
+                  </Text>
+
+                  <View style={styles.xNotificationMetaRow}>
+                    <Text
+                      style={[
+                        styles.xNotificationTime,
+                        { color: notification.accentColor },
+                      ]}
+                    >
+                      {notification.timeLabel}
+                    </Text>
+                    <Ionicons
+                      name={notification.iconName}
+                      size={12}
+                      color={notification.accentColor}
+                    />
+                  </View>
+                </View>
+              </View>
+            </Pressable>
+          ))
+        ) : (
+          <View style={styles.xMessagesEmptyCard}>
+            <Text style={styles.xMessagesEmptyTitle}>لا توجد إشعارات بعد</Text>
+            <Text style={styles.xMessagesEmptyText}>
+              عندما ترسل رسالة خاصة أو يصل رد جديد أو يظهر نشاط على منشوراتك
+              ستجده هنا مباشرة.
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  xDetailScreen: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  xDetailCloseButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  xDetailScrollArea: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  xAvatarTiny: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1A8CD8",
+  },
+  xAvatarTinyImage: {
+    width: "100%",
+    height: "100%",
+  },
+  xAvatarTinyText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  xVerifiedIcon: {
+    marginLeft: 4,
+    marginRight: 0,
+  },
+  xPostMetaLine: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  xPostAuthor: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+    marginLeft: 3,
+  },
+  xPostHandle: {
+    color: "rgba(255,255,255,0.54)",
+    fontSize: 13,
+    fontWeight: "600",
+    marginLeft: 6,
+  },
+  xPostTime: {
+    color: "rgba(255,255,255,0.54)",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  xPostDot: {
+    color: "rgba(255,255,255,0.42)",
+    fontSize: 14,
+    marginLeft: 6,
+  },
   xMessagesSection: {
     paddingTop: 6,
     paddingBottom: 10,
@@ -219,53 +420,129 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
   },
-  xAvatarTiny: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    overflow: "hidden",
+  xNotificationHeader: {
+    paddingTop: 56,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "#000000",
+  },
+  xNotificationHeaderBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#1A8CD8",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
-  xAvatarTinyImage: {
+  xNotificationHeaderTextBlock: {
+    flex: 1,
+    marginHorizontal: 12,
+    alignItems: "flex-end",
+  },
+  xNotificationHeaderTitle: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  xNotificationHeaderSubtitle: {
+    color: "rgba(255,255,255,0.62)",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 20,
+    textAlign: "right",
+    marginTop: 6,
+  },
+  xNotificationContent: {
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+  xNotificationCard: {
+    backgroundColor: "#000000",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.12)",
+    paddingHorizontal: 16,
+    paddingTop: 15,
+    paddingBottom: 15,
+  },
+  xNotificationCardUnread: {
+    backgroundColor: "rgba(255,255,255,0.02)",
+  },
+  xNotificationCardHeader: {
+    flexDirection: "row-reverse",
+    alignItems: "flex-start",
+  },
+  xNotificationAvatarWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  xNotificationAvatarImage: {
     width: "100%",
     height: "100%",
   },
-  xAvatarTinyText: {
+  xNotificationIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  xNotificationTextBlock: {
+    flex: 1,
+    marginRight: 12,
+    alignItems: "flex-end",
+  },
+  xNotificationTitleRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+  },
+  xNotificationTitle: {
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "900",
+    textAlign: "right",
   },
-  xVerifiedIcon: {
-    marginLeft: 4,
-    marginRight: 0,
+  xNotificationVerifiedIcon: {
+    marginLeft: 6,
   },
-  xPostMetaLine: {
+  xNotificationUnreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: "#1D9BF0",
+    marginLeft: 8,
+  },
+  xNotificationBody: {
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 21,
+    textAlign: "right",
+    marginTop: 8,
+  },
+  xNotificationMetaRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    flexWrap: "wrap",
+    marginTop: 10,
   },
-  xPostAuthor: {
-    color: "#FFFFFF",
-    fontSize: 15,
+  xNotificationTime: {
+    fontSize: 11,
     fontWeight: "800",
-    marginLeft: 3,
-  },
-  xPostHandle: {
-    color: "rgba(255,255,255,0.54)",
-    fontSize: 13,
-    fontWeight: "600",
-    marginLeft: 6,
-  },
-  xPostTime: {
-    color: "rgba(255,255,255,0.54)",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  xPostDot: {
-    color: "rgba(255,255,255,0.42)",
-    fontSize: 14,
-    marginLeft: 6,
+    textAlign: "right",
+    marginRight: 6,
   },
 });

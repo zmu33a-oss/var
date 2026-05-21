@@ -7,7 +7,11 @@
     "userInterfaceStyle": "dark",
     "assetBundlePatterns": ["**/*"],
     "ios": {
+      "bundleIdentifier": "com.xtik.webplus",
       "supportsTablet": true
+    },
+    "android": {
+      "package": "com.xtik.webplus"
     },
     "web": {
       "bundler": "metro"

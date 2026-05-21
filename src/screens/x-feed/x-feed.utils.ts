@@ -1,5 +1,14 @@
 import type { AppwriteDirectMessageRecord } from "../../lib/appwrite";
-import type { MessageThreadEntry, MessageThreadProfileLike, PrivateMessageEntry } from "./x-feed.types";
+import { normalizeAuthorId } from "../../appshell/appshell.helpers";
+import type { Post } from "../../app.types";
+import type {
+  HashtagTrendEntry,
+  MessageThreadEntry,
+  MessageThreadProfileLike,
+  PrivateMessageEntry,
+} from "./x-feed.types";
+
+export const HASHTAG_PATTERN = /#[A-Za-z0-9_\u0600-\u06FF]+/g;
 
 export function buildMessageThreadEntry(
   profile: MessageThreadProfileLike,
@@ -34,9 +43,10 @@ export function buildMessageThreadEntry(
   };
 }
 
-export const HASHTAG_PATTERN = /#[A-Za-z0-9_\u0600-\u06FF]+/g;
-
-export function buildComposerDisplayVarId(displayVarId: string, authorId: string) {
+export function buildComposerDisplayVarId(
+  displayVarId: string,
+  authorId: string,
+) {
   const normalizedDisplayVarId = displayVarId.trim();
 
   if (normalizedDisplayVarId) {
@@ -113,17 +123,114 @@ export function formatPrivateMessageTimeLabel(createdAt: string) {
   return new Date(parsedDate).toLocaleDateString("ar-SA");
 }
 
+export function buildTrendingHashtags(posts: Post[]): HashtagTrendEntry[] {
+  const hashtagMap = new Map<string, HashtagTrendEntry>();
+
+  const registerHashtagSource = (
+    text: string,
+    order: number,
+    contextLabel: string,
+    anchorPost: Post,
+  ) => {
+    const matches = extractHashtags(text);
+
+    if (!matches.length) {
+      return;
+    }
+
+    const snippet = compactHashtagSnippet(text);
+    const mentionsByKey = new Map<string, { label: string; count: number }>();
+
+    matches.forEach((match) => {
+      const normalizedKey = normalizeHashtagKey(match);
+      const existingMention = mentionsByKey.get(normalizedKey);
+
+      if (existingMention) {
+        existingMention.count += 1;
+        return;
+      }
+
+      mentionsByKey.set(normalizedKey, { label: match, count: 1 });
+    });
+
+    mentionsByKey.forEach((mentionData, normalizedKey) => {
+      const existingEntry = hashtagMap.get(normalizedKey);
+
+      if (!existingEntry) {
+        hashtagMap.set(normalizedKey, {
+          key: normalizedKey,
+          label: mentionData.label,
+          itemCount: 1,
+          mentionsTotal: mentionData.count,
+          latestContextLabel: contextLabel,
+          latestSnippet: snippet,
+          order,
+          anchorPost,
+        });
+        return;
+      }
+
+      existingEntry.itemCount += 1;
+      existingEntry.mentionsTotal += mentionData.count;
+
+      if (order < existingEntry.order) {
+        existingEntry.label = mentionData.label;
+        existingEntry.latestContextLabel = contextLabel;
+        existingEntry.latestSnippet = snippet;
+        existingEntry.order = order;
+        existingEntry.anchorPost = anchorPost;
+      }
+    });
+  };
+
+  posts.forEach((post, postIndex) => {
+    const postSourceText = [post.title?.trim(), post.content.trim()]
+      .filter(Boolean)
+      .join(" ");
+
+    registerHashtagSource(
+      postSourceText,
+      postIndex * 100,
+      `منشور · ${post.time}`,
+      post,
+    );
+
+    (post.replyItems ?? []).forEach((reply, replyIndex) => {
+      registerHashtagSource(
+        reply.content,
+        postIndex * 100 + replyIndex + 1,
+        `رد ${reply.author} · ${reply.time}`,
+        post,
+      );
+    });
+  });
+
+  return [...hashtagMap.values()].sort((left, right) => {
+    if (right.itemCount !== left.itemCount) {
+      return right.itemCount - left.itemCount;
+    }
+
+    if (right.mentionsTotal !== left.mentionsTotal) {
+      return right.mentionsTotal - left.mentionsTotal;
+    }
+
+    return left.order - right.order;
+  });
+}
+
 export function buildPrivateMessageEntry(
   record: AppwriteDirectMessageRecord,
   currentUserVarId: string,
 ): PrivateMessageEntry {
-  const normalizedCurrentUserVarId = currentUserVarId.trim();
-  const normalizedSenderVarId = record.senderVarId.trim();
-  const normalizedCreatedAt = record.createdAt.trim() || new Date().toISOString();
+  const normalizedCurrentUserVarId = normalizeAuthorId(currentUserVarId);
+  const normalizedSenderVarId = normalizeAuthorId(record.senderVarId);
+  const normalizedCreatedAt =
+    record.createdAt.trim() || new Date().toISOString();
 
   return {
     id: record.id,
-    sender: normalizedSenderVarId === normalizedCurrentUserVarId ? "me" : "peer",
+    sender:
+      normalizedSenderVarId === normalizedCurrentUserVarId ? "me" : "peer",
     content: record.content.trim(),
     timeLabel: formatPrivateMessageTimeLabel(normalizedCreatedAt),
     createdAt: normalizedCreatedAt,

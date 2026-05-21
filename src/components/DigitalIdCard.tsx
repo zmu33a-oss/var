@@ -1,6 +1,5 @@
 import { Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   Pressable,
@@ -11,6 +10,11 @@ import {
   type LayoutChangeEvent,
 } from "react-native";
 import type { IconName } from "../app.types";
+import {
+  createCompatStyleSheet,
+  getNativePointerEventsProps,
+  getWebPointerEventsStyle,
+} from "../lib/crossPlatformStyles";
 
 type DigitalIdCardProps = {
   onPress: () => void;
@@ -64,14 +68,6 @@ export default function DigitalIdCard(props: DigitalIdCardProps) {
     swipePanHandlers,
     swipeHintLabel,
   } = props;
-  const holderInitials =
-    holderName
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase() ?? "")
-      .join("") || "XT";
 
   return (
     <Pressable
@@ -84,12 +80,18 @@ export default function DigitalIdCard(props: DigitalIdCardProps) {
       ]}
     >
       <View style={[styles.shadowWrap, styles.cardShell]}>
+        <LinearGradient
+          colors={["#0F766E", "#0B1823", "#05080F"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
         <View style={styles.glassOrbPrimary} />
         <View style={styles.glassOrbSecondary} />
         <LinearGradient
           colors={[
-            "rgba(255,255,255,0.36)",
-            "rgba(255,255,255,0.12)",
+            "rgba(255,255,255,0.18)",
+            "rgba(255,255,255,0.05)",
             "rgba(255,255,255,0.04)",
           ]}
           start={{ x: 0, y: 0 }}
@@ -98,23 +100,8 @@ export default function DigitalIdCard(props: DigitalIdCardProps) {
         />
         <LinearGradient
           colors={[
-            "rgba(255,255,255,0.22)",
-            "rgba(255,255,255,0.08)",
-            "rgba(255,255,255,0.03)",
-          ]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-        <BlurView
-          intensity={42}
-          tint="dark"
-          style={StyleSheet.absoluteFillObject}
-        />
-        <LinearGradient
-          colors={[
-            "rgba(255,255,255,0.20)",
-            "rgba(255,255,255,0.03)",
+            "rgba(255,255,255,0.10)",
+            "rgba(255,255,255,0.02)",
             "rgba(255,255,255,0.00)",
           ]}
           start={{ x: 0.08, y: 0.02 }}
@@ -123,35 +110,19 @@ export default function DigitalIdCard(props: DigitalIdCardProps) {
         />
 
         <View style={styles.content}>
-          <View style={styles.topRow}>
-            <View style={styles.brandRow}>
-              <View style={styles.iconBubble}>
-                <Ionicons name="logo-apple" size={18} color="#FFFFFF" />
-              </View>
-              <View style={styles.brandCopy}>
-                <Text style={styles.brandKicker}>APPLE WALLET ID</Text>
-                <Text style={styles.brandTitle}>Xtik Pass</Text>
-              </View>
-            </View>
-
-            <View style={styles.verifiedPill}>
-              <Ionicons
-                name="checkmark-circle"
-                size={14}
-                color="#FFFFFF"
-                style={styles.verifiedIcon}
-              />
-              <Text style={styles.verifiedText}>FACE ID</Text>
-            </View>
-          </View>
-
           <View style={styles.statusRow}>
             <View style={styles.badgesRow}>
               <View style={styles.goldBadge}>
+                <Ionicons
+                  name="card-outline"
+                  size={14}
+                  color="rgba(255,255,255,0.88)"
+                  style={styles.goldBadgeIcon}
+                />
                 <Text style={styles.goldBadgeText}>APPLE PASS</Text>
               </View>
               <View style={[styles.mutedBadge, styles.badgeSpacing]}>
-                <Text style={styles.mutedBadgeText}>WALLET NATIVE</Text>
+                <Text style={styles.mutedBadgeText}>PROFILE ID</Text>
               </View>
             </View>
 
@@ -163,26 +134,8 @@ export default function DigitalIdCard(props: DigitalIdCardProps) {
 
           <View style={styles.identityRow}>
             <View style={styles.holderColumn}>
-              <View style={styles.avatarWrap}>
-                <LinearGradient
-                  colors={["#E9EDF4", "#C4CCD8", "#8C96A6"]}
-                  start={{ x: 0.1, y: 0.1 }}
-                  end={{ x: 0.9, y: 0.9 }}
-                  style={styles.avatarFill}
-                >
-                  <Text style={styles.avatarInitials}>{holderInitials}</Text>
-                </LinearGradient>
-                <View style={styles.avatarStatusBadge}>
-                  <Ionicons name="checkmark" size={10} color="#09111C" />
-                </View>
-              </View>
-
               <Text style={styles.holderName}>{holderName}</Text>
               <Text style={styles.holderHandle}>{holderHandle}</Text>
-
-              <View style={styles.codePill}>
-                <Text style={styles.codeText}>{idCode}</Text>
-              </View>
             </View>
 
             <View style={styles.qrColumn}>
@@ -193,11 +146,16 @@ export default function DigitalIdCard(props: DigitalIdCardProps) {
             </View>
           </View>
 
+          <View style={styles.codeBlock}>
+            <Text style={styles.codeLabel}>VAR ID</Text>
+            <Text style={styles.codeText}>{idCode}</Text>
+          </View>
+
           {swipeEnabled ? (
             <View style={styles.swipeTrack} onLayout={onSwipeLayout}>
               <View style={styles.swipeTrackTextRow}>
                 <Ionicons
-                  name="logo-apple"
+                  name="card-outline"
                   size={15}
                   color="rgba(255,255,255,0.96)"
                 />
@@ -206,7 +164,13 @@ export default function DigitalIdCard(props: DigitalIdCardProps) {
                 </Text>
               </View>
 
-              <View pointerEvents="none" style={styles.swipeTrailIcons}>
+              <View
+                {...getNativePointerEventsProps("none")}
+                style={[
+                  styles.swipeTrailIcons,
+                  getWebPointerEventsStyle("none"),
+                ]}
+              >
                 <Ionicons
                   name="chevron-forward"
                   size={14}
@@ -268,7 +232,7 @@ export default function DigitalIdCard(props: DigitalIdCardProps) {
                   ctaArrowOnRight ? styles.ctaTextRowInline : null,
                 ]}
               >
-                <Ionicons name="logo-apple" size={18} color="#FFFFFF" />
+                <Ionicons name="card-outline" size={18} color="#FFFFFF" />
                 <Text style={styles.ctaText}>
                   {authenticating ? busyLabel : ctaLabel}
                 </Text>
@@ -320,7 +284,7 @@ function DigitalIdQrMatrix() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createCompatStyleSheet({
   pressable: {
     width: "100%",
   },
@@ -332,111 +296,53 @@ const styles = StyleSheet.create({
   },
   shadowWrap: {
     shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 22 },
-    shadowOpacity: 0.28,
-    shadowRadius: 34,
-    elevation: 22,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.24,
+    shadowRadius: 24,
+    elevation: 18,
   },
   cardShell: {
     overflow: "hidden",
-    borderRadius: 32,
+    borderRadius: 28,
   },
   glassOrbPrimary: {
     position: "absolute",
-    top: -48,
+    top: -24,
     left: -18,
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: "rgba(255,255,255,0.16)",
+    width: 148,
+    height: 148,
+    borderRadius: 74,
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   glassOrbSecondary: {
     position: "absolute",
-    bottom: -64,
-    right: -28,
+    bottom: -92,
+    right: -36,
     width: 210,
     height: 210,
     borderRadius: 105,
-    backgroundColor: "rgba(202,214,234,0.08)",
+    backgroundColor: "rgba(15,118,110,0.20)",
   },
   edgeStroke: {
     ...StyleSheet.absoluteFillObject,
-    opacity: 0.7,
+    opacity: 0.9,
   },
   topSheen: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    height: 160,
+    height: 120,
   },
   content: {
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.28)",
-    backgroundColor: "rgba(24,31,43,0.56)",
-    paddingHorizontal: 22,
-    paddingVertical: 22,
-  },
-  topRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  brandRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    flexShrink: 1,
-  },
-  iconBubble: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.24)",
-  },
-  brandCopy: {
-    marginRight: 12,
-    alignItems: "flex-end",
-  },
-  brandKicker: {
-    color: "rgba(255,255,255,0.64)",
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    textAlign: "right",
-  },
-  brandTitle: {
-    marginTop: 4,
-    color: "#FFFFFF",
-    fontSize: 24,
-    fontWeight: "900",
-    letterSpacing: 0.2,
-    textAlign: "right",
-  },
-  verifiedPill: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  verifiedIcon: {
-    marginLeft: 6,
-  },
-  verifiedText: {
-    color: "rgba(255,255,255,0.82)",
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "transparent",
+    paddingHorizontal: 18,
+    paddingVertical: 18,
   },
   statusRow: {
-    marginTop: 16,
+    marginTop: 0,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
@@ -446,12 +352,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   goldBadge: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
+    borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.11)",
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
+  },
+  goldBadgeIcon: {
+    marginLeft: 6,
   },
   goldBadgeText: {
     color: "#FFFFFF",
@@ -462,7 +373,7 @@ const styles = StyleSheet.create({
   mutedBadge: {
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -500,86 +411,38 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   identityRow: {
-    marginTop: 20,
+    marginTop: 22,
     flexDirection: "row-reverse",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "space-between",
   },
   holderColumn: {
     flex: 1,
     alignItems: "flex-end",
-  },
-  avatarWrap: {
-    width: 74,
-    height: 74,
-    borderRadius: 24,
-    alignItems: "center",
+    minHeight: 92,
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.26)",
-    backgroundColor: "rgba(255,255,255,0.10)",
-    overflow: "hidden",
-  },
-  avatarFill: {
-    width: "100%",
-    height: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarInitials: {
-    color: "#16202B",
-    fontSize: 26,
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
-  avatarStatusBadge: {
-    position: "absolute",
-    left: 6,
-    bottom: 6,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
   },
   holderName: {
-    marginTop: 16,
     color: "#FFFFFF",
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "900",
     textAlign: "right",
   },
   holderHandle: {
     marginTop: 4,
     color: "rgba(255,255,255,0.72)",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "800",
     textAlign: "right",
   },
-  codePill: {
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  codeText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1,
-  },
   qrColumn: {
     alignItems: "center",
-    marginRight: 16,
+    marginRight: 14,
   },
   qrPanel: {
-    borderRadius: 22,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.24)",
+    borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.96)",
     padding: 12,
   },
@@ -590,15 +453,39 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 1,
   },
+  codeBlock: {
+    alignSelf: "stretch",
+    marginTop: 22,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: "flex-end",
+  },
+  codeLabel: {
+    color: "rgba(255,255,255,0.54)",
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "right",
+    letterSpacing: 0.6,
+  },
+  codeText: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "right",
+    marginTop: 6,
+    letterSpacing: 0.8,
+  },
   ctaRow: {
-    marginTop: 20,
+    marginTop: 18,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(0,0,0,0.25)",
-    borderRadius: 22,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
@@ -631,14 +518,14 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.16)",
   },
   swipeTrack: {
-    marginTop: 20,
+    marginTop: 18,
     height: 62,
-    borderRadius: 24,
+    borderRadius: 20,
     overflow: "hidden",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.26)",
+    borderColor: "rgba(255,255,255,0.12)",
   },
   swipeTrackTextRow: {
     flexDirection: "row-reverse",
