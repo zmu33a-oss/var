@@ -53,7 +53,7 @@ export function resolveWalletPassUrl(options: WalletPassUrlOptions) {
     email: options.profile.email,
     phoneNumber: options.profile.phoneNumber,
     profession: options.profile.profession,
-    nationalId: options.profile.nationalId,
+    nationalId: options.profile.displayVarId || options.profile.nationalId,
     nationality: options.profile.nationality,
     joinDate: options.profile.joinDate,
     clubName: options.clubName,

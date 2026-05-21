@@ -4,7 +4,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import XFeedScreen from "./XFeedScreen";
 import {
   Animated,
-  Image,
   Modal,
   Platform,
   Pressable,
@@ -14,20 +13,32 @@ import {
   TextInput,
   View,
 } from "react-native";
-import type { HomeMode, IconName, Palette, Post, Video } from "../app.types";
+import {
+  createCompatStyleSheet,
+  getNativePointerEventsProps,
+  getWebPointerEventsStyle,
+} from "../lib/crossPlatformStyles";
+import type {
+  FollowingProfileCard,
+  HomeMode,
+  IconName,
+  Palette,
+  PendingAuthIntent,
+  Post,
+  Video,
+} from "../app.types";
 
-const MONO_FONT = Platform.OS === "ios" ? "Courier" : "monospace";
-const TIKTOK_HANDLE_WIDTH = 34;
-const TIKTOK_HANDLE_HEIGHT = 156;
+const TIKTOK_HANDLE_WIDTH = 30;
+const TIKTOK_HANDLE_HEIGHT = 136;
 const TIKTOK_DOCK_GAP = 0;
-const TIKTOK_DOCK_RAIL_WIDTH = 152;
-const TIKTOK_DOCK_CONTENT_OFFSET = 12;
-const TIKTOK_HANDLE_PEEK_OFFSET = 22;
-const TIKTOK_HANDLE_OPEN_OFFSET = 34;
-const TIKTOK_HANDLE_OVERHANG = 18;
+const TIKTOK_DOCK_RAIL_WIDTH = 92;
+const TIKTOK_DOCK_CONTENT_OFFSET = 6;
+const TIKTOK_HANDLE_PEEK_OFFSET = 0;
+const TIKTOK_HANDLE_OPEN_OFFSET = 14;
+const TIKTOK_HANDLE_OVERHANG = 8;
 const TIKTOK_HANDLE_OVERLAP = 4;
 const TIKTOK_INFO_BOTTOM_OFFSET = 102;
-const VAR_CHAT_ICON = require("../../assets/icons/varchat.png");
+const FULLSCREEN_DOUBLE_TAP_DELAY = 260;
 
 type HomeScreenProps = {
   homeMode: HomeMode;
@@ -38,15 +49,34 @@ type HomeScreenProps = {
   windowHeight: number;
   onChangeMode: (mode: HomeMode) => void;
   onCreatePost: () => void;
-  onOpenChat: () => void;
-  onRequireAuth: (message?: string) => void;
+  onPingAppwrite: () => void;
+  onRequireAuth: (message?: string, pendingIntent?: PendingAuthIntent) => void;
   onTogglePostLike: (postId: number) => void;
+  onTogglePostRepost: (postId: number) => void;
+  onSharePost: (postId: number) => void;
+  currentUserVarId: string;
+  currentUserDisplayName: string;
+  currentUserDisplayVarId: string;
+  currentUserAvatarUri: string;
+  currentUserJoinDate: string;
+  currentUserNationality: string;
+  currentUserUsername: string;
+  currentUserRole: "admin" | "member";
+  currentUserIsVerified: boolean;
+  followedAuthorIds: string[];
+  followedProfiles: FollowingProfileCard[];
+  onToggleAuthorFollow: (authorVarId: string) => void;
+  onSubmitPostReply: (postId: number, text: string) => void;
+  resumeReplyPostId: number | null;
+  onReplyIntentConsumed: () => void;
+  onShowNotice?: (message: string) => void;
   onToggleVideoLike: (videoId: number) => void;
   onToggleVideoSave: (videoId: number) => void;
   onToggleVideoShare: (videoId: number) => void;
   onSubmitVideoComment: (videoId: number, text: string) => void;
-  onToggleVideoFullscreen: (videoId: number) => void;
-  focusVideoId: number | null;
+  onToggleVideoFullscreen: () => void;
+  onExitVideoFullscreen: () => void;
+  isVideoFullscreen: boolean;
 };
 
 export default function HomeScreen(props: HomeScreenProps) {
@@ -57,82 +87,148 @@ export default function HomeScreen(props: HomeScreenProps) {
     videos,
     windowHeight,
     onCreatePost,
-    onOpenChat,
+    onPingAppwrite,
     onRequireAuth,
     onTogglePostLike,
+    onTogglePostRepost,
+    onSharePost,
+    currentUserVarId,
+    currentUserDisplayName,
+    currentUserDisplayVarId,
+    currentUserAvatarUri,
+    currentUserJoinDate,
+    currentUserNationality,
+    currentUserUsername,
+    currentUserRole,
+    currentUserIsVerified,
+    followedAuthorIds,
+    followedProfiles,
+    onToggleAuthorFollow,
+    onSubmitPostReply,
+    resumeReplyPostId,
+    onReplyIntentConsumed,
+    onShowNotice,
     onToggleVideoLike,
     onToggleVideoSave,
     onToggleVideoShare,
     onSubmitVideoComment,
     onToggleVideoFullscreen,
-    focusVideoId,
+    onExitVideoFullscreen,
+    isVideoFullscreen,
   } = props;
 
   const tiktokCardHeight = Math.max(windowHeight, 520);
+  const showHomePingButton = homeMode !== "tiktok" || !isVideoFullscreen;
 
   if (homeMode === "tiktok") {
     return (
-      <ScrollView
-        decelerationRate="fast"
-        disableIntervalMomentum
-        pagingEnabled
-        snapToAlignment="start"
-        snapToInterval={tiktokCardHeight}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.tiktokScreenContent}
-      >
-        {videos.map((video) => (
-          <TikTokVideoCard
-            key={video.id}
-            cardHeight={tiktokCardHeight}
-            video={video}
-            onOpenChat={onOpenChat}
-            onToggleLike={() => onToggleVideoLike(video.id)}
-            onToggleSave={() => onToggleVideoSave(video.id)}
-            onToggleShare={() => onToggleVideoShare(video.id)}
-            onSubmitComment={(comment) =>
-              onSubmitVideoComment(video.id, comment)
-            }
-            onToggleFullscreen={() => onToggleVideoFullscreen(video.id)}
-            isFullscreen={focusVideoId === video.id}
-          />
-        ))}
-      </ScrollView>
+      <View style={styles.homeScreenRoot}>
+        {showHomePingButton ? (
+          <HomePingButton onPress={onPingAppwrite} mode="tiktok" />
+        ) : null}
+        <ScrollView
+          decelerationRate="fast"
+          disableIntervalMomentum
+          pagingEnabled
+          snapToAlignment="start"
+          snapToInterval={tiktokCardHeight}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.tiktokScreenContent}
+        >
+          {videos.map((video) => (
+            <TikTokVideoCard
+              key={video.id}
+              cardHeight={tiktokCardHeight}
+              video={video}
+              onToggleLike={() => onToggleVideoLike(video.id)}
+              onToggleSave={() => onToggleVideoSave(video.id)}
+              onToggleShare={() => onToggleVideoShare(video.id)}
+              onSubmitComment={(comment) =>
+                onSubmitVideoComment(video.id, comment)
+              }
+              onToggleFullscreen={onToggleVideoFullscreen}
+              onExitFullscreen={onExitVideoFullscreen}
+              isFullscreen={isVideoFullscreen}
+            />
+          ))}
+        </ScrollView>
+      </View>
     );
   }
 
   return (
-    <XFeedScreen
-      isLoggedIn={isLoggedIn}
-      posts={posts}
-      onCreatePost={onCreatePost}
-      onOpenChat={onOpenChat}
-      onRequireAuth={onRequireAuth}
-      onTogglePostLike={onTogglePostLike}
-    />
+    <View style={styles.homeScreenRoot}>
+      {showHomePingButton ? (
+        <HomePingButton onPress={onPingAppwrite} mode="default" />
+      ) : null}
+      <XFeedScreen
+        isLoggedIn={isLoggedIn}
+        posts={posts}
+        onCreatePost={onCreatePost}
+        onRequireAuth={onRequireAuth}
+        onTogglePostLike={onTogglePostLike}
+        onTogglePostRepost={onTogglePostRepost}
+        onSharePost={onSharePost}
+        currentUserVarId={currentUserVarId}
+        currentUserDisplayName={currentUserDisplayName}
+        currentUserDisplayVarId={currentUserDisplayVarId}
+        currentUserAvatarUri={currentUserAvatarUri}
+        currentUserJoinDate={currentUserJoinDate}
+        currentUserNationality={currentUserNationality}
+        currentUserUsername={currentUserUsername}
+        currentUserRole={currentUserRole}
+        currentUserIsVerified={currentUserIsVerified}
+        followedAuthorIds={followedAuthorIds}
+        followedProfiles={followedProfiles}
+        onToggleAuthorFollow={onToggleAuthorFollow}
+        onSubmitPostReply={onSubmitPostReply}
+        resumeReplyPostId={resumeReplyPostId}
+        onReplyIntentConsumed={onReplyIntentConsumed}
+        onShowNotice={onShowNotice}
+      />
+    </View>
+  );
+}
+
+function HomePingButton(props: {
+  onPress: () => void;
+  mode: "default" | "tiktok";
+}) {
+  return (
+    <View
+      style={[
+        styles.pingButtonWrap,
+        props.mode === "tiktok" ? styles.pingButtonWrapTikTok : null,
+      ]}
+    >
+      <Pressable style={styles.pingButton} onPress={props.onPress}>
+        <Ionicons name="pulse-outline" size={16} color="#DFF7FF" />
+        <Text style={styles.pingButtonText}>Send a ping</Text>
+      </Pressable>
+    </View>
   );
 }
 
 function TikTokVideoCard(props: {
   cardHeight: number;
   video: Video;
-  onOpenChat: () => void;
   onToggleLike: () => void;
   onToggleSave: () => void;
   onToggleShare: () => void;
   onSubmitComment: (comment: string) => void;
   onToggleFullscreen: () => void;
+  onExitFullscreen: () => void;
   isFullscreen: boolean;
 }) {
   const {
     cardHeight,
     video,
-    onOpenChat,
     onToggleLike,
     onToggleSave,
     onToggleShare,
     onSubmitComment,
     onToggleFullscreen,
+    onExitFullscreen,
     isFullscreen,
   } = props;
   const [isDockOpen, setIsDockOpen] = useState(false);
@@ -141,6 +237,7 @@ function TikTokVideoCard(props: {
   const [commentDraft, setCommentDraft] = useState("");
   const dockProgress = useRef(new Animated.Value(0)).current;
   const infoProgress = useRef(new Animated.Value(0)).current;
+  const lastFullscreenTapAt = useRef(0);
 
   useEffect(() => {
     Animated.spring(dockProgress, {
@@ -159,6 +256,12 @@ function TikTokVideoCard(props: {
       useNativeDriver: false,
     }).start();
   }, [infoProgress, isCaptionExpanded]);
+
+  useEffect(() => {
+    if (!isFullscreen) {
+      lastFullscreenTapAt.current = 0;
+    }
+  }, [isFullscreen]);
 
   const handleTranslateX = dockProgress.interpolate({
     inputRange: [0, 0.48, 1],
@@ -180,6 +283,7 @@ function TikTokVideoCard(props: {
     inputRange: [0, 1],
     outputRange: [0, -18],
   });
+  const showVideoChrome = !isFullscreen;
 
   const submitComment = () => {
     const trimmedComment = commentDraft.trim();
@@ -192,9 +296,16 @@ function TikTokVideoCard(props: {
     setIsCommentComposerOpen(false);
   };
 
-  const openQuickChatMenu = () => {
-    setIsDockOpen(false);
-    onOpenChat();
+  const exitFullscreenOnDoubleTap = () => {
+    const now = Date.now();
+
+    if (now - lastFullscreenTapAt.current <= FULLSCREEN_DOUBLE_TAP_DELAY) {
+      lastFullscreenTapAt.current = 0;
+      onExitFullscreen();
+      return;
+    }
+
+    lastFullscreenTapAt.current = now;
   };
 
   return (
@@ -210,140 +321,157 @@ function TikTokVideoCard(props: {
         />
       )}
 
-      <View style={styles.tiktokTopRow}>
-        <Pressable style={styles.tiktokSoundButton}>
-          <Ionicons name="volume-medium" size={16} color="#FFFFFF" />
-        </Pressable>
-      </View>
+      {isFullscreen && !showVideoChrome ? (
+        <View
+          style={styles.tiktokFullscreenTapLayer}
+          onStartShouldSetResponder={() => true}
+          onResponderRelease={exitFullscreenOnDoubleTap}
+        />
+      ) : null}
 
-      <View style={styles.tiktokDockWrap}>
+      {showVideoChrome ? (
+        <>
+          <View style={styles.tiktokTopRow}>
+            <Pressable style={styles.tiktokSoundButton}>
+              <Ionicons name="volume-medium" size={16} color="#FFFFFF" />
+            </Pressable>
+          </View>
+
+          <View style={styles.tiktokDockWrap}>
+            <Animated.View
+              style={[
+                styles.tiktokVarTabWrap,
+                { transform: [{ translateX: handleTranslateX }] },
+              ]}
+            >
+              <Pressable
+                style={[
+                  styles.tiktokVarTab,
+                  isDockOpen ? styles.tiktokVarTabOpen : null,
+                ]}
+                hitSlop={8}
+                onPress={() => setIsDockOpen((currentValue) => !currentValue)}
+              >
+                <Text style={styles.tiktokVarTabText}>VAR</Text>
+              </Pressable>
+            </Animated.View>
+
+            <Animated.View
+              {...getNativePointerEventsProps(isDockOpen ? "auto" : "none")}
+              style={[
+                styles.tiktokDockRailShell,
+                { width: dockShellWidth },
+                getWebPointerEventsStyle(isDockOpen ? "auto" : "none"),
+              ]}
+            >
+              <Animated.View
+                style={[
+                  styles.tiktokDockRail,
+                  {
+                    opacity: dockRailOpacity,
+                    transform: [{ translateX: dockRailTranslateX }],
+                  },
+                ]}
+              >
+                <TikTokDockStat
+                  icon="heart"
+                  value={video.likes}
+                  active={video.likedByMe}
+                  onPress={onToggleLike}
+                />
+                <TikTokDockStat
+                  icon="chatbubble"
+                  value={video.comments}
+                  active={isCommentComposerOpen}
+                  onPress={() =>
+                    setIsCommentComposerOpen((currentValue) => !currentValue)
+                  }
+                />
+                <TikTokDockStat
+                  icon="paper-plane"
+                  value={video.shares}
+                  active={video.sharedByMe}
+                  onPress={onToggleShare}
+                />
+                <TikTokDockStat
+                  icon="bookmark"
+                  value={video.saves}
+                  active={video.savedByMe}
+                  onPress={onToggleSave}
+                />
+                <TikTokDockStat
+                  icon={isFullscreen ? "contract-outline" : "expand-outline"}
+                  value={isFullscreen ? "رجوع" : "ملء"}
+                  active={isFullscreen}
+                  onPress={onToggleFullscreen}
+                />
+              </Animated.View>
+            </Animated.View>
+          </View>
+        </>
+      ) : null}
+
+      {showVideoChrome ? (
+        <LinearGradient
+          colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.86)"]}
+          style={styles.tiktokBottomFade}
+        />
+      ) : null}
+
+      {showVideoChrome ? (
         <Animated.View
           style={[
-            styles.tiktokVarTabWrap,
-            { transform: [{ translateX: handleTranslateX }] },
+            styles.tiktokInfoBlock,
+            {
+              bottom: isFullscreen ? 28 : TIKTOK_INFO_BOTTOM_OFFSET,
+              transform: [{ translateY: infoTranslateY }],
+            },
           ]}
         >
-          <Pressable
-            style={[
-              styles.tiktokVarTab,
-              isDockOpen ? styles.tiktokVarTabOpen : null,
-            ]}
-            hitSlop={8}
-            onPress={() => setIsDockOpen((currentValue) => !currentValue)}
-          >
-            <Text style={styles.tiktokVarTabText}>VAR</Text>
-          </Pressable>
-        </Animated.View>
-
-        <Animated.View
-          pointerEvents={isDockOpen ? "auto" : "none"}
-          style={[styles.tiktokDockRailShell, { width: dockShellWidth }]}
-        >
-          <Animated.View
-            style={[
-              styles.tiktokDockRail,
-              {
-                opacity: dockRailOpacity,
-                transform: [{ translateX: dockRailTranslateX }],
-              },
-            ]}
-          >
-            <TikTokDockMenuItem
-              label="رسالة جديدة"
-              onPress={openQuickChatMenu}
-            />
-            <TikTokDockMenuItem label="القروبات" onPress={openQuickChatMenu} />
-            <TikTokDockStat
-              icon="heart"
-              value={video.likes}
-              active={video.likedByMe}
-              onPress={onToggleLike}
-            />
-            <TikTokDockStat
-              icon="chatbubble"
-              value={video.comments}
-              active={isCommentComposerOpen}
-              onPress={() =>
-                setIsCommentComposerOpen((currentValue) => !currentValue)
-              }
-            />
-            <TikTokDockStat
-              icon="paper-plane"
-              value={video.shares}
-              active={video.sharedByMe}
-              onPress={onToggleShare}
-            />
-            <TikTokDockStat
-              icon="bookmark"
-              value={video.saves}
-              active={video.savedByMe}
-              onPress={onToggleSave}
-            />
-            <TikTokDockStat
-              icon={isFullscreen ? "contract-outline" : "expand-outline"}
-              value={isFullscreen ? "رجوع" : "ملء"}
-              active={isFullscreen}
-              onPress={onToggleFullscreen}
-            />
-          </Animated.View>
-        </Animated.View>
-      </View>
-
-      <LinearGradient
-        colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.86)"]}
-        style={styles.tiktokBottomFade}
-      />
-
-      <Animated.View
-        style={[
-          styles.tiktokInfoBlock,
-          {
-            bottom: isFullscreen ? 28 : TIKTOK_INFO_BOTTOM_OFFSET,
-            transform: [{ translateY: infoTranslateY }],
-          },
-        ]}
-      >
-        <View style={styles.tiktokCaptionRow}>
-          <Text
-            numberOfLines={isCaptionExpanded ? 3 : 1}
-            style={styles.tiktokCaption}
-          >
-            {video.caption}
-          </Text>
-
-          <Pressable
-            onPress={() =>
-              setIsCaptionExpanded((currentValue) => !currentValue)
-            }
-          >
-            <Text style={styles.tiktokCaptionToggle}>
-              {isCaptionExpanded ? "إخفاء" : "المزيد"}
-            </Text>
-          </Pressable>
-        </View>
-
-        {isCaptionExpanded ? (
-          <View style={styles.tiktokTagRow}>
-            <Tag label="#VAR" />
-            <Tag label="#WEBPLUS" />
-            <Tag label="#Expo" />
-          </View>
-        ) : null}
-
-        <View style={styles.tiktokCreatorRow}>
-          <View style={styles.tiktokCreatorText}>
-            <View style={styles.tiktokNameRow}>
-              <Text style={styles.tiktokCreatorName}>{video.creatorName}</Text>
-              <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" />
+          <View style={styles.tiktokCreatorRow}>
+            <View style={styles.tiktokCreatorText}>
+              <View style={styles.tiktokNameRow}>
+                <Text style={styles.tiktokCreatorName}>
+                  {video.creatorName}
+                </Text>
+                <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" />
+              </View>
+              <Text style={styles.tiktokHandle}>{video.creatorHandle}</Text>
             </View>
-            <Text style={styles.tiktokHandle}>{video.creatorHandle}</Text>
+
+            <View style={styles.tiktokCreatorBadge}>
+              <Text style={styles.tiktokCreatorBadgeText}>{video.tag}</Text>
+            </View>
           </View>
 
-          <View style={styles.tiktokCreatorBadge}>
-            <Text style={styles.tiktokCreatorBadgeText}>{video.tag}</Text>
+          <View style={styles.tiktokCaptionRow}>
+            <Text
+              numberOfLines={isCaptionExpanded ? 3 : 1}
+              style={styles.tiktokCaption}
+            >
+              {video.caption}
+            </Text>
+
+            <Pressable
+              onPress={() =>
+                setIsCaptionExpanded((currentValue) => !currentValue)
+              }
+            >
+              <Text style={styles.tiktokCaptionToggle}>
+                {isCaptionExpanded ? "إخفاء" : "المزيد"}
+              </Text>
+            </Pressable>
           </View>
-        </View>
-      </Animated.View>
+
+          {isCaptionExpanded ? (
+            <View style={styles.tiktokTagRow}>
+              <Tag label="#VAR" />
+              <Tag label="#WEBPLUS" />
+              <Tag label="#Expo" />
+            </View>
+          ) : null}
+        </Animated.View>
+      ) : null}
 
       <Modal
         transparent
@@ -423,20 +551,37 @@ function TikTokDockStat(props: {
   );
 }
 
-function TikTokDockMenuItem(props: { label: string; onPress: () => void }) {
-  return (
-    <Pressable style={styles.tiktokDockMenuItem} onPress={props.onPress}>
-      <Image
-        source={VAR_CHAT_ICON}
-        resizeMode="contain"
-        style={styles.tiktokDockMenuIcon}
-      />
-      <Text style={styles.tiktokDockMenuText}>{props.label}</Text>
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
+const styles = createCompatStyleSheet({
+  homeScreenRoot: {
+    flex: 1,
+  },
+  pingButtonWrap: {
+    position: "absolute",
+    top: 74,
+    left: 16,
+    zIndex: 40,
+  },
+  pingButtonWrapTikTok: {
+    left: "auto",
+    right: 18,
+    top: 128,
+  },
+  pingButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(8, 24, 35, 0.9)",
+    borderWidth: 1,
+    borderColor: "rgba(122,223,255,0.28)",
+  },
+  pingButtonText: {
+    color: "#DFF7FF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
   tiktokScreenContent: {
     paddingBottom: 0,
   },
@@ -479,8 +624,8 @@ const styles = StyleSheet.create({
   tiktokVarTab: {
     width: TIKTOK_HANDLE_WIDTH,
     height: TIKTOK_HANDLE_HEIGHT,
-    borderTopRightRadius: 10,
-    borderBottomRightRadius: 10,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
     backgroundColor: "rgba(0,0,0,0.84)",
     alignItems: "center",
     justifyContent: "center",
@@ -491,12 +636,13 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   tiktokVarTabOpen: {
-    backgroundColor: "rgba(13,36,72,0.94)",
+    backgroundColor: "rgba(14,44,88,0.96)",
   },
   tiktokVarTabText: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "900",
+    letterSpacing: 0.6,
     transform: [{ rotate: "90deg" }],
     textShadowColor: "rgba(111,214,255,0.62)",
     textShadowOffset: { width: 0, height: 2 },
@@ -511,46 +657,29 @@ const styles = StyleSheet.create({
     width: TIKTOK_DOCK_RAIL_WIDTH,
     borderTopLeftRadius: 0,
     borderBottomLeftRadius: 0,
-    borderTopRightRadius: 8,
-    borderBottomRightRadius: 8,
-    paddingVertical: 10,
+    borderTopRightRadius: 14,
+    borderBottomRightRadius: 14,
+    paddingVertical: 9,
     paddingLeft: TIKTOK_DOCK_CONTENT_OFFSET,
-    paddingRight: 10,
-    backgroundColor: "rgba(0,0,0,0.82)",
+    paddingRight: 5,
+    backgroundColor: "rgba(5,10,18,0.88)",
     borderWidth: 1,
     borderLeftWidth: 0,
     borderColor: "rgba(255,255,255,0.12)",
   },
-  tiktokDockMenuItem: {
-    minHeight: 38,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    paddingHorizontal: 10,
-    marginBottom: 8,
-  },
-  tiktokDockMenuIcon: {
-    width: 18,
-    height: 18,
-    marginLeft: 8,
-  },
-  tiktokDockMenuText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "900",
-    textAlign: "right",
-  },
   tiktokDockButton: {
     alignItems: "center",
-    paddingVertical: 7,
+    paddingVertical: 6,
   },
   tiktokDockValue: {
     color: "#FFFFFF",
     fontSize: 11,
     fontWeight: "800",
-    marginTop: 5,
+    marginTop: 4,
+  },
+  tiktokFullscreenTapLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 5,
   },
   tiktokBottomFade: {
     position: "absolute",
@@ -566,13 +695,14 @@ const styles = StyleSheet.create({
   },
   tiktokCaptionRow: {
     flexDirection: "row-reverse",
-    alignItems: "center",
+    alignItems: "flex-start",
+    marginTop: 10,
   },
   tiktokCreatorRow: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 12,
+    marginBottom: 2,
   },
   tiktokCreatorText: {
     alignItems: "flex-end",
@@ -619,7 +749,7 @@ const styles = StyleSheet.create({
   },
   tiktokTagRow: {
     flexDirection: "row-reverse",
-    marginTop: 10,
+    marginTop: 12,
   },
   tagWrap: {
     backgroundColor: "rgba(255,255,255,0.12)",
