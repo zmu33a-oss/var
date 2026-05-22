@@ -1,8 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "name": "var",
-  "installCommand": "npm install && npm --prefix admin-web install",
+  "installCommand": "npm install",
   "buildCommand": "npm run vercel-build",
+  "devCommand": "npx expo start --web --port $PORT --host localhost",
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/admin", "destination": "/admin/index.html" },

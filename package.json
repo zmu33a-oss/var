@@ -2,7 +2,6 @@
   "name": "var",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "npm@10.9.2",
   "main": "expo/AppEntry",
   "scripts": {
     "dev": "node scripts/expo-dev.cjs",
@@ -13,9 +12,9 @@
     "web:lan": "node scripts/expo-dev.cjs --host lan",
     "build": "node scripts/build-vercel.cjs",
     "vercel-build": "node scripts/build-vercel.cjs",
-    "admin:dev": "npm --prefix admin-web run dev",
-    "admin:build": "npm --prefix admin-web run build",
-    "dev:api": "node scripts/ensure-dist-placeholder.cjs && npx vercel dev --listen 3000 --yes --prebuilt --project var",
+    "admin:dev": "node scripts/admin-dev.cjs",
+    "admin:build": "node scripts/admin-build.cjs",
+    "dev:api": "node scripts/dev-api.cjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
