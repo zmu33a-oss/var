@@ -150,7 +150,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     "following" | "for-you" | "messages"
   >("for-you");
   const [replyDraft, setReplyDraft] = useState("");
-  const [privateDraft, setPrivateDraft] = useState("");
   const [replyTargetPost, setReplyTargetPost] = useState<Post | null>(null);
   const [openedPost, setOpenedPost] = useState<Post | null>(null);
   const [openedMessageThreadVarId, setOpenedMessageThreadVarId] = useState<
@@ -1214,7 +1213,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     setIsNotificationsOpen(false);
     setOpenedMessageThreadProfile(thread.profile);
     setOpenedMessageThreadVarId(normalizeAuthorId(thread.profile.varId));
-    setPrivateDraft("");
   };
 
   const openAuthorPrivateMessageThread = (profile: OpenedAuthorProfile) => {
@@ -1236,7 +1234,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   const closePrivateMessageThread = () => {
     setOpenedMessageThreadProfile(null);
     setOpenedMessageThreadVarId(null);
-    setPrivateDraft("");
   };
 
   const openNotifications = () => {
@@ -1246,7 +1243,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     setReplyDraft("");
     setOpenedMessageThreadProfile(null);
     setOpenedMessageThreadVarId(null);
-    setPrivateDraft("");
     setIsHashtagDirectoryOpen(false);
     setIsNotificationsOpen(true);
   };
@@ -1291,29 +1287,28 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     setReplyDraft("");
     setOpenedMessageThreadProfile(null);
     setOpenedMessageThreadVarId(null);
-    setPrivateDraft("");
     setIsHashtagDirectoryOpen(false);
     setOpenedPost(matchingPost);
   };
 
-  const submitPrivateMessage = async () => {
+  const submitPrivateMessage = async (messageText: string): Promise<boolean> => {
     const normalizedPeerVarId = normalizeAuthorId(
       openedMessageThreadVarId?.trim() || "",
     );
-    const trimmedDraft = privateDraft.trim();
+    const trimmedDraft = messageText.trim();
 
     if (!trimmedDraft || isSendingPrivateMessage) {
-      return;
+      return false;
     }
 
     if (!isLoggedIn || !normalizedCurrentUserVarId) {
       onRequireAuth("سجل الدخول لإرسال رسالة خاصة.");
-      return;
+      return false;
     }
 
     if (!normalizedPeerVarId || normalizedPeerVarId === normalizedCurrentUserVarId) {
       onShowNotice?.("تعذر تحديد المستخدم المستلم للرسالة.");
-      return;
+      return false;
     }
 
     if (!hasAppwriteSocialInteractionsConfig()) {
@@ -1321,7 +1316,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       onShowNotice?.(
         `ربط Appwrite غير مكتمل للرسائل. أضف: ${missingFields}. انسخ .env.example إلى .env وعبّئ معرفات قاعدة البيانات والتفاعلات.`,
       );
-      return;
+      return false;
     }
 
     setIsSendingPrivateMessage(true);
@@ -1337,7 +1332,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         onShowNotice?.(
           "تعذر حفظ الرسالة في Appwrite. تحقق من EXPO_PUBLIC_APPWRITE_DATABASE_ID و EXPO_PUBLIC_APPWRITE_SOCIAL_INTERACTIONS_COLLECTION_ID.",
         );
-        return;
+        return false;
       }
 
       const nextMessage = buildPrivateMessageEntry(
@@ -1354,14 +1349,15 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           nextMessage,
         ],
       }));
-      setPrivateDraft("");
       onShowNotice?.("تم إرسال الرسالة وحفظها في Appwrite.");
+      return true;
     } catch (error) {
       onShowNotice?.(
         error instanceof Error
           ? `تعذر إرسال الرسالة: ${error.message}`
           : "تعذر إرسال الرسالة إلى Appwrite.",
       );
+      return false;
     } finally {
       setIsSendingPrivateMessage(false);
     }
@@ -1818,8 +1814,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       {/* ── Part A: ChatOverlay replaces the old full-screen DM Modal ── */}
       <ChatOverlay
         thread={openedMessageThread}
-        draft={privateDraft}
-        onDraftChange={setPrivateDraft}
         onSend={submitPrivateMessage}
         isSending={isSendingPrivateMessage}
         onClose={closePrivateMessageThread}
