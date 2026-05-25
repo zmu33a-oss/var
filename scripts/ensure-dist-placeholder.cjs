@@ -6,6 +6,9 @@ const distDir = path.join(rootDir, "dist");
 const adminDir = path.join(distDir, "admin");
 const indexHtml = path.join(distDir, "index.html");
 const adminIndexHtml = path.join(adminDir, "index.html");
+const adminJs = path.join(adminDir, "admin.js");
+const adminSourceHtml = path.join(rootDir, "admin-web", "index.html");
+const adminSourceJs = path.join(rootDir, "admin-web", "admin.js");
 
 const placeholder = `<!doctype html>
 <html lang="ar" dir="rtl">
@@ -20,8 +23,14 @@ if (!fs.existsSync(indexHtml)) {
   fs.writeFileSync(indexHtml, placeholder, "utf8");
 }
 
-if (!fs.existsSync(adminIndexHtml)) {
+if (fs.existsSync(adminSourceHtml)) {
+  fs.copyFileSync(adminSourceHtml, adminIndexHtml);
+} else if (!fs.existsSync(adminIndexHtml)) {
   fs.writeFileSync(adminIndexHtml, placeholder, "utf8");
 }
 
-console.log("dist placeholder ready for vercel dev --prebuilt");
+if (fs.existsSync(adminSourceJs)) {
+  fs.copyFileSync(adminSourceJs, adminJs);
+}
+
+console.log("dist/admin ready for local admin preview");

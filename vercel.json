@@ -3,10 +3,6 @@
   "name": "var",
   "installCommand": "npm install",
   "buildCommand": "npm run vercel-build",
-  "devCommand": "npx expo start --web --port $PORT --host localhost",
-  "outputDirectory": "dist",
-  "rewrites": [
-    { "source": "/admin", "destination": "/admin/index.html" },
-    { "source": "/admin/:path*", "destination": "/admin/index.html" }
-  ]
+  "devCommand": "node scripts/vercel-dev-static.cjs",
+  "outputDirectory": "dist"
 }

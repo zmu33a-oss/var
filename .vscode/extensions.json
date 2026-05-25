@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "PKief.material-icon-theme",
+    "bradlc.vscode-tailwindcss",
+    "naumovs.color-highlight",
+    "jock.svg",
+    "esbenp.prettier-vscode"
+  ]
+}

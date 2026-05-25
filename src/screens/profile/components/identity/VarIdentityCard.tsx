@@ -1,25 +1,27 @@
-import { useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { Image, Platform, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import {
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
-  withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { Circle, Line, Svg } from "react-native-svg";
 import QRCode from "react-native-qrcode-svg";
 import {
   getArabicFontStyle,
   resolveProfileAvatarUri,
 } from "../../profile.helpers";
 
-/** ISO/IEC 7810 ID-1 — نفس نسبة بطاقات الائتمان و Apple Wallet */
-const CARD_ASPECT_RATIO = 1.586;
+const CARD_ASPECT_RATIO = 0.57;
 
 type VarIdentityCardProps = {
   width: number;
@@ -39,522 +41,460 @@ function buildVarQrPayload(displayVarId: string) {
   return appUrl ? `${appUrl}/add/${encodeURIComponent(id)}` : id;
 }
 
-// ─── Shimmer sweep ────────────────────────────────────────────────────────────
-
-function CardShimmer({ width }: { width: number }) {
-  const tx = useSharedValue(-width * 1.6);
-
-  useEffect(() => {
-    tx.value = withRepeat(
-      withDelay(
-        3600,
-        withTiming(width * 1.6, {
-          duration: 1100,
-          easing: Easing.inOut(Easing.quad),
-        }),
-      ),
-      -1,
-      false,
-    );
-  }, [width, tx]);
-
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: tx.value }],
-  }));
+function GoldenFrontQr(props: { value: string; compact: boolean }) {
+  const size = props.compact ? 42 : 48;
 
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[StyleSheet.absoluteFillObject, style]}
-    >
-      <LinearGradient
-        colors={[
-          "transparent",
-          "rgba(255,248,215,0.06)",
-          "rgba(232,213,163,0.16)",
-          "rgba(255,248,215,0.06)",
-          "transparent",
-        ]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.shimmerGrad}
+    <View style={styles.frontQrPlate}>
+      <QRCode
+        value={props.value}
+        size={size}
+        color="#2A1E08"
+        backgroundColor="transparent"
+        quietZone={2}
       />
-    </Animated.View>
-  );
-}
-
-// ─── SVG dot-grid background ──────────────────────────────────────────────────
-
-function CardBackground({ width }: { width: number }) {
-  const h = width / CARD_ASPECT_RATIO;
-  const cols = 10;
-  const rows = 6;
-  const dots: { cx: number; cy: number; key: string }[] = [];
-  for (let c = 0; c < cols; c++) {
-    for (let r = 0; r < rows; r++) {
-      dots.push({
-        cx: ((c + 0.5) * width) / cols,
-        cy: ((r + 0.5) * h) / rows,
-        key: `${c}-${r}`,
-      });
-    }
-  }
-
-  return (
-    <Svg
-      width={width}
-      height={h}
-      style={StyleSheet.absoluteFillObject}
-      pointerEvents="none"
-    >
-      {dots.map((d) => (
-        <Circle key={d.key} cx={d.cx} cy={d.cy} r={0.9} fill="rgba(232,213,163,0.18)" />
-      ))}
-      <Line
-        x1={0}
-        y1={h * 0.58}
-        x2={width * 0.46}
-        y2={0}
-        stroke="rgba(232,213,163,0.09)"
-        strokeWidth={0.8}
-      />
-      <Line
-        x1={width * 0.28}
-        y1={h}
-        x2={width * 0.88}
-        y2={0}
-        stroke="rgba(232,213,163,0.06)"
-        strokeWidth={0.5}
-      />
-      <Circle
-        cx={width * 0.78}
-        cy={h * 0.38}
-        r={h * 0.52}
-        fill="none"
-        stroke="rgba(201,169,98,0.07)"
-        strokeWidth={0.7}
-      />
-    </Svg>
-  );
-}
-
-// ─── Chip ─────────────────────────────────────────────────────────────────────
-
-function CardChip() {
-  return (
-    <View style={styles.chip}>
-      <LinearGradient
-        colors={["#D4B96A", "#F2DFA0", "#C9A84C"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.chipGrad}
-      >
-        <View style={styles.chipInner}>
-          <View style={styles.chipLine} />
-          <View style={[styles.chipLine, styles.chipLineShort]} />
-          <View style={styles.chipLine} />
-        </View>
-      </LinearGradient>
     </View>
   );
 }
 
-// ─── Footer with BlurView ─────────────────────────────────────────────────────
+function GoldenCardFront(props: {
+  width: number;
+  displayVarId: string;
+  isVerified?: boolean;
+}) {
+  const cardHeight = props.width * CARD_ASPECT_RATIO;
+  const compact = props.width < 360;
+  const qrPayload = buildVarQrPayload(props.displayVarId);
 
-function CardFooter({
-  joinDate,
-  nationalityArabic,
-  nationalityEnglish,
-  compact,
-  arabicTextStyle,
-}: {
+  return (
+    <LinearGradient
+      colors={["#D5B370", "#EED8A7", "#C29F5C", "#E6CC92", "#AF8C47"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.card, { width: props.width, height: cardHeight }]}
+    >
+      <LinearGradient
+        colors={["rgba(255,255,255,0.18)", "transparent"]}
+        style={StyleSheet.absoluteFillObject}
+      />
+
+      <View style={styles.watermarkContainer}>
+        <Text style={styles.watermarkText}>VAR</Text>
+      </View>
+
+      <View style={styles.topRightContainer}>
+        <Text style={styles.varGoldText}>
+          <Text style={styles.serifBold}>VAR</Text>{" "}
+          {props.isVerified ? "GOLD" : "MEMBER"}
+        </Text>
+      </View>
+
+      <View style={styles.logoRow}>
+        <View style={styles.logoContainer}>
+          <Text style={styles.logoMainText}>VAR</Text>
+          <Text style={styles.logoSubText}>VAR BANK FOR FANS</Text>
+        </View>
+
+        <GoldenFrontQr value={qrPayload} compact={compact} />
+      </View>
+
+      <View style={styles.footerRow}>
+        <View style={styles.footerRight}>
+          <Text style={styles.farIdText}>
+            {props.displayVarId || "VAR-0000000"}
+          </Text>
+          <Text style={styles.idSubtitle}>VAR ID</Text>
+        </View>
+      </View>
+    </LinearGradient>
+  );
+}
+
+function GoldenCardBack(props: {
+  width: number;
+  avatarUri: string;
+  displayVarId: string;
   joinDate: string;
   nationalityArabic: string;
   nationalityEnglish: string;
-  compact: boolean;
   arabicTextStyle: object | undefined;
 }) {
-  const inner = (
-    <View style={styles.footerInner}>
-      <View style={styles.footerField}>
-        <Text style={styles.footerLabel}>MEMBER SINCE</Text>
-        <Text numberOfLines={1} style={[styles.footerValue, arabicTextStyle]}>
-          {joinDate || "—"}
-        </Text>
-      </View>
-
-      <View style={styles.footerDivider} />
-
-      <View style={[styles.footerField, styles.footerFieldEnd]}>
-        <Text style={styles.footerLabel}>NATIONALITY</Text>
-        <Text
-          numberOfLines={1}
-          style={[styles.footerValue, arabicTextStyle]}
-        >
-          {nationalityArabic || "—"}
-        </Text>
-        {!compact && nationalityEnglish ? (
-          <Text numberOfLines={1} style={styles.footerSubValue}>
-            {nationalityEnglish}
-          </Text>
-        ) : null}
-      </View>
-    </View>
-  );
-
-  if (Platform.OS === "web") {
-    return <View style={styles.footerWebFallback}>{inner}</View>;
-  }
+  const cardHeight = props.width * CARD_ASPECT_RATIO;
+  const qrSize = props.width < 340 ? 54 : 62;
+  const qrPayload = buildVarQrPayload(props.displayVarId);
 
   return (
-    <BlurView intensity={18} tint="dark" style={styles.footerBlur}>
-      {inner}
-    </BlurView>
+    <LinearGradient
+      colors={["#AF8C47", "#C29F5C", "#B8934E", "#9A7838"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[
+        styles.card,
+        styles.cardBack,
+        { width: props.width, height: cardHeight },
+      ]}
+    >
+      <LinearGradient
+        colors={["rgba(255,255,255,0.10)", "transparent"]}
+        style={StyleSheet.absoluteFillObject}
+      />
+
+      <View style={styles.backHeader}>
+        <Text style={styles.backTitle}>MEMBER DETAILS</Text>
+        <Text style={styles.backSubtitle}>VAR PRIVATE ID</Text>
+      </View>
+
+      <View style={styles.backBody}>
+        <View style={styles.backAvatarWrap}>
+          <Image
+            source={{ uri: resolveProfileAvatarUri(props.avatarUri) }}
+            style={styles.backAvatarImage}
+          />
+        </View>
+
+        <View style={styles.backInfoBlock}>
+          <View style={styles.backInfoRow}>
+            <Text style={styles.backInfoLabel}>MEMBER SINCE</Text>
+            <Text style={[styles.backInfoValue, props.arabicTextStyle]}>
+              {props.joinDate || "—"}
+            </Text>
+          </View>
+
+          <View style={styles.backInfoRow}>
+            <Text style={styles.backInfoLabel}>NATIONALITY</Text>
+            <Text style={[styles.backInfoValue, props.arabicTextStyle]}>
+              {props.nationalityArabic || "—"}
+            </Text>
+            {props.nationalityEnglish ? (
+              <Text style={styles.backInfoSubValue}>
+                {props.nationalityEnglish}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={styles.backQrPlate}>
+          <QRCode
+            value={qrPayload}
+            size={qrSize}
+            color="#0A0C10"
+            backgroundColor="#F5F0E6"
+            quietZone={4}
+          />
+        </View>
+      </View>
+
+      <View style={styles.backFooter}>
+        <Text style={styles.backFooterId}>
+          {props.displayVarId || "VAR-0000000"}
+        </Text>
+      </View>
+    </LinearGradient>
   );
 }
 
-// ─── Main card ────────────────────────────────────────────────────────────────
-
 export function VarIdentityCard(props: VarIdentityCardProps) {
+  const [isFlipped, setIsFlipped] = useState(false);
+  const rotation = useSharedValue(0);
   const arabicTextStyle = getArabicFontStyle(props.arabicFontFamily);
-  const qrPayload = buildVarQrPayload(props.displayVarId);
-  const qrSize = props.width < 340 ? 46 : 52;
-  const compact = props.width < 360;
+  const cardHeight = props.width * CARD_ASPECT_RATIO;
+
+  const toggleFlip = () => {
+    const nextFlipped = !isFlipped;
+    setIsFlipped(nextFlipped);
+    rotation.value = withTiming(nextFlipped ? 180 : 0, {
+      duration: 550,
+      easing: Easing.inOut(Easing.cubic),
+    });
+  };
+
+  const flipStyle = useAnimatedStyle(() => ({
+    transform: [{ perspective: 1200 }, { rotateY: `${rotation.value}deg` }],
+  }));
 
   return (
-    <View style={[styles.shadow, { width: props.width }]}>
-      <View style={[styles.shell, { aspectRatio: CARD_ASPECT_RATIO }]}>
-        <LinearGradient
-          colors={["#2E2616", "#14171F", "#07090E", "#020305"]}
-          locations={[0, 0.3, 0.7, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.frame}
+    <View style={[styles.wrapper, { width: props.width }]}>
+      <View style={[styles.flipStage, { height: cardHeight }]}>
+        <Animated.View
+          style={[
+            styles.flipInner,
+            flipStyle,
+            Platform.OS === "web"
+              ? ({ transformStyle: "preserve-3d" } as object)
+              : null,
+          ]}
         >
-          {/* base overlay tint */}
-          <LinearGradient
-            colors={[
-              "rgba(201,169,98,0.20)",
-              "transparent",
-              "rgba(255,255,255,0.03)",
+          <View
+            style={[
+              styles.cardFace,
+              Platform.OS === "web"
+                ? ({ backfaceVisibility: "hidden" } as object)
+                : null,
             ]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFillObject}
-          />
-
-          {/* SVG dot grid + accent lines */}
-          <CardBackground width={props.width} />
-
-          {/* Animated shimmer sweep */}
-          <CardShimmer width={props.width} />
-
-          {/* ── top row ── */}
-          <View style={styles.topRow}>
-            <View style={styles.topLeading}>
-              <CardChip />
-              <View style={styles.brandCol}>
-                <Text style={styles.brandMark}>VAR</Text>
-                <Text style={styles.brandTier}>PRIVATE MEMBERSHIP</Text>
-              </View>
-            </View>
-
-            {props.isVerified ? (
-              <View style={styles.tierPill}>
-                <Ionicons name="diamond-outline" size={11} color="#E8D5A3" />
-                <Text style={styles.tierPillText}>VERIFIED</Text>
-              </View>
-            ) : (
-              <View style={styles.tierPillMuted}>
-                <Text style={styles.tierPillTextMuted}>MEMBER</Text>
-              </View>
-            )}
+          >
+            <GoldenCardFront
+              width={props.width}
+              displayVarId={props.displayVarId}
+              isVerified={props.isVerified}
+            />
           </View>
 
-          {/* ── body row ── */}
-          <View style={styles.bodyRow}>
-            <View style={styles.memberBlock}>
-              <View style={styles.avatarRing}>
-                <Image
-                  source={{ uri: resolveProfileAvatarUri(props.avatarUri) }}
-                  style={styles.avatarImage}
-                />
-                {/* gold rim gradient */}
-                <LinearGradient
-                  colors={[
-                    "rgba(201,169,98,0.38)",
-                    "transparent",
-                    "rgba(201,169,98,0.18)",
-                  ]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={StyleSheet.absoluteFillObject}
-                />
-              </View>
-
-              <View style={styles.idBlock}>
-                <Text style={styles.idLabel}>VAR ID</Text>
-                <Text
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.7}
-                  style={[
-                    styles.idValue,
-                    compact ? styles.idValueCompact : null,
-                  ]}
-                >
-                  {props.displayVarId || "—"}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.qrDock}>
-              <View style={styles.qrPlate}>
-                <QRCode
-                  value={qrPayload}
-                  size={qrSize}
-                  color="#0A0C10"
-                  backgroundColor="#F5F0E6"
-                  quietZone={4}
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* ── frosted footer ── */}
-          <View style={styles.footerWrap}>
-            <View style={styles.footerRule} />
-            <CardFooter
+          <View
+            style={[
+              styles.cardFace,
+              styles.cardFaceBack,
+              Platform.OS === "web"
+                ? ({ backfaceVisibility: "hidden" } as object)
+                : null,
+            ]}
+          >
+            <GoldenCardBack
+              width={props.width}
+              avatarUri={props.avatarUri}
+              displayVarId={props.displayVarId}
               joinDate={props.joinDate}
               nationalityArabic={props.nationalityArabic}
               nationalityEnglish={props.nationalityEnglish}
-              compact={compact}
               arabicTextStyle={arabicTextStyle}
             />
           </View>
-        </LinearGradient>
+        </Animated.View>
       </View>
+
+      <Pressable style={styles.flipButton} onPress={toggleFlip}>
+        <Ionicons
+          name="sync-outline"
+          size={16}
+          color="#E8D5A3"
+          style={isFlipped ? styles.flipIconFlipped : null}
+        />
+        <Text style={styles.flipButtonText}>
+          {isFlipped ? "عرض الوجه الأمامي" : "قلب البطاقة"}
+        </Text>
+      </Pressable>
     </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
-  shadow: {
-    marginTop: 10,
+  wrapper: {
     alignSelf: "center",
-    shadowColor: "#C9A84C",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.28,
-    shadowRadius: 24,
-    elevation: 16,
+    marginTop: 10,
   },
-  shell: {
+  flipStage: {
     width: "100%",
-    borderRadius: 18,
-    overflow: "hidden",
   },
-  frame: {
-    flex: 1,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(201,169,98,0.38)",
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 0,
-    overflow: "hidden",
-  },
-  shimmerGrad: {
-    flex: 1,
+  flipInner: {
     width: "100%",
     height: "100%",
   },
-  // ── chip ──
-  chip: {
-    width: 40,
-    height: 29,
-    borderRadius: 7,
+  cardFace: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  cardFaceBack: {
+    transform: [{ rotateY: "180deg" }],
+  },
+  card: {
+    borderRadius: 14,
+    padding: 18,
+    shadowColor: "#bca168",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 8,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.28)",
+    borderColor: "rgba(255, 255, 255, 0.2)",
   },
-  chipGrad: {
-    flex: 1,
-    padding: 5,
+  cardBack: {
+    borderColor: "rgba(255, 255, 255, 0.16)",
   },
-  chipInner: {
-    flex: 1,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "rgba(18,21,28,0.30)",
-    justifyContent: "space-evenly",
-    paddingHorizontal: 3,
+  watermarkContainer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    opacity: 0.05,
   },
-  chipLine: {
-    height: 1,
-    borderRadius: 999,
-    backgroundColor: "rgba(18,21,28,0.45)",
+  watermarkText: {
+    fontSize: 120,
+    fontWeight: "900",
+    color: "#000000",
   },
-  chipLineShort: {
-    width: "70%",
-    alignSelf: "center",
+  topRightContainer: {
+    position: "absolute",
+    top: 18,
+    right: 20,
+    alignItems: "flex-end",
   },
-  // ── top row ──
-  topRow: {
+  varGoldText: {
+    fontSize: 12,
+    color: "#111111",
+    letterSpacing: 1.2,
+  },
+  serifBold: {
+    fontWeight: "bold",
+  },
+  logoRow: {
+    marginTop: 35,
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    zIndex: 2,
+    gap: 10,
   },
-  topLeading: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+  logoContainer: {
+    alignItems: "flex-start",
+    paddingLeft: 4,
+    flex: 1,
   },
-  brandCol: { gap: 2 },
-  brandMark: {
-    color: "#F8F4EA",
-    fontSize: 22,
+  logoMainText: {
+    fontSize: 38,
     fontWeight: "900",
-    letterSpacing: 3.6,
+    color: "#0a0a0a",
+    letterSpacing: -1,
   },
-  brandTier: {
-    color: "rgba(232,213,163,0.72)",
-    fontSize: 7.5,
-    fontWeight: "800",
-    letterSpacing: 1.8,
+  logoSubText: {
+    fontSize: 8.5,
+    fontWeight: "700",
+    color: "#1a1a1a",
+    marginTop: -2,
+    letterSpacing: 0.3,
   },
-  tierPill: {
+  frontQrPlate: {
+    marginTop: 28,
+    borderRadius: 8,
+    padding: 2,
+    backgroundColor: "transparent",
+    overflow: "hidden",
+  },
+  footerRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.07)",
-    borderWidth: 1,
-    borderColor: "rgba(201,169,98,0.35)",
+    justifyContent: "flex-end",
+    alignItems: "flex-end",
+    position: "absolute",
+    bottom: 18,
+    right: 20,
   },
-  tierPillMuted: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+  footerRight: {
+    alignItems: "flex-end",
   },
-  tierPillText: {
-    color: "#E8D5A3",
+  farIdText: {
+    fontSize: 12.5,
+    fontWeight: "bold",
+    color: "#050505",
+    letterSpacing: 0.8,
+  },
+  idSubtitle: {
     fontSize: 8,
-    fontWeight: "800",
-    letterSpacing: 1.2,
+    fontWeight: "700",
+    color: "rgba(17,17,17,0.72)",
+    marginTop: 2,
+    letterSpacing: 0.6,
   },
-  tierPillTextMuted: {
-    color: "rgba(255,255,255,0.55)",
-    fontSize: 8,
-    fontWeight: "800",
-    letterSpacing: 1.2,
+  backHeader: {
+    alignItems: "flex-end",
   },
-  // ── body ──
-  bodyRow: {
+  backTitle: {
+    color: "#111111",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+  },
+  backSubtitle: {
+    color: "rgba(17,17,17,0.72)",
+    fontSize: 8.5,
+    fontWeight: "700",
+    letterSpacing: 1.1,
+    marginTop: 2,
+  },
+  backBody: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 10,
-    zIndex: 2,
+    marginTop: 14,
+    gap: 10,
   },
-  memberBlock: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    minWidth: 0,
-    paddingRight: 8,
-  },
-  avatarRing: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  backAvatarWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     overflow: "hidden",
     borderWidth: 1.5,
-    borderColor: "rgba(232,213,163,0.50)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(17,17,17,0.25)",
+    backgroundColor: "rgba(255,255,255,0.18)",
   },
-  avatarImage: { width: "100%", height: "100%" },
-  idBlock: { flex: 1, minWidth: 0 },
-  idLabel: {
-    color: "rgba(232,213,163,0.70)",
-    fontSize: 8,
+  backAvatarImage: {
+    width: "100%",
+    height: "100%",
+  },
+  backInfoBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: 10,
+  },
+  backInfoRow: {
+    alignItems: "flex-end",
+  },
+  backInfoLabel: {
+    color: "rgba(17,17,17,0.55)",
+    fontSize: 7,
     fontWeight: "800",
-    letterSpacing: 1.4,
+    letterSpacing: 1,
   },
-  idValue: {
-    color: "#FFFFFF",
-    fontSize: 17,
-    fontWeight: "800",
-    letterSpacing: 1.8,
-    marginTop: 3,
-    fontVariant: ["tabular-nums"],
+  backInfoValue: {
+    color: "#111111",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 2,
+    textAlign: "right",
   },
-  idValueCompact: { fontSize: 14, letterSpacing: 1.2 },
-  qrDock: { alignItems: "flex-end", justifyContent: "center" },
-  qrPlate: {
+  backInfoSubValue: {
+    color: "rgba(17,17,17,0.62)",
+    fontSize: 8.5,
+    fontWeight: "600",
+    marginTop: 1,
+    textAlign: "right",
+  },
+  backQrPlate: {
     borderRadius: 10,
     padding: 5,
     backgroundColor: "#F5F0E6",
     borderWidth: 1,
-    borderColor: "rgba(201,169,98,0.45)",
+    borderColor: "rgba(17,17,17,0.18)",
   },
-  // ── footer ──
-  footerWrap: { zIndex: 2, marginTop: 8 },
-  footerRule: {
-    height: 1,
-    backgroundColor: "rgba(201,169,98,0.22)",
-  },
-  footerBlur: {
-    overflow: "hidden",
-    borderBottomLeftRadius: 17,
-    borderBottomRightRadius: 17,
-  },
-  footerWebFallback: {
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderBottomLeftRadius: 17,
-    borderBottomRightRadius: 17,
-  },
-  footerInner: {
-    flexDirection: "row",
+  backFooter: {
     alignItems: "flex-end",
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
+    marginTop: 8,
   },
-  footerField: { flex: 1, minWidth: 0 },
-  footerFieldEnd: { alignItems: "flex-end" },
-  footerDivider: {
-    width: 1,
-    alignSelf: "stretch",
-    marginHorizontal: 12,
-    backgroundColor: "rgba(201,169,98,0.18)",
-  },
-  footerLabel: {
-    color: "rgba(255,255,255,0.40)",
-    fontSize: 7,
+  backFooterId: {
+    color: "#050505",
+    fontSize: 12,
     fontWeight: "800",
-    letterSpacing: 1.1,
+    letterSpacing: 0.8,
   },
-  footerValue: {
-    color: "#F3F0E8",
-    fontSize: 11,
+  flipButton: {
+    marginTop: 14,
+    alignSelf: "center",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(201,169,98,0.35)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  flipButtonText: {
+    color: "#E8D5A3",
+    fontSize: 13,
     fontWeight: "700",
-    marginTop: 3,
   },
-  footerSubValue: {
-    color: "rgba(255,255,255,0.48)",
-    fontSize: 8,
-    fontWeight: "600",
-    marginTop: 2,
-    textAlign: "right",
+  flipIconFlipped: {
+    transform: [{ rotate: "180deg" }],
   },
 });

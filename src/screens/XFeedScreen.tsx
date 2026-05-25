@@ -5,6 +5,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   TextInput,
@@ -18,6 +19,11 @@ import {
   listAppwriteDirectMessages,
   listAppwriteProfileIndexesByVarIds,
   sendAppwriteDirectMessage,
+  findAppwriteProfileIndexByDisplayVarId,
+  getAppwriteVarProfile,
+} from "../lib/appwrite";
+import type {
+  AppwriteLockedPrediction,
 } from "../lib/appwrite";
 import type {
   FollowingProfileCard,
@@ -35,6 +41,7 @@ import type {
   PrivateMessageEntry,
   WebAudioConstructor,
   WebAudioInstance,
+  XFeedTab,
   XNotificationEntry,
 } from "./x-feed/x-feed.types";
 import {
@@ -49,13 +56,12 @@ import {
   createDefaultAuthorProfileSectionVisibility,
 } from "./x-feed/x-feed.types";
 import { XPostCard, XReplyCard } from "./x-feed/XPostCard";
-import {
-  XMessagesScreen,
-  XNotificationsScreen,
-} from "./x-feed/XMessagesScreen";
+import { XNotificationsScreen } from "./x-feed/XMessagesScreen";
 import { XHashtagTrendCard } from "./x-feed/XHashtagDirectory";
 import { XFollowingDeck } from "./x-feed/XFollowingDeck";
+import { XProfileHub } from "./x-feed/XProfileHub";
 import { XAuthorProfileScreen } from "./x-feed/XAuthorProfileScreen";
+import { XPostActionsModal } from "./x-feed/XPostActionsModal";
 import { styles } from "./x-feed/x-feed.styles";
 import ChatOverlay from "./ChatOverlay";
 import {
@@ -94,6 +100,14 @@ type XFeedScreenProps = {
   resumeReplyPostId: number | null;
   onReplyIntentConsumed: () => void;
   onShowNotice?: (message: string) => void;
+  onRefreshPosts: () => void;
+  onLoadMorePosts: () => void;
+  isRefreshingPosts: boolean;
+  isLoadingMorePosts: boolean;
+  hasMorePosts: boolean;
+  onDeletePost: (postId: number) => void;
+  onUpdatePostContent: (postId: number, content: string) => void;
+  onReportPost: (postId: number) => void;
 };
 
 type OpenedAuthorReplyItem = import("../app.types").PostReply & {
@@ -127,6 +141,14 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     resumeReplyPostId,
     onReplyIntentConsumed,
     onShowNotice,
+    onRefreshPosts,
+    onLoadMorePosts,
+    isRefreshingPosts,
+    isLoadingMorePosts,
+    hasMorePosts,
+    onDeletePost,
+    onUpdatePostContent,
+    onReportPost,
   } = props;
   const normalizedCurrentUserVarId = normalizeAuthorId(currentUserVarId);
   const resolvedCurrentUserDisplayVarId = buildComposerDisplayVarId(
@@ -146,11 +168,23 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       (followedId) =>
         normalizeAuthorId(followedId) === normalizeAuthorId(authorVarId),
     );
-  const [activeTab, setActiveTab] = useState<
-    "following" | "for-you" | "messages"
-  >("for-you");
+  const followingPosts = useMemo(() => {
+    if (!followedAuthorIds.length) {
+      return [];
+    }
+
+    const followedSet = new Set(
+      followedAuthorIds.map((authorId) => normalizeAuthorId(authorId)),
+    );
+
+    return posts.filter((post) => {
+      const authorId = normalizeAuthorId(post.authorId?.trim() || "");
+
+      return Boolean(authorId && followedSet.has(authorId));
+    });
+  }, [followedAuthorIds, posts]);
+  const [activeTab, setActiveTab] = useState<XFeedTab>("for-you");
   const [replyDraft, setReplyDraft] = useState("");
-  const [privateDraft, setPrivateDraft] = useState("");
   const [replyTargetPost, setReplyTargetPost] = useState<Post | null>(null);
   const [openedPost, setOpenedPost] = useState<Post | null>(null);
   const [openedMessageThreadVarId, setOpenedMessageThreadVarId] = useState<
@@ -161,6 +195,10 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   const [isHashtagDirectoryOpen, setIsHashtagDirectoryOpen] = useState(false);
   const [openedAuthorProfile, setOpenedAuthorProfile] =
     useState<OpenedAuthorProfile | null>(null);
+  const [authorLockedPredictions, setAuthorLockedPredictions] = useState<
+    AppwriteLockedPrediction[]
+  >([]);
+  const [actionsPost, setActionsPost] = useState<Post | null>(null);
   const [authorProfileTab, setAuthorProfileTab] =
     useState<AuthorProfileTab>("likes");
   const [
@@ -845,6 +883,11 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     [notificationEntries, seenNotificationIds],
   );
 
+  const unreadMessageCount = useMemo(
+    () => messageThreads.filter((thread) => thread.unread).length,
+    [messageThreads],
+  );
+
   const unreadNotificationCount = useMemo(
     () =>
       notificationCards.filter((notification) => notification.unread).length,
@@ -945,13 +988,41 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   }, [openedPost, posts]);
 
   useEffect(() => {
+    const authorId = openedAuthorProfile?.authorId.trim();
+
+    if (!authorId) {
+      setAuthorLockedPredictions([]);
+      return;
+    }
+
+    let isActive = true;
+
+    void getAppwriteVarProfile(authorId)
+      .then((profile) => {
+        if (!isActive) {
+          return;
+        }
+
+        setAuthorLockedPredictions(profile?.lockedPredictions ?? []);
+      })
+      .catch(() => {
+        if (isActive) {
+          setAuthorLockedPredictions([]);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [openedAuthorProfile?.authorId]);
+
+  useEffect(() => {
     if (activeTab === "for-you") {
       return;
     }
 
     setOpenedMessageThreadProfile(null);
     setOpenedMessageThreadVarId(null);
-    setPrivateDraft("");
     setIsHashtagDirectoryOpen(false);
     setOpenedPost(null);
     setOpenedAuthorProfile(null);
@@ -1214,7 +1285,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     setIsNotificationsOpen(false);
     setOpenedMessageThreadProfile(thread.profile);
     setOpenedMessageThreadVarId(normalizeAuthorId(thread.profile.varId));
-    setPrivateDraft("");
   };
 
   const openAuthorPrivateMessageThread = (profile: OpenedAuthorProfile) => {
@@ -1236,7 +1306,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   const closePrivateMessageThread = () => {
     setOpenedMessageThreadProfile(null);
     setOpenedMessageThreadVarId(null);
-    setPrivateDraft("");
   };
 
   const openNotifications = () => {
@@ -1246,7 +1315,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     setReplyDraft("");
     setOpenedMessageThreadProfile(null);
     setOpenedMessageThreadVarId(null);
-    setPrivateDraft("");
     setIsHashtagDirectoryOpen(false);
     setIsNotificationsOpen(true);
   };
@@ -1291,29 +1359,28 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     setReplyDraft("");
     setOpenedMessageThreadProfile(null);
     setOpenedMessageThreadVarId(null);
-    setPrivateDraft("");
     setIsHashtagDirectoryOpen(false);
     setOpenedPost(matchingPost);
   };
 
-  const submitPrivateMessage = async () => {
+  const submitPrivateMessage = async (messageText: string): Promise<boolean> => {
     const normalizedPeerVarId = normalizeAuthorId(
       openedMessageThreadVarId?.trim() || "",
     );
-    const trimmedDraft = privateDraft.trim();
+    const trimmedDraft = messageText.trim();
 
     if (!trimmedDraft || isSendingPrivateMessage) {
-      return;
+      return false;
     }
 
     if (!isLoggedIn || !normalizedCurrentUserVarId) {
       onRequireAuth("سجل الدخول لإرسال رسالة خاصة.");
-      return;
+      return false;
     }
 
     if (!normalizedPeerVarId || normalizedPeerVarId === normalizedCurrentUserVarId) {
       onShowNotice?.("تعذر تحديد المستخدم المستلم للرسالة.");
-      return;
+      return false;
     }
 
     if (!hasAppwriteSocialInteractionsConfig()) {
@@ -1321,7 +1388,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       onShowNotice?.(
         `ربط Appwrite غير مكتمل للرسائل. أضف: ${missingFields}. انسخ .env.example إلى .env وعبّئ معرفات قاعدة البيانات والتفاعلات.`,
       );
-      return;
+      return false;
     }
 
     setIsSendingPrivateMessage(true);
@@ -1337,7 +1404,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         onShowNotice?.(
           "تعذر حفظ الرسالة في Appwrite. تحقق من EXPO_PUBLIC_APPWRITE_DATABASE_ID و EXPO_PUBLIC_APPWRITE_SOCIAL_INTERACTIONS_COLLECTION_ID.",
         );
-        return;
+        return false;
       }
 
       const nextMessage = buildPrivateMessageEntry(
@@ -1354,14 +1421,15 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           nextMessage,
         ],
       }));
-      setPrivateDraft("");
       onShowNotice?.("تم إرسال الرسالة وحفظها في Appwrite.");
+      return true;
     } catch (error) {
       onShowNotice?.(
         error instanceof Error
           ? `تعذر إرسال الرسالة: ${error.message}`
           : "تعذر إرسال الرسالة إلى Appwrite.",
       );
+      return false;
     } finally {
       setIsSendingPrivateMessage(false);
     }
@@ -1537,20 +1605,123 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     void onSharePost(post.id);
   };
 
-  const handleAuthorFollow = (post: Post) => {
-    toggleAuthorFollowByVarId(post.authorId?.trim() || "");
+  const openPostActions = (post: Post) => {
+    setActionsPost(post);
+  };
+
+  const closePostActions = () => {
+    setActionsPost(null);
+  };
+
+  const handleDeleteActionPost = (post: Post) => {
+    closePostActions();
+
+    if (openedPost?.id === post.id) {
+      setOpenedPost(null);
+    }
+
+    void onDeletePost(post.id);
+  };
+
+  const handleSaveEditActionPost = (post: Post, content: string) => {
+    closePostActions();
+    void onUpdatePostContent(post.id, content);
+  };
+
+  const handleReportActionPost = (post: Post) => {
+    closePostActions();
+    onReportPost(post.id);
+  };
+
+  const openOwnProfile = () => {
+    if (!isLoggedIn || !normalizedCurrentUserVarId) {
+      onRequireAuth("سجل الدخول لعرض ملفك.");
+      return;
+    }
+
+    setOpenedPost(null);
+    setReplyTargetPost(null);
+    setAuthorProfileTab("posts");
+    setOpenedAuthorProfile({
+      authorId: normalizedCurrentUserVarId,
+      displayName: currentUserDisplayName.trim() || normalizedCurrentUserVarId,
+      displayVarId: resolvedCurrentUserDisplayVarId,
+      avatarUri: currentUserAvatarUri.trim(),
+      verified: Boolean(currentUserIsVerified),
+      role: currentUserRole || (currentUserIsVerified ? "admin" : "member"),
+      username: currentUserUsername?.trim() || "",
+      joinDate: currentUserJoinDate,
+      nationality: currentUserNationality,
+    });
+  };
+
+  const openFollowingProfile = (profile: FollowingProfileCard) => {
+    const normalizedId = normalizeAuthorId(profile.varId);
+
+    setOpenedPost(null);
+    setReplyTargetPost(null);
+    setAuthorProfileTab("posts");
+    setOpenedAuthorProfile({
+      authorId: normalizedId,
+      displayName: profile.displayName,
+      displayVarId: profile.displayVarId,
+      avatarUri: profile.avatarUri,
+      verified: profile.role === "admin",
+      role: profile.role,
+      username: profile.username,
+    });
+  };
+
+  const lookupMessageProfile = async (displayVarId: string) => {
+    const profileIndex =
+      await findAppwriteProfileIndexByDisplayVarId(displayVarId);
+
+    if (!profileIndex) {
+      return null;
+    }
+
+    return {
+      varId: normalizeAuthorId(profileIndex.varId),
+      displayVarId: profileIndex.displayVarId,
+      displayName: profileIndex.displayName,
+      username: profileIndex.username,
+      avatarUri: profileIndex.avatarUri,
+      role: profileIndex.role,
+    } satisfies FollowingProfileCard;
+  };
+
+  const openNewMessageThread = (profile: FollowingProfileCard) => {
+    if (normalizeAuthorId(profile.varId) === normalizedCurrentUserVarId) {
+      onShowNotice?.("لا يمكنك بدء محادثة مع نفسك.");
+      return;
+    }
+
+    openPrivateMessageThread(
+      buildMessageThreadEntry(
+        profile,
+        privateMessagesByVarId[normalizeAuthorId(profile.varId)] ?? [],
+      ),
+    );
   };
 
   const openAuthorProfile = (post: Post) => {
     const normalizedAuthorId =
-      post.authorId?.trim() || post.author?.trim() || post.handle?.trim() || "";
+      post.repostMeta?.varId?.trim() ||
+      post.authorId?.trim() ||
+      post.author?.trim() ||
+      post.handle?.trim() ||
+      "";
 
     if (!normalizedAuthorId) {
       return;
     }
 
     const normalizedId = normalizeAuthorId(
-      post.authorId?.trim() || post.author?.trim() || post.handle?.trim() || "",
+      post.repostMeta?.varId?.trim() ||
+        post.authorId?.trim() ||
+        post.author?.trim() ||
+        post.handle?.trim() ||
+        "",
     );
     const normalizedPostHandle = post.handle.trim().replace(/^@+/, "").toLowerCase();
     const normalizedUsername = (currentUserUsername || "").trim().toLowerCase();
@@ -1646,6 +1817,30 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     closeReplyComposer();
   };
 
+  const resolvePostFeedKey = (post: Post) =>
+    post.feedKey?.trim() || String(post.id);
+
+  const handleFeedScroll = (event: {
+    nativeEvent: {
+      layoutMeasurement: { height: number };
+      contentOffset: { y: number };
+      contentSize: { height: number };
+    };
+  }) => {
+    if (activeTab !== "for-you" || isLoadingMorePosts || !hasMorePosts) {
+      return;
+    }
+
+    const { layoutMeasurement, contentOffset, contentSize } =
+      event.nativeEvent;
+    const distanceFromBottom =
+      contentSize.height - layoutMeasurement.height - contentOffset.y;
+
+    if (distanceFromBottom < 240) {
+      onLoadMorePosts();
+    }
+  };
+
   return (
     <View style={styles.xScreen}>
       <ScrollView
@@ -1655,6 +1850,16 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           styles.xScreenContent,
           { paddingBottom: xScreenBottomPadding },
         ]}
+        scrollEventThrottle={320}
+        onScroll={handleFeedScroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshingPosts}
+            onRefresh={onRefreshPosts}
+            tintColor="#FFFFFF"
+            colors={["#1D9BF0"]}
+          />
+        }
       >
         <XFeedHeader
           windowWidth={windowWidth}
@@ -1665,43 +1870,73 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           onOpenNotifications={openNotifications}
         />
 
-        {activeTab === "following" ? (
-          <XFollowingDeck
+        {activeTab === "profile" ? (
+          <XProfileHub
             isLoggedIn={isLoggedIn}
-            profiles={followedProfiles}
-            onRequireAuth={() => onRequireAuth("سجل الدخول لعرض المتابَعين.")}
-            onUnfollow={onToggleAuthorFollow}
-          />
-        ) : activeTab === "messages" ? (
-          <XMessagesScreen
-            isLoggedIn={isLoggedIn}
-            threads={messageThreads}
+            displayName={currentUserDisplayName}
+            displayVarId={resolvedCurrentUserDisplayVarId}
+            avatarUri={currentUserAvatarUri}
+            isVerified={currentUserIsVerified}
+            role={currentUserRole}
+            messageThreads={messageThreads}
+            unreadMessageCount={unreadMessageCount}
             onRequireAuth={() =>
-              onRequireAuth("سجل الدخول لعرض الرسائل الخاصة داخل صفحة X.")
+              onRequireAuth("سجل الدخول لعرض ملفك ورسائلك داخل X.")
             }
+            onOpenPublicProfile={openOwnProfile}
             onOpenThread={openPrivateMessageThread}
+            onComposeLookup={lookupMessageProfile}
+            onOpenNewThread={openNewMessageThread}
           />
-        ) : (
+        ) : activeTab === "following" ? (
+          <>
+            <XFollowingDeck
+              isLoggedIn={isLoggedIn}
+              profiles={followedProfiles}
+              onRequireAuth={() => onRequireAuth("سجل الدخول لعرض المتابَعين.")}
+              onUnfollow={onToggleAuthorFollow}
+              onOpenProfile={openFollowingProfile}
+            />
+            {followingPosts.length ? (
+              <View style={styles.xFollowingFeedSection}>
+                <Text style={styles.xFollowingFeedTitle}>منشورات المتابَعين</Text>
+                {followingPosts.map((post) => (
+                  <XPostCard
+                    key={`following-${resolvePostFeedKey(post)}`}
+                    post={post}
+                    onOpenAuthor={() => openAuthorProfile(post)}
+                    onOpen={() => openPostDetail(post)}
+                    onReply={() => openReplyComposer(post)}
+                    onRepost={() => handlePostRepost(post)}
+                    onShare={() => handlePostShare(post)}
+                    onLike={() => handlePostLike(post)}
+                    onOpenActions={() => openPostActions(post)}
+                  />
+                ))}
+              </View>
+            ) : isLoggedIn && followedProfiles.length ? (
+              <View style={styles.xEmptyStateCard}>
+                <Text style={styles.xEmptyStateTitle}>لا توجد منشورات بعد</Text>
+                <Text style={styles.xEmptyStateText}>
+                  الحسابات التي تتابعها لم تنشر منشورات ظاهرة حاليًا.
+                </Text>
+              </View>
+            ) : null}
+          </>
+        ) : activeTab === "for-you" ? (
           <>
             {posts.length ? (
               posts.map((post) => (
                 <XPostCard
-                  key={post.id}
+                  key={resolvePostFeedKey(post)}
                   post={post}
-                  canToggleFollow={Boolean(
-                    post.authorId?.trim() &&
-                    post.authorId.trim() !== normalizedCurrentUserVarId,
-                  )}
-                  isFollowingAuthor={Boolean(
-                    post.authorId?.trim() && isAuthorFollowed(post.authorId),
-                  )}
-                  onToggleFollow={() => handleAuthorFollow(post)}
                   onOpenAuthor={() => openAuthorProfile(post)}
                   onOpen={() => openPostDetail(post)}
                   onReply={() => openReplyComposer(post)}
                   onRepost={() => handlePostRepost(post)}
                   onShare={() => handlePostShare(post)}
                   onLike={() => handlePostLike(post)}
+                  onOpenActions={() => openPostActions(post)}
                 />
               ))
             ) : (
@@ -1712,8 +1947,18 @@ export default function XFeedScreen(props: XFeedScreenProps) {
                 </Text>
               </View>
             )}
+            {isLoadingMorePosts ? (
+              <View style={styles.xLoadMoreState}>
+                <Text style={styles.xLoadMoreStateText}>جارٍ تحميل المزيد...</Text>
+              </View>
+            ) : null}
+            {!hasMorePosts && posts.length ? (
+              <View style={styles.xLoadMoreState}>
+                <Text style={styles.xLoadMoreStateText}>وصلت إلى نهاية المنشورات</Text>
+              </View>
+            ) : null}
           </>
-        )}
+        ) : null}
       </ScrollView>
 
       <Pressable
@@ -1818,8 +2063,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       {/* ── Part A: ChatOverlay replaces the old full-screen DM Modal ── */}
       <ChatOverlay
         thread={openedMessageThread}
-        draft={privateDraft}
-        onDraftChange={setPrivateDraft}
         onSend={submitPrivateMessage}
         isSending={isSendingPrivateMessage}
         onClose={closePrivateMessageThread}
@@ -1854,15 +2097,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
               <>
                 <XPostCard
                   post={openedPost}
-                  canToggleFollow={Boolean(
-                    openedPost.authorId?.trim() &&
-                    openedPost.authorId.trim() !== normalizedCurrentUserVarId,
-                  )}
-                  isFollowingAuthor={Boolean(
-                    openedPost.authorId?.trim() &&
-                    isAuthorFollowed(openedPost.authorId),
-                  )}
-                  onToggleFollow={() => handleAuthorFollow(openedPost)}
                   onOpenAuthor={() => openAuthorProfile(openedPost)}
                   interactive={false}
                   onOpen={() => undefined}
@@ -1870,6 +2104,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
                   onRepost={() => handlePostRepost(openedPost)}
                   onShare={() => handlePostShare(openedPost)}
                   onLike={() => handlePostLike(openedPost)}
+                  onOpenActions={() => openPostActions(openedPost)}
                 />
 
                 {(openedPost.replyItems ?? []).length ? (
@@ -1908,6 +2143,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
             replyItems={openedAuthorReplyItems}
             postsRepliesTotal={openedAuthorRepliesTotal}
             postsSharesTotal={openedAuthorSharesTotal}
+            lockedPredictions={authorLockedPredictions}
             profile={resolvedOpenedAuthorProfile}
             sectionNoticeDismissal={openedAuthorSectionNoticeDismissal}
             sectionVisibility={openedAuthorSectionVisibility}
@@ -1966,9 +2202,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
               <>
                 <XPostCard
                   post={replyTargetPost}
-                  canToggleFollow={false}
-                  isFollowingAuthor={false}
-                  onToggleFollow={() => undefined}
                   onOpenAuthor={() => openAuthorProfile(replyTargetPost)}
                   interactive={false}
                   onOpen={() => undefined}
@@ -1977,7 +2210,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
                   onShare={() => undefined}
                   onLike={() => undefined}
                   showActionRow={false}
-                  showSyntheticMedia={false}
                 />
 
                 <View style={styles.xReplyComposerCard}>
@@ -2065,6 +2297,18 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           </ScrollView>
         </View>
       </Modal>
+
+      <XPostActionsModal
+        post={actionsPost}
+        isOwner={
+          Boolean(actionsPost) &&
+          isCurrentUserAuthor(actionsPost?.authorId?.trim() || "")
+        }
+        onClose={closePostActions}
+        onDelete={handleDeleteActionPost}
+        onSaveEdit={handleSaveEditActionPost}
+        onReport={handleReportActionPost}
+      />
     </View>
   );
 }

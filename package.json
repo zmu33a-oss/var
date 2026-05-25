@@ -13,6 +13,7 @@
     "build": "node scripts/build-vercel.cjs",
     "vercel-build": "node scripts/build-vercel.cjs",
     "admin:dev": "node scripts/admin-dev.cjs",
+    "admin:local": "node scripts/admin-dev.cjs",
     "admin:build": "node scripts/admin-build.cjs",
     "dev:api": "node scripts/dev-api.cjs",
     "typecheck": "tsc --noEmit"

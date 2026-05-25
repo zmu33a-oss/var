@@ -1,4 +1,6 @@
-import { Account, Client, Databases, ID, Query, Users } from "node-appwrite";
+import { Account, AppwriteException, Client, Databases, ID, Query, Users } from "node-appwrite";
+import fs from "node:fs";
+import path from "node:path";
 
 export type AdminConfig = {
   endpoint: string;
@@ -20,7 +22,63 @@ export type AdminActor = {
   session: string;
 };
 
+let localEnvHydrated = false;
+
+function hydrateLocalEnv() {
+  if (localEnvHydrated) {
+    return;
+  }
+
+  localEnvHydrated = true;
+
+  if (process.env.APPWRITE_API_KEY?.trim()) {
+    return;
+  }
+
+  const root = process.cwd();
+
+  for (const fileName of [".env.local", ".env"]) {
+    const filePath = path.join(root, fileName);
+
+    if (!fs.existsSync(filePath)) {
+      continue;
+    }
+
+    const content = fs.readFileSync(filePath, "utf8");
+
+    for (const rawLine of content.split(/\r?\n/)) {
+      const line = rawLine.trim();
+
+      if (!line || line.startsWith("#")) {
+        continue;
+      }
+
+      const separatorIndex = line.indexOf("=");
+
+      if (separatorIndex <= 0) {
+        continue;
+      }
+
+      const key = line.slice(0, separatorIndex).trim();
+      let value = line.slice(separatorIndex + 1).trim();
+
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
 export function readAdminConfig(): AdminConfig {
+  hydrateLocalEnv();
+
   return {
     endpoint:
       process.env.APPWRITE_ENDPOINT?.trim() ||
@@ -62,7 +120,10 @@ export function sendJson(
   response.statusCode = statusCode;
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   response.setHeader("Access-Control-Allow-Origin", "*");
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Appwrite-Session");
+  response.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, X-Appwrite-Session, X-Appwrite-JWT",
+  );
   response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   response.end(JSON.stringify(payload));
 }
@@ -75,7 +136,10 @@ export function handleOptions(request: { method?: string }, response: {
   if ((request.method ?? "GET") === "OPTIONS") {
     response.statusCode = 204;
     response.setHeader("Access-Control-Allow-Origin", "*");
-    response.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Appwrite-Session");
+    response.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, X-Appwrite-Session, X-Appwrite-JWT",
+    );
     response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     response.end("");
     return true;
@@ -89,11 +153,49 @@ export function readSessionHeader(request: { headers?: Record<string, string | s
   return typeof raw === "string" ? raw.trim() : "";
 }
 
+export function readJwtHeader(request: { headers?: Record<string, string | string[] | undefined> }) {
+  const raw = request.headers?.["x-appwrite-jwt"];
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
+export type AdminAuth = {
+  type: "jwt" | "session";
+  token: string;
+};
+
+export function readAuthHeader(
+  request: { headers?: Record<string, string | string[] | undefined> },
+): AdminAuth | null {
+  const jwt = readJwtHeader(request);
+  if (jwt) {
+    return { type: "jwt", token: jwt };
+  }
+
+  const session = readSessionHeader(request);
+  if (session) {
+    return { type: "session", token: session };
+  }
+
+  return null;
+}
+
 export function createSessionClient(config: AdminConfig, session: string) {
   return new Client()
     .setEndpoint(config.endpoint)
     .setProject(config.projectId)
     .setSession(session);
+}
+
+export function createAuthClient(config: AdminConfig, auth: AdminAuth) {
+  const client = new Client()
+    .setEndpoint(config.endpoint)
+    .setProject(config.projectId);
+
+  if (auth.type === "jwt") {
+    return client.setJWT(auth.token);
+  }
+
+  return client.setSession(auth.token);
 }
 
 export function createServerClient(config: AdminConfig) {
@@ -137,9 +239,9 @@ export async function requireAdminSession(
   request: { headers?: Record<string, string | string[] | undefined> },
   config: AdminConfig,
 ) {
-  const session = readSessionHeader(request);
+  const auth = readAuthHeader(request);
 
-  if (!session) {
+  if (!auth) {
     throw new Error("MISSING_SESSION");
   }
 
@@ -147,7 +249,7 @@ export async function requireAdminSession(
     throw new Error("MISSING_PROJECT");
   }
 
-  const account = new Account(createSessionClient(config, session));
+  const account = new Account(createAuthClient(config, auth));
   const user = await account.get();
   const prefs = (user.prefs ?? {}) as Record<string, unknown>;
   const username =
@@ -165,22 +267,232 @@ export async function requireAdminSession(
     name: user.name ?? "",
     username,
     role,
-    session,
+    session: auth.token,
   } satisfies AdminActor;
+}
+
+type AppwriteSession = {
+  secret?: string;
+};
+
+type AppwriteJwt = {
+  jwt?: string;
+};
+
+async function readAppwriteResponse<T extends Record<string, unknown>>(
+  response: Response,
+  fallbackMessage: string,
+) {
+  const payload = (await response.json().catch(() => ({}))) as T & {
+    message?: string;
+    type?: string;
+  };
+
+  if (!response.ok) {
+    const message =
+      typeof payload.message === "string" && payload.message.trim()
+        ? payload.message.trim()
+        : fallbackMessage;
+    const error = new Error(message);
+    (error as Error & { type?: string }).type = payload.type;
+    throw error;
+  }
+
+  return payload;
+}
+
+export async function createEmailSession(
+  config: AdminConfig,
+  email: string,
+  password: string,
+) {
+  if (!config.projectId) {
+    throw new Error("MISSING_PROJECT");
+  }
+
+  const account = new Account(
+    new Client().setEndpoint(config.endpoint).setProject(config.projectId),
+  );
+
+  try {
+    return await account.createEmailPasswordSession(email, password);
+  } catch (error) {
+    if (error instanceof AppwriteException) {
+      const mapped = new Error(error.message);
+      (mapped as Error & { type?: string }).type = error.type;
+      throw mapped;
+    }
+
+    throw error;
+  }
+}
+
+export async function createAdminJwtForUser(
+  config: AdminConfig,
+  userId: string,
+  sessionId: string,
+) {
+  requireServerKey(config);
+
+  const users = new Users(createServerClient(config));
+
+  try {
+    const result = await users.createJWT(userId, sessionId);
+    const jwt = typeof result.jwt === "string" ? result.jwt.trim() : "";
+
+    if (!jwt) {
+      throw new Error("MISSING_JWT");
+    }
+
+    return jwt;
+  } catch (error) {
+    if (error instanceof AppwriteException) {
+      const mapped = new Error(error.message);
+      (mapped as Error & { type?: string }).type = error.type;
+      throw mapped;
+    }
+
+    throw error;
+  }
+}
+
+export async function createJwtForSession(
+  config: AdminConfig,
+  sessionSecret: string,
+) {
+  if (!config.projectId) {
+    throw new Error("MISSING_PROJECT");
+  }
+
+  const response = await fetch(`${config.endpoint}/account/jwt`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Appwrite-Project": config.projectId,
+      "X-Appwrite-Session": sessionSecret,
+    },
+  });
+
+  const payload = await readAppwriteResponse<AppwriteJwt>(
+    response,
+    "تعذر إنشاء رمز الدخول.",
+  );
+  const jwt = typeof payload.jwt === "string" ? payload.jwt.trim() : "";
+
+  if (!jwt) {
+    throw new Error("MISSING_JWT");
+  }
+
+  return jwt;
+}
+
+export function mapLoginError(error: unknown) {
+  const type =
+    error instanceof Error
+      ? (error as Error & { type?: string }).type
+      : undefined;
+  const message = error instanceof Error ? error.message : "UNKNOWN";
+
+  if (type === "user_invalid_credentials" || message.includes("Invalid credentials")) {
+    return {
+      status: 401,
+      code: "INVALID_CREDENTIALS",
+      error: "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
+    };
+  }
+
+  if (message === "NOT_ADMIN") {
+    return {
+      status: 403,
+      code: "NOT_ADMIN",
+      error: "هذا الحساب ليس لديه صلاحية أدمن.",
+    };
+  }
+
+  if (message === "MISSING_PROJECT") {
+    return {
+      status: 500,
+      code: "MISSING_PROJECT",
+      error: "إعدادات Appwrite ناقصة على السيرفر.",
+    };
+  }
+
+  if (message === "INVALID_BODY") {
+    return {
+      status: 400,
+      code: "INVALID_BODY",
+      error: "تعذر قراءة بيانات الطلب.",
+    };
+  }
+
+  if (message === "MISSING_SESSION_SECRET") {
+    return {
+      status: 500,
+      code: "MISSING_SESSION_SECRET",
+      error: "Appwrite لم يُرجع secret للجلسة.",
+    };
+  }
+
+  if (message === "MISSING_JWT") {
+    return {
+      status: 500,
+      code: "MISSING_JWT",
+      error: "تعذر إنشاء رمز الدخول.",
+    };
+  }
+
+  if (message === "MISSING_API_KEY") {
+    return {
+      status: 500,
+      code: "MISSING_API_KEY",
+      error: "APPWRITE_API_KEY غير موجود في إعدادات السيرفر.",
+    };
+  }
+
+  if (message === "MISSING_SESSION") {
+    return {
+      status: 500,
+      code: "MISSING_SESSION",
+      error: "تعذر إنشاء جلسة Appwrite.",
+    };
+  }
+
+  if (type === "user_password_mismatch" || type === "user_not_found") {
+    return {
+      status: 401,
+      code: "INVALID_CREDENTIALS",
+      error: "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
+    };
+  }
+
+  return {
+    status: 500,
+    code: "LOGIN_FAILED",
+    error: "تعذر تسجيل الدخول. حاول مرة أخرى.",
+  };
 }
 
 export function readJsonBody(request: {
   body?: string | Record<string, unknown>;
 }) {
-  if (!request.body) {
-    return {};
-  }
+  try {
+    if (!request.body) {
+      return {};
+    }
 
-  if (typeof request.body === "string") {
-    return JSON.parse(request.body) as Record<string, unknown>;
-  }
+    if (typeof request.body === "string") {
+      const trimmed = request.body.trim();
+      if (!trimmed) {
+        return {};
+      }
 
-  return request.body as Record<string, unknown>;
+      return JSON.parse(trimmed) as Record<string, unknown>;
+    }
+
+    return request.body as Record<string, unknown>;
+  } catch {
+    throw new Error("INVALID_BODY");
+  }
 }
 
 export async function updateDocumentWithFallback(
@@ -247,6 +559,222 @@ export async function findProfileByDisplayVarId(
   }
 
   return document;
+}
+
+/**
+ * بحث ذكي يجرّب عدّة استراتيجيات بالترتيب:
+ *   1) displayVarId مطابق تماماً (الصيغة القياسية VAR-XXXXXXXX)
+ *   2) varId مطابق تماماً (لو الـ admin أدخل varId كامل)
+ *   3) username بدون @ (لو الإدخال يبدأ بـ @ أو بدون شرطة)
+ *   4) document ID مباشرة (Appwrite User ID)
+ *   5) search على displayName (fuzzy)
+ *   6) search على username (fuzzy)
+ * يُرجع أول مطابقة يجدها، أو null.
+ */
+export async function findProfileSmart(
+  config: AdminConfig,
+  rawQuery: string,
+): Promise<Record<string, unknown> | null> {
+  requireServerKey(config);
+
+  const trimmed = rawQuery.trim();
+  if (!trimmed || !config.databaseId) {
+    return null;
+  }
+
+  const databases = new Databases(createServerClient(config));
+
+  const tryQuery = async (
+    queries: string[],
+  ): Promise<Record<string, unknown> | null> => {
+    try {
+      const response = await databases.listDocuments(
+        config.databaseId,
+        config.profilesCollectionId,
+        [...queries, Query.limit(1)],
+      );
+      const document = response.documents[0];
+      return document ? (document as unknown as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  // 1) Display VAR (VAR-XXXXXXXX)
+  const normalizedDisplay = normalizeDisplayVarId(trimmed);
+  if (normalizedDisplay) {
+    const byDisplay = await tryQuery([
+      Query.equal("displayVarId", normalizedDisplay),
+    ]);
+    if (byDisplay) return byDisplay;
+  }
+
+  // 2) varId مطابق (مثل VAR-someRandomId)
+  const upperTrimmed = trimmed.toUpperCase();
+  if (upperTrimmed.startsWith("VAR-")) {
+    const byVarIdExact = await tryQuery([Query.equal("varId", upperTrimmed)]);
+    if (byVarIdExact) return byVarIdExact;
+
+    // أحياناً varId مخزَّن lowercase
+    const byVarIdLower = await tryQuery([
+      Query.equal("varId", trimmed.toLowerCase()),
+    ]);
+    if (byVarIdLower) return byVarIdLower;
+  }
+
+  // 3) username (بدون @، بحروف صغيرة)
+  const usernameCandidate = trimmed.replace(/^@+/, "").toLowerCase();
+  if (usernameCandidate && /^[a-z0-9._]+$/.test(usernameCandidate)) {
+    const byUsername = await tryQuery([
+      Query.equal("username", usernameCandidate),
+    ]);
+    if (byUsername) return byUsername;
+  }
+
+  // 4) جلب الـ document مباشرة بـ ID (لو المستخدم لصق Appwrite User ID)
+  if (/^[a-zA-Z0-9_-]{8,}$/.test(trimmed)) {
+    try {
+      const document = await databases.getDocument(
+        config.databaseId,
+        config.profilesCollectionId,
+        trimmed,
+      );
+      return document as unknown as Record<string, unknown>;
+    } catch {
+      // ignore — ليست document ID صالحة
+    }
+  }
+
+  // 5) fuzzy search على displayName (يتطلب fulltext index)
+  if (trimmed.length >= 2) {
+    const byDisplayName = await tryQuery([
+      Query.search("displayName", trimmed),
+    ]);
+    if (byDisplayName) return byDisplayName;
+  }
+
+  // 6) fuzzy search على username
+  if (usernameCandidate.length >= 2) {
+    const byUsernameSearch = await tryQuery([
+      Query.search("username", usernameCandidate),
+    ]);
+    if (byUsernameSearch) return byUsernameSearch;
+  }
+
+  return null;
+}
+
+/**
+ * يُرجع قائمة المستخدمين مع pagination و بحث اختياري.
+ * يُستخدم في صفحة Users لعرض جدول كامل.
+ */
+export async function listAdminProfiles(
+  config: AdminConfig,
+  options: { search?: string; limit?: number; offset?: number } = {},
+): Promise<{
+  profiles: Array<Record<string, unknown>>;
+  total: number;
+}> {
+  requireServerKey(config);
+
+  if (!config.databaseId) {
+    return { profiles: [], total: 0 };
+  }
+
+  const databases = new Databases(createServerClient(config));
+  const limit = Math.min(Math.max(options.limit ?? 25, 1), 100);
+  const offset = Math.max(options.offset ?? 0, 0);
+
+  const queries: string[] = [
+    Query.orderDesc("$createdAt"),
+    Query.limit(limit),
+    Query.offset(offset),
+  ];
+
+  const search = options.search?.trim();
+  if (search) {
+    // نطبّق نفس استراتيجية البحث الذكي بطريقة OR-friendly عبر تجارب متتابعة.
+    // أولاً نجرّب match مباشر، ثم fallback لـ fuzzy search.
+    const normalizedDisplay = normalizeDisplayVarId(search);
+
+    // مجموعة محاولات مرتبة حسب الأولوية
+    const attempts: string[][] = [];
+
+    if (normalizedDisplay) {
+      attempts.push([
+        Query.equal("displayVarId", normalizedDisplay),
+        Query.limit(limit),
+        Query.offset(offset),
+      ]);
+    }
+
+    if (search.toUpperCase().startsWith("VAR-")) {
+      attempts.push([
+        Query.equal("varId", search.toUpperCase()),
+        Query.limit(limit),
+        Query.offset(offset),
+      ]);
+    }
+
+    const usernameCandidate = search.replace(/^@+/, "").toLowerCase();
+    if (usernameCandidate && /^[a-z0-9._]+$/.test(usernameCandidate)) {
+      attempts.push([
+        Query.equal("username", usernameCandidate),
+        Query.limit(limit),
+        Query.offset(offset),
+      ]);
+    }
+
+    // fuzzy
+    if (search.length >= 2) {
+      attempts.push([
+        Query.search("displayName", search),
+        Query.limit(limit),
+        Query.offset(offset),
+      ]);
+      attempts.push([
+        Query.search("username", usernameCandidate || search),
+        Query.limit(limit),
+        Query.offset(offset),
+      ]);
+    }
+
+    for (const attemptQueries of attempts) {
+      try {
+        const response = await databases.listDocuments(
+          config.databaseId,
+          config.profilesCollectionId,
+          attemptQueries,
+        );
+        if (response.documents.length > 0) {
+          return {
+            profiles: response.documents.map(
+              (d) => d as unknown as Record<string, unknown>,
+            ),
+            total: response.total,
+          };
+        }
+      } catch {
+        // جرّب المحاولة التالية
+      }
+    }
+
+    return { profiles: [], total: 0 };
+  }
+
+  // بدون بحث — قائمة عادية مرتّبة بالأحدث
+  const response = await databases.listDocuments(
+    config.databaseId,
+    config.profilesCollectionId,
+    queries,
+  );
+
+  return {
+    profiles: response.documents.map(
+      (d) => d as unknown as Record<string, unknown>,
+    ),
+    total: response.total,
+  };
 }
 
 export function readBoolField(value: unknown) {
@@ -402,4 +930,74 @@ export async function syncAccountVerifiedPref(
       isVerified: verified,
     },
   });
+}
+
+export async function updateProfileRole(
+  config: AdminConfig,
+  profileDocumentId: string,
+  role: "admin" | "member",
+) {
+  return updateDocumentWithFallback(
+    config,
+    config.profilesCollectionId,
+    profileDocumentId,
+    [{ role }],
+  );
+}
+
+export async function syncAccountRolePref(
+  config: AdminConfig,
+  userId: string,
+  role: "admin" | "member",
+) {
+  requireServerKey(config);
+  const users = new Users(createServerClient(config));
+  const current = await users.get(userId);
+  const prefs = (current.prefs ?? {}) as Record<string, unknown>;
+
+  await users.updatePrefs(userId, {
+    prefs: {
+      ...prefs,
+      role,
+      adminLabel: role === "admin" ? "VAR" : "",
+    },
+  });
+}
+
+export async function deleteProfileAndUser(
+  config: AdminConfig,
+  profile: Record<string, unknown>,
+  adminId: string,
+) {
+  requireServerKey(config);
+
+  const profileId =
+    typeof profile.$id === "string" ? profile.$id.trim() : "";
+  const userId =
+    typeof profile.userId === "string" && profile.userId.trim()
+      ? profile.userId.trim()
+      : profileId;
+
+  if (!profileId || !userId) {
+    throw new Error("INVALID_PROFILE");
+  }
+
+  if (userId === adminId) {
+    throw new Error("CANNOT_DELETE_SELF");
+  }
+
+  const databases = new Databases(createServerClient(config));
+  const users = new Users(createServerClient(config));
+
+  await databases.deleteDocument(
+    config.databaseId,
+    config.profilesCollectionId,
+    profileId,
+  );
+
+  try {
+    await users.delete(userId);
+  } catch {
+    // profile already removed; user cleanup is best-effort
+  }
 }
