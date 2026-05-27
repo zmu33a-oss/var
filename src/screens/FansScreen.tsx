@@ -1,6 +1,5 @@
 import {
   ScrollView,
-  StyleSheet,
   View,
 } from "react-native";
 import type { FanClubId } from "../app.types";
@@ -21,26 +20,26 @@ type FansScreenProps = {
 export default function FansScreen(props: FansScreenProps) {
   return (
     <View style={styles.root}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.screenContent,
-            styles.screenContentWithTongue,
-          ]}
-        >
-          <FansAssociationCard supporters={props.supporters} />
-        </ScrollView>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.screenContent,
+          styles.screenContentWithTongue,
+        ]}
+      >
+        <FansAssociationCard supporters={props.supporters} />
+      </ScrollView>
 
-        <View style={styles.tongueOverlayHost} pointerEvents="box-none">
-          <FansSupportTongue
-            supporters={props.supporters}
-            supportedTeams={props.supportedTeams}
-            isLoggedIn={props.isLoggedIn}
-            onRequireAuth={props.onRequireAuth}
-            onToggleSupport={props.onToggleSupport}
-          />
-        </View>
+      <View style={styles.tongueOverlayHost} pointerEvents="box-none">
+        <FansSupportTongue
+          supporters={props.supporters}
+          supportedTeams={props.supportedTeams}
+          isLoggedIn={props.isLoggedIn}
+          onRequireAuth={props.onRequireAuth}
+          onToggleSupport={props.onToggleSupport}
+        />
       </View>
+    </View>
   );
 }
 

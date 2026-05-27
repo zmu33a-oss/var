@@ -612,6 +612,28 @@ export default function XFeedScreen(props: XFeedScreenProps) {
 
       return didChange ? nextIds : currentIds;
     });
+
+    setSeenNotificationIds((currentIds) => {
+      let didChange = false;
+      const nextIds = { ...currentIds };
+
+      threadMessages.forEach((message) => {
+        if (message.sender !== "peer") {
+          return;
+        }
+
+        const notificationId = `dm-${normalizedOpenedThreadVarId}-${message.id}`;
+
+        if (nextIds[notificationId]) {
+          return;
+        }
+
+        nextIds[notificationId] = true;
+        didChange = true;
+      });
+
+      return didChange ? nextIds : currentIds;
+    });
   }, [openedMessageThreadVarId, privateMessagesByVarId]);
 
   const messageProfilesByVarId = useMemo(() => {
@@ -666,12 +688,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   ]);
 
   const messageThreads = useMemo(() => {
-    return Array.from(
-      new Set([
-        ...Object.keys(messageProfilesByVarId),
-        ...Object.keys(privateMessagesByVarId),
-      ]),
-    )
+    return Object.keys(privateMessagesByVarId)
       .filter(
         (peerVarId) =>
           Boolean(peerVarId) && peerVarId !== normalizedCurrentUserVarId,
@@ -767,6 +784,10 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         return;
       }
 
+      if (seenPrivateMessageIds[latestMessage.id]) {
+        return;
+      }
+
       nextNotifications.push({
         id: `dm-${thread.id}-${latestMessage.id}`,
         title: "رسالة خاصة جديدة",
@@ -857,6 +878,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     normalizedReplyAuthorDisplayName,
     normalizedReplyAuthorHandle,
     posts,
+    seenPrivateMessageIds,
   ]);
 
   const notificationEntries = useMemo(() => {
@@ -1021,8 +1043,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       return;
     }
 
-    setOpenedMessageThreadProfile(null);
-    setOpenedMessageThreadVarId(null);
     setIsHashtagDirectoryOpen(false);
     setOpenedPost(null);
     setOpenedAuthorProfile(null);

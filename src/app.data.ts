@@ -429,10 +429,13 @@ export const INITIAL_PROFILE: ProfileData = {
   nationalId: "1093478521",
   birthDate: "15/05/1990",
   nationality: "سعودي",
+  association: "الهلال",
   joinDate: "مايو 2026",
   avatarUri: "",
   avatarFrameEnabled: false,
   isVerified: true,
+  cardTier: "classic",
+  role: "member",
   earnedPoints: 0,
   lockedPredictions: [],
   socialMetrics: {

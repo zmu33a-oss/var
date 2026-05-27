@@ -38,6 +38,21 @@ import {
   getNativePointerEventsProps,
   getWebPointerEventsStyle,
 } from "../lib/crossPlatformStyles";
+import type { AdminUserSummary } from "../lib/admin/mobile-admin-api";
+import {
+  getMobileAdminApiHint,
+  lookupMobileAdminUser,
+  verifyMobileAdminSession,
+} from "../lib/admin/mobile-admin-api";
+import {
+  AdminApiStatusBanner,
+  AdminAuditPanel,
+  AdminPanelTabs,
+  AdminPostsPanel,
+  AdminUserModerationBar,
+  AdminUsersPanel,
+  type AdminMobilePanel,
+} from "./admin/AdminMobilePanels";
 
 const SHELL_WIDTH = 430;
 
@@ -108,7 +123,9 @@ async function readAdminDashboardSnapshot(
     }
 
     if (label === "posts") {
-      nextSnapshot.appwritePosts = result.value as AppwritePostRecord[];
+      nextSnapshot.appwritePosts = (
+        result.value as import("../lib/appwrite").AppwritePostsPage
+      ).records;
       return;
     }
 
@@ -320,6 +337,11 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
     useState<AppwriteVarProfile | null>(null);
   const [lookupPosts, setLookupPosts] = useState<AppwritePostRecord[]>([]);
   const [supportActionMessage, setSupportActionMessage] = useState("");
+  const [activePanel, setActivePanel] = useState<AdminMobilePanel>("overview");
+  const [apiReady, setApiReady] = useState<boolean | null>(null);
+  const [apiMessage, setApiMessage] = useState("");
+  const [apiModerationUser, setApiModerationUser] =
+    useState<AdminUserSummary | null>(null);
   const canLookupProfiles = Boolean(
     APPWRITE_CONFIG.databaseId.trim() &&
     APPWRITE_CONFIG.profilesCollectionId.trim(),
@@ -377,6 +399,33 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
   useEffect(() => {
     let isActive = true;
 
+    const verifyApi = async () => {
+      setApiReady(null);
+
+      try {
+        await verifyMobileAdminSession();
+        if (isActive) {
+          setApiReady(true);
+          setApiMessage("");
+        }
+      } catch (error) {
+        if (isActive) {
+          setApiReady(false);
+          setApiMessage(getMobileAdminApiHint(error));
+        }
+      }
+    };
+
+    void verifyApi();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+
     const loadDashboard = async () => {
       setIsRefreshing(true);
 
@@ -417,15 +466,35 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
     setIsRefreshing(false);
   };
 
-  const handleLookup = async () => {
-    if (!lookupValue.trim()) {
+  const refreshApiModerationUser = async (query: string) => {
+    if (!query.trim() || !apiReady) {
+      setApiModerationUser(null);
+      return;
+    }
+
+    try {
+      setApiModerationUser(await lookupMobileAdminUser(query));
+    } catch {
+      setApiModerationUser(null);
+    }
+  };
+
+  const handleLookup = async (forcedQuery?: string) => {
+    const query = (forcedQuery ?? lookupValue).trim();
+
+    if (!query) {
       setLookupProfile(null);
       setLookupVarProfile(null);
       setLookupPosts([]);
+      setApiModerationUser(null);
       setSupportActionMessage("");
       setLookupWarning("");
-      setLookupError("أدخل رقم VAR الظاهر أولاً.");
+      setLookupError("أدخل رقم VAR أو اسم المستخدم أولاً.");
       return;
+    }
+
+    if (forcedQuery) {
+      setLookupValue(forcedQuery);
     }
 
     setIsLookupLoading(true);
@@ -434,20 +503,42 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
     setLookupProfile(null);
     setLookupVarProfile(null);
     setLookupPosts([]);
+    setApiModerationUser(null);
     setSupportActionMessage("");
 
     try {
-      const snapshot = await readAdminLookupSnapshot(lookupValue);
+      const snapshot = await readAdminLookupSnapshot(query);
       setLookupProfile(snapshot.profileIndex);
       setLookupVarProfile(snapshot.varProfile);
       setLookupPosts(snapshot.posts);
       setLookupError(snapshot.error);
       setLookupWarning(snapshot.warning);
+
+      if (snapshot.profileIndex) {
+        await refreshApiModerationUser(
+          snapshot.profileIndex.displayVarId || query,
+        );
+      } else if (apiReady) {
+        try {
+          const apiUser = await lookupMobileAdminUser(query);
+          setApiModerationUser(apiUser);
+          setLookupError("");
+        } catch (apiError) {
+          if (!snapshot.error) {
+            setLookupError(getMobileAdminApiHint(apiError));
+          }
+        }
+      }
     } catch {
       setLookupError("تعذر تنفيذ البحث الآن. حاول مرة أخرى بعد قليل.");
     } finally {
       setIsLookupLoading(false);
     }
+  };
+
+  const handleSelectUserFromList = (user: AdminUserSummary) => {
+    setActivePanel("overview");
+    void handleLookup(user.displayVarId || user.varId);
   };
 
   const handleCopySupportField = async (label: string, value: string) => {
@@ -530,7 +621,7 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
             <Text style={styles.headerEyebrow}>VAR CONTROL</Text>
             <Text style={styles.headerTitle}>لوحة التحكم</Text>
             <Text style={styles.headerSubtitle}>
-              مركز تشغيل المشروع داخل Expo مع قراءة مباشرة من Appwrite
+              أوامر إدارية حقيقية عبر API مع قراءة مباشرة من Appwrite
             </Text>
           </View>
 
@@ -586,6 +677,20 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
           </View>
         ) : null}
 
+        <AdminApiStatusBanner ready={apiReady} message={apiMessage} />
+
+        <AdminPanelTabs activePanel={activePanel} onChange={setActivePanel} />
+
+        {activePanel === "users" ? (
+          <AdminUsersPanel onSelectUser={handleSelectUserFromList} />
+        ) : null}
+
+        {activePanel === "posts" ? <AdminPostsPanel /> : null}
+
+        {activePanel === "audit" ? <AdminAuditPanel /> : null}
+
+        {activePanel === "overview" ? (
+          <>
         <SectionCard title="بحث الدعم" eyebrow="DISPLAY VAR LOOKUP">
           <Text style={styles.lookupLead}>
             أدخل رقم VAR الظاهر للعميل، وسنحوّله داخليًا إلى الحساب المرتبط وVAR
@@ -627,7 +732,7 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
                 }
               }}
               onSubmitEditing={() => void handleLookup()}
-              placeholder="VAR-12345678"
+              placeholder="VAR-12345678 أو @username"
               placeholderTextColor="rgba(255,255,255,0.34)"
               style={styles.lookupInput}
               value={lookupValue}
@@ -635,7 +740,7 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
           </View>
 
           <Text style={styles.lookupHint}>
-            يعمل هذا البحث على رقم VAR الظاهر العام، وليس على varId الداخلي.
+            يدعم البحث برقم VAR أو اسم المستخدم. الأوامر الإدارية تعمل عبر API.
           </Text>
 
           {!canLookupProfiles ? (
@@ -768,6 +873,79 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
                   </Text>
                 </Pressable>
               </View>
+
+              {supportActionMessage ? (
+                <Text style={styles.supportActionMessage}>
+                  {supportActionMessage}
+                </Text>
+              ) : null}
+
+              {apiReady && apiModerationUser ? (
+                <AdminUserModerationBar
+                  displayVarId={apiModerationUser.displayVarId}
+                  verified={apiModerationUser.verified}
+                  cardTier={apiModerationUser.cardTier || "classic"}
+                  accountStatus={apiModerationUser.accountStatus}
+                  role={apiModerationUser.role}
+                  onUpdated={(message) => {
+                    setSupportActionMessage(message);
+                    void refreshApiModerationUser(
+                      apiModerationUser.displayVarId || lookupValue,
+                    );
+                  }}
+                />
+              ) : null}
+            </View>
+          ) : null}
+
+          {!lookupProfile && apiModerationUser ? (
+            <View style={styles.lookupResultCard}>
+              <View style={styles.lookupResultHeader}>
+                <View style={styles.lookupResultBadge}>
+                  <Ionicons
+                    name="person-circle-outline"
+                    size={15}
+                    color="#09111C"
+                  />
+                  <Text style={styles.lookupResultBadgeText}>API MATCH</Text>
+                </View>
+                <Text style={styles.lookupResultStamp}>
+                  {formatRelativeStamp(apiModerationUser.createdAt)}
+                </Text>
+              </View>
+
+              <Text style={styles.lookupResultName}>
+                {apiModerationUser.displayName || "بدون اسم ظاهر"}
+              </Text>
+              <Text style={styles.lookupResultMeta}>
+                @{apiModerationUser.username || "no-username"} •{" "}
+                {formatRoleLabel(
+                  apiModerationUser.role === "admin" ? "admin" : "member",
+                )}
+              </Text>
+
+              <DetailRow
+                label="Display VAR"
+                value={apiModerationUser.displayVarId}
+              />
+              <DetailRow label="Internal VAR" value={apiModerationUser.varId} />
+              <DetailRow label="User ID" value={apiModerationUser.userId} />
+
+              {apiReady ? (
+                <AdminUserModerationBar
+                  displayVarId={apiModerationUser.displayVarId}
+                  verified={apiModerationUser.verified}
+                  cardTier={apiModerationUser.cardTier || "classic"}
+                  accountStatus={apiModerationUser.accountStatus}
+                  role={apiModerationUser.role}
+                  onUpdated={(message) => {
+                    setSupportActionMessage(message);
+                    void refreshApiModerationUser(
+                      apiModerationUser.displayVarId || lookupValue,
+                    );
+                  }}
+                />
+              ) : null}
 
               {supportActionMessage ? (
                 <Text style={styles.supportActionMessage}>
@@ -959,24 +1137,8 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
             <EmptySectionCopy text="سيظهر ترتيب الحسابات هنا بعد توفر منشورات كافية داخل collection الخاصة بالمنشورات." />
           )}
         </SectionCard>
-
-        <SectionCard title="ما الذي نكمله بعد هذا" eyebrow="NEXT BUILD">
-          <RoadmapRow
-            icon="people-outline"
-            title="Users API"
-            summary="إضافة endpoint أو collection view آمن لعرض المستخدمين وصلاحياتهم داخل اللوحة."
-          />
-          <RoadmapRow
-            icon="trophy-outline"
-            title="Predictions Moderation"
-            summary="ربط مراجعة التوقعات واعتماد النقاط من نفس لوحة التحكم بدل القراءة فقط."
-          />
-          <RoadmapRow
-            icon="document-text-outline"
-            title="Audit Trail"
-            summary="تسجيل من عدل ماذا ومتى، حتى تبقى عمليات الإدارة قابلة للمراجعة."
-          />
-        </SectionCard>
+          </>
+        ) : null}
       </ScrollView>
     </View>
   );

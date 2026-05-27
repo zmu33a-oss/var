@@ -16,7 +16,8 @@
     unhide_post: "إظهار منشور",
     delete_post: "حذف منشور",
     delete_account: "حذف حساب",
-    change_role: "تغيير رتبة",
+    set_card_tier: "تعيين بطاقة",
+    migrate_card_tiers: "ترحيل بطاقات كلاسيك",
   };
 
   let keysData = [];
@@ -26,6 +27,7 @@
   let currentAdmin = null;
   let currentGlobalMode = "X-Mode";
   let isBusy = false;
+  let cardTierMigrationAttempted = false;
 
   function resolveApiBase() {
     if (typeof window === "undefined") return "";
@@ -386,6 +388,39 @@
     if (window.lucide) window.lucide.createIcons();
   }
 
+  function formatCardTierLabel(cardTier) {
+    switch (cardTier) {
+      case "gold":
+        return "ذهبية";
+      case "platinum":
+        return "بلاتينيوم";
+      default:
+        return "كلاسيك";
+    }
+  }
+
+  async function maybeMigrateCardTiers() {
+    if (cardTierMigrationAttempted) {
+      return;
+    }
+
+    cardTierMigrationAttempted = true;
+
+    try {
+      const payload = await adminFetch("/api/admin/users/migrate-card-tiers", {
+        method: "POST",
+      });
+      if (payload?.migrated > 0) {
+        showToast(
+          `تم تطبيق بطاقة كلاسيك على ${payload.migrated} حساب.`,
+          "success",
+        );
+      }
+    } catch {
+      // ignore migration failures on first load
+    }
+  }
+
   function renderUsers(filteredData) {
     const tableBody = document.getElementById("users-table-body");
     if (!tableBody) return;
@@ -395,7 +430,7 @@
     if (dataToRender.length === 0) {
       tableBody.innerHTML = `
         <tr>
-          <td colspan="6" class="py-8 px-6 text-center text-xs text-zinc-500">
+          <td colspan="7" class="py-8 px-6 text-center text-xs text-zinc-500">
             لا يوجد مستخدمون مطابقون للبحث الحالي.
           </td>
         </tr>
@@ -430,6 +465,16 @@
         </td>
         <td class="py-4 px-6 font-mono text-xs text-zinc-400" dir="ltr">${escapeHtml(displayVarId || user.id)}</td>
         <td class="py-4 px-6 text-xs font-semibold text-zinc-300">${escapeHtml(formatRoleLabel(user.role))}</td>
+        <td class="py-4 px-6">
+          <select
+            data-card-tier="${escapeHtml(displayVarId)}"
+            class="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-[11px] text-zinc-200"
+          >
+            <option value="classic" ${user.cardTier === "classic" || !user.cardTier ? "selected" : ""}>كلاسيك</option>
+            <option value="gold" ${user.cardTier === "gold" ? "selected" : ""}>ذهبية</option>
+            <option value="platinum" ${user.cardTier === "platinum" ? "selected" : ""}>بلاتينيوم</option>
+          </select>
+        </td>
         <td class="py-4 px-6 text-xs text-zinc-500">${escapeHtml(formatDateLabel(user.createdAt))}</td>
         <td class="py-4 px-6 text-center">
           <span class="px-2.5 py-1 rounded-md text-[10px] font-extrabold ${isBlocked ? "bg-red-500/10 text-red-400 border border-red-500/20" : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"}">
@@ -524,6 +569,8 @@
     postsCount = Array.isArray(postsPayload.posts)
       ? postsPayload.posts.length
       : 0;
+
+    await maybeMigrateCardTiers();
 
     const connected = Boolean(health?.writesEnabled);
     setServerStatus(
@@ -944,6 +991,25 @@
     renderUsers(usersData.filter((user) => user.role === mappedRole));
   }
 
+  async function changeUserCardTier(displayVarId, cardTier) {
+    if (!displayVarId || !cardTier || isBusy) return;
+
+    isBusy = true;
+    try {
+      await adminFetch("/api/admin/users/card-tier", {
+        method: "POST",
+        body: JSON.stringify({ displayVarId, cardTier }),
+      });
+      showToast(`تم تعيين بطاقة ${formatCardTierLabel(cardTier)}.`, "success");
+      await refreshUsers();
+      await refreshAuditLogs();
+    } catch (error) {
+      showToast(error?.message || "تعذر تعيين البطاقة.", "warning");
+    } finally {
+      isBusy = false;
+    }
+  }
+
   async function toggleUserStatus(displayVarId) {
     if (!displayVarId || isBusy) return;
     const user = usersData.find(
@@ -1116,6 +1182,14 @@
           showToast("تم حذف المفتاح المحلي.", "info");
         }
       }
+    });
+
+    document.getElementById("users-table-body")?.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLSelectElement)) return;
+      const displayVarId = target.dataset.cardTier;
+      if (!displayVarId) return;
+      void changeUserCardTier(displayVarId, target.value);
     });
 
     document.getElementById("users-table-body")?.addEventListener("click", (event) => {

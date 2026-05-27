@@ -158,6 +158,18 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     marginLeft: 4,
   },
+  xFollowingFeedSection: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
+  xFollowingFeedTitle: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "900",
+    textAlign: "right",
+    marginBottom: 12,
+  },
   xEmptyStateCard: {
     marginTop: 18,
     marginHorizontal: 16,
@@ -182,6 +194,15 @@ export const styles = StyleSheet.create({
     lineHeight: 21,
     textAlign: "right",
     marginTop: 6,
+  },
+  xLoadMoreState: {
+    paddingVertical: 18,
+    alignItems: "center",
+  },
+  xLoadMoreStateText: {
+    color: "rgba(255,255,255,0.56)",
+    fontSize: 13,
+    fontWeight: "700",
   },
   xAvatarTiny: {
     width: 40,

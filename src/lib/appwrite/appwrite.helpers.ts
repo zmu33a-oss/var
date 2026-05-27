@@ -5,6 +5,7 @@ import type {
   AppwritePointsDocument,
   AppwritePointsLedgerEntry,
   AppwritePostDocument,
+  AppwritePostEngagementAggregate,
   AppwritePostRecord,
   AppwritePostReplyRecord,
   AppwriteDirectMessageRecord,
@@ -19,6 +20,7 @@ import type {
   AppwriteUserRole,
   AppwriteVarSocialSummary,
 } from "./appwrite.types";
+import { normalizeMembershipCardTier } from "../membershipCardTier";
 import {
   VAR_ADMIN_USERNAME,
   VAR_DISPLAY_DIGIT_COUNT,
@@ -223,6 +225,8 @@ export function toAppwriteProfilePrefs(
       typeof prefs.birthDate === "string" ? prefs.birthDate.trim() : "",
     nationality:
       typeof prefs.nationality === "string" ? prefs.nationality.trim() : "",
+    association:
+      typeof prefs.association === "string" ? prefs.association.trim() : "",
     avatarUri: resolveAppwriteAvatarUrl(prefs.avatarUri, prefs.avatarUrl),
     avatarUrl: resolveAppwriteAvatarUrl(prefs.avatarUrl, prefs.avatarUri),
     role:
@@ -234,6 +238,12 @@ export function toAppwriteProfilePrefs(
     adminLabel:
       typeof prefs.adminLabel === "string" ? prefs.adminLabel.trim() : "",
     isVerified: readBoolishAppwriteValue(prefs.isVerified),
+    cardTier:
+      prefs.cardTier === "classic" ||
+      prefs.cardTier === "gold" ||
+      prefs.cardTier === "platinum"
+        ? prefs.cardTier
+        : undefined,
   };
 }
 
@@ -270,6 +280,29 @@ export function resolveAdminRole(
 
 // ─── Document → Record converters ──────────────────────────────────────────
 
+export function createEmptyPostEngagementAggregate(): AppwritePostEngagementAggregate {
+  return {
+    likes: 0,
+    reposts: 0,
+    shares: 0,
+    likedByMe: false,
+    repostedByMe: false,
+    sharedByMe: false,
+  };
+}
+
+export function isAppwritePostHidden(document: AppwritePostDocument): boolean {
+  if (readAppwriteBoolean(document.isHidden)) {
+    return true;
+  }
+
+  if (typeof document.status === "string") {
+    return document.status.trim().toLowerCase() === "hidden";
+  }
+
+  return false;
+}
+
 export function toAppwritePostRecord(
   document: AppwritePostDocument,
 ): AppwritePostRecord {
@@ -280,12 +313,16 @@ export function toAppwritePostRecord(
       ? normalizeAppwriteVarId(document.varId)
       : normalizeAppwriteVarId(authorId);
 
+  const mediaUri =
+    typeof document.mediaUri === "string" ? document.mediaUri.trim() : "";
+
   return {
     id: document.$id,
     title: typeof document.title === "string" ? document.title : "",
     content: typeof document.content === "string" ? document.content : "",
     authorId,
     varId,
+    mediaUri: mediaUri || undefined,
     createdAt: document.$createdAt,
   };
 }
@@ -321,10 +358,12 @@ export function toAppwriteAuthUser(
     profession: prefs.profession || "",
     birthDate: prefs.birthDate || "",
     nationality: prefs.nationality || "",
+    association: prefs.association || "",
     avatarUri: prefs.avatarUri || "",
     role: resolvedRole,
     adminLabel: resolvedRole === "admin" ? prefs.adminLabel || "VAR" : "",
     isVerified: prefs.isVerified === true || resolvedRole === "admin",
+    cardTier: normalizeMembershipCardTier(prefs.cardTier),
     createdAt,
   };
 }
@@ -348,6 +387,7 @@ export function toAppwriteProfileIndexRecord(
     isVerified:
       readBoolishAppwriteValue(document.isVerified) ||
       roleValue === "admin",
+    cardTier: normalizeMembershipCardTier(document.cardTier),
     createdAt:
       typeof document.$createdAt === "string" ? document.$createdAt : "",
   };

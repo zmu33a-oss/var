@@ -20,7 +20,22 @@ export type AppwritePostRecord = {
   content: string;
   authorId: string;
   varId: string;
+  mediaUri?: string;
   createdAt: string;
+};
+
+export type AppwritePostsPage = {
+  records: AppwritePostRecord[];
+  total: number;
+};
+
+export type AppwritePostEngagementAggregate = {
+  likes: number;
+  reposts: number;
+  shares: number;
+  likedByMe: boolean;
+  repostedByMe: boolean;
+  sharedByMe: boolean;
 };
 
 export type AppwritePostReplyRecord = {
@@ -110,10 +125,12 @@ export type AppwriteAuthUser = {
   profession: string;
   birthDate: string;
   nationality: string;
+  association: string;
   avatarUri: string;
   role: AppwriteUserRole;
   adminLabel: string;
   isVerified: boolean;
+  cardTier: "classic" | "gold" | "platinum";
   createdAt: string;
 };
 
@@ -127,6 +144,7 @@ export type AppwriteProfileIndexRecord = {
   avatarUri: string;
   role: AppwriteUserRole;
   isVerified: boolean;
+  cardTier: "classic" | "gold" | "platinum";
   createdAt: string;
 };
 
@@ -185,6 +203,7 @@ export type AppwriteProfilePrefs = {
   profession?: string;
   birthDate?: string;
   nationality?: string;
+  association?: string;
   avatarUri?: string;
   avatarUrl?: string;
   role?: AppwriteUserRole;
@@ -196,6 +215,7 @@ export type AppwritePostInput = {
   title: string;
   content: string;
   varId: string;
+  mediaUri?: string;
 };
 
 export type AppwritePostDocument = {
@@ -205,6 +225,9 @@ export type AppwritePostDocument = {
   content?: unknown;
   authorId?: unknown;
   varId?: unknown;
+  mediaUri?: unknown;
+  isHidden?: unknown;
+  status?: unknown;
 };
 
 export type AppwriteAccountDocument = {
@@ -227,6 +250,7 @@ export type AppwriteProfileIndexDocument = {
   avatarUrl?: unknown;
   role?: unknown;
   isVerified?: unknown;
+  cardTier?: unknown;
 };
 
 export type AppwritePredictionDocument = {

@@ -9,6 +9,7 @@ export function XFollowingDeck(props: {
   profiles: FollowingProfileCard[];
   onRequireAuth: () => void;
   onUnfollow: (authorVarId: string) => void;
+  onOpenProfile: (profile: FollowingProfileCard) => void;
 }) {
   if (!props.isLoggedIn) {
     return (
@@ -45,7 +46,7 @@ export function XFollowingDeck(props: {
       <View style={styles.xFollowingSectionHeader}>
         <Text style={styles.xFollowingTitle}>المتابعون</Text>
         <Text style={styles.xFollowingSubtitle}>
-          الحسابات التي تتابعها مرتبة كبطاقات متسلسلة.
+          اضغط على البطاقة لفتح البروفايل، وستجد منشورات المتابَعين بالأسفل.
         </Text>
       </View>
 
@@ -66,77 +67,82 @@ export function XFollowingDeck(props: {
                 },
               ]}
             >
-              <LinearGradient
-                colors={
-                  isAdmin
-                    ? ["#1D4ED8", "#081223", "#05080F"]
-                    : ["#0F766E", "#0B1823", "#05080F"]
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.xFollowingCard}
-              >
-                <View style={styles.xFollowingCardGlow} />
+              <Pressable onPress={() => props.onOpenProfile(profile)}>
+                <LinearGradient
+                  colors={
+                    isAdmin
+                      ? ["#1D4ED8", "#081223", "#05080F"]
+                      : ["#0F766E", "#0B1823", "#05080F"]
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.xFollowingCard}
+                >
+                  <View style={styles.xFollowingCardGlow} />
 
-                <View style={styles.xFollowingCardHeader}>
-                  <View style={styles.xFollowingBadge}>
-                    <Ionicons
-                      name="card-outline"
-                      size={14}
-                      color="rgba(255,255,255,0.88)"
-                    />
-                    <Text style={styles.xFollowingBadgeText}>WEBPLUS PASS</Text>
-                  </View>
-
-                  <Pressable
-                    style={styles.xFollowingRemoveButton}
-                    onPress={() => props.onUnfollow(profile.varId)}
-                  >
-                    <Text style={styles.xFollowingRemoveButtonText}>إلغاء</Text>
-                  </Pressable>
-                </View>
-
-                <View style={styles.xFollowingIdentityRow}>
-                  <View style={styles.xFollowingAvatarWrap}>
-                    {profile.avatarUri.trim() ? (
-                      <Image
-                        source={{ uri: profile.avatarUri }}
-                        style={styles.xFollowingAvatarImage}
+                  <View style={styles.xFollowingCardHeader}>
+                    <View style={styles.xFollowingBadge}>
+                      <Ionicons
+                        name="card-outline"
+                        size={14}
+                        color="rgba(255,255,255,0.88)"
                       />
-                    ) : (
-                      <Text style={styles.xFollowingAvatarText}>
-                        {profile.displayName.slice(0, 1) || "V"}
-                      </Text>
-                    )}
+                      <Text style={styles.xFollowingBadgeText}>WEBPLUS PASS</Text>
+                    </View>
+
+                    <Pressable
+                      style={styles.xFollowingRemoveButton}
+                      onPress={(event) => {
+                        event.stopPropagation?.();
+                        props.onUnfollow(profile.varId);
+                      }}
+                    >
+                      <Text style={styles.xFollowingRemoveButtonText}>إلغاء</Text>
+                    </Pressable>
                   </View>
 
-                  <View style={styles.xFollowingIdentityText}>
-                    <View style={styles.xFollowingNameRow}>
-                      <Text style={styles.xFollowingName}>
-                        {profile.displayName}
-                      </Text>
-                      {isAdmin ? (
-                        <SealCheckIcon
-                          size={16}
-                          style={styles.xFollowingVerifiedIcon}
+                  <View style={styles.xFollowingIdentityRow}>
+                    <View style={styles.xFollowingAvatarWrap}>
+                      {profile.avatarUri.trim() ? (
+                        <Image
+                          source={{ uri: profile.avatarUri }}
+                          style={styles.xFollowingAvatarImage}
                         />
-                      ) : null}
+                      ) : (
+                        <Text style={styles.xFollowingAvatarText}>
+                          {profile.displayName.slice(0, 1) || "V"}
+                        </Text>
+                      )}
                     </View>
-                    <Text style={styles.xFollowingHandle}>
-                      {profile.username
-                        ? `@${profile.username}`
-                        : profile.displayVarId}
+
+                    <View style={styles.xFollowingIdentityText}>
+                      <View style={styles.xFollowingNameRow}>
+                        <Text style={styles.xFollowingName}>
+                          {profile.displayName}
+                        </Text>
+                        {isAdmin ? (
+                          <SealCheckIcon
+                            size={16}
+                            style={styles.xFollowingVerifiedIcon}
+                          />
+                        ) : null}
+                      </View>
+                      <Text style={styles.xFollowingHandle}>
+                        {profile.username
+                          ? `@${profile.username}`
+                          : profile.displayVarId}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.xFollowingIdBlock}>
+                    <Text style={styles.xFollowingIdLabel}>VAR ID</Text>
+                    <Text style={styles.xFollowingIdValue}>
+                      {profile.displayVarId}
                     </Text>
                   </View>
-                </View>
-
-                <View style={styles.xFollowingIdBlock}>
-                  <Text style={styles.xFollowingIdLabel}>VAR ID</Text>
-                  <Text style={styles.xFollowingIdValue}>
-                    {profile.displayVarId}
-                  </Text>
-                </View>
-              </LinearGradient>
+                </LinearGradient>
+              </Pressable>
             </View>
           );
         })}

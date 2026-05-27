@@ -8,6 +8,7 @@ export type HomeMode = "tiktok" | "x";
 export type AuthMode = "login" | "signup";
 export type LeagueTab = "events" | "lineup" | "predictions" | "live" | null;
 export type FanClubId = "hilal" | "nassr" | "ittihad";
+export type MembershipCardTier = "classic" | "gold" | "platinum";
 export type IconName = ComponentProps<typeof Ionicons>["name"];
 
 export type ChatMessage = {
@@ -51,8 +52,19 @@ export type Video = {
   tag: string;
 };
 
+export type PostRepostMeta = {
+  interactionId?: string;
+  varId: string;
+  author: string;
+  authorAvatarUri?: string;
+  authorVerified?: boolean;
+  handle: string;
+  time: string;
+};
+
 export type Post = {
   id: number;
+  feedKey?: string;
   sourceId?: string;
   title?: string;
   authorId?: string;
@@ -62,6 +74,8 @@ export type Post = {
   handle: string;
   time: string;
   content: string;
+  mediaUri?: string;
+  repostMeta?: PostRepostMeta;
   replyItems?: PostReply[];
   likes: number;
   replies: number;
@@ -169,10 +183,13 @@ export type ProfileData = {
   nationalId: string;
   birthDate: string;
   nationality: string;
+  association: string;
   joinDate: string;
   avatarUri: string;
   avatarFrameEnabled: boolean;
   isVerified: boolean;
+  cardTier: MembershipCardTier;
+  role: "admin" | "member";
   earnedPoints: number;
   lockedPredictions: LockedPredictionSummary[];
   socialMetrics: ProfileSocialMetrics;

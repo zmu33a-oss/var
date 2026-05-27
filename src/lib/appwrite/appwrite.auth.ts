@@ -14,13 +14,16 @@ import {
 } from "./appwrite.config";
 import {
   normalizeAppwriteUsername,
+  normalizeAppwriteDisplayVarId,
   buildAppwriteVarId,
   buildAppwriteDisplayVarId,
   toAppwriteAuthUser,
+  toAppwriteProfilePrefs,
   resolveAppwriteAvatarUrl,
   isUnauthorizedAppwriteError,
   isActiveAppwriteSessionError,
 } from "./appwrite.helpers";
+import { normalizeMembershipCardTier } from "../membershipCardTier";
 import {
   IS_WEB_RUNTIME,
   AppwriteID,
@@ -420,6 +423,7 @@ export async function signupAppwriteUser(input: {
       avatarUrl: DEFAULT_APPWRITE_AVATAR_URL,
       role: isVarAdminAccount ? "admin" : "member",
       adminLabel: isVarAdminAccount ? "VAR" : "",
+      cardTier: "classic",
     },
   });
 
@@ -486,6 +490,8 @@ export async function saveAppwriteUserProfile(input: {
   profession: string;
   birthDate: string;
   nationality: string;
+  association: string;
+  displayVarId: string;
   avatarUri: string;
 }) {
   const accountService = getAccountBridge();
@@ -498,12 +504,15 @@ export async function saveAppwriteUserProfile(input: {
       ? VAR_ADMIN_USERNAME
       : normalizeAppwriteUsername(input.username);
   const nextAvatarUrl = resolveAppwriteAvatarUrl(input.avatarUri);
+  const nextDisplayVarId =
+    normalizeAppwriteDisplayVarId(input.displayVarId) ||
+    mappedUser.displayVarId;
 
   await accountService.updateName(input.name.trim());
   await accountService.updatePrefs<AppwriteProfilePrefs>({
     prefs: {
       varId: mappedUser.varId,
-      displayVarId: mappedUser.displayVarId,
+      displayVarId: nextDisplayVarId,
       username: nextUsername,
       phoneNumber: input.phoneNumber.trim(),
       nationalId: input.nationalId.trim(),
@@ -512,10 +521,12 @@ export async function saveAppwriteUserProfile(input: {
       profession: input.profession.trim(),
       birthDate: input.birthDate.trim(),
       nationality: input.nationality.trim(),
+      association: input.association.trim(),
       avatarUri: nextAvatarUrl,
       avatarUrl: nextAvatarUrl,
       role: mappedUser.role,
       adminLabel: mappedUser.role === "admin" ? "VAR" : "",
+      cardTier: mappedUser.cardTier,
     },
   });
 
@@ -545,7 +556,41 @@ export async function logoutAppwriteUser() {
 async function buildSyncedAppwriteAuthUser(
   document: AppwriteAccountDocument,
 ): Promise<AppwriteAuthUser> {
-  const mappedUser = toAppwriteAuthUser(document);
+  const parsedPrefs = toAppwriteProfilePrefs(document.prefs);
+  let mappedUser = toAppwriteAuthUser(document);
+
+  if (!parsedPrefs.cardTier) {
+    try {
+      const accountService = getAccountBridge();
+      const rawPrefs =
+        document.prefs && typeof document.prefs === "object"
+          ? (document.prefs as Record<string, unknown>)
+          : {};
+
+      await accountService.updatePrefs<AppwriteProfilePrefs>({
+        prefs: {
+          ...rawPrefs,
+          cardTier: "classic",
+        },
+      });
+
+      mappedUser = {
+        ...mappedUser,
+        cardTier: "classic",
+      };
+    } catch {
+      mappedUser = {
+        ...mappedUser,
+        cardTier: "classic",
+      };
+    }
+  }
+
+  mappedUser = {
+    ...mappedUser,
+    cardTier: normalizeMembershipCardTier(mappedUser.cardTier),
+  };
+
   const { syncAppwriteProfileIndexRecord } = await import("./appwrite.profile");
   await syncAppwriteProfileIndexRecord(mappedUser);
   return mappedUser;

@@ -55,7 +55,9 @@ type WebAudioInstance = {
 type WebAudioConstructor = new (src?: string) => WebAudioInstance;
 
 export function MatchShowcaseCard(props: {
+  competitionTitle: string;
   config: MatchShowcaseCardConfig;
+  headerFontFamily?: string;
   kickoffCountdownLabel: string;
   onOpenDetails: () => void;
   pollTweetCardHeight: number;
@@ -357,9 +359,9 @@ export function MatchShowcaseCard(props: {
     <GlassCard style={styles.matchCard}>
       <LinearGradient
         colors={[
-          "rgba(255,255,255,0.42)",
-          "rgba(255,255,255,0.20)",
-          "rgba(255,255,255,0.08)",
+          "rgba(255,152,0,0.28)",
+          "rgba(255,152,0,0.08)",
+          "rgba(255,152,0,0.28)",
         ]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -377,13 +379,13 @@ export function MatchShowcaseCard(props: {
             colors={[
               "rgba(0,0,0,0)",
               "rgba(0,0,0,0)",
-              "rgba(255,255,255,0.96)",
-              "rgba(255,255,255,0.96)",
-              "rgba(0,0,0,0)",
+              "rgba(255,152,0,0.98)",
+              "rgba(255,193,7,1)",
+              "rgba(255,152,0,0.98)",
               "rgba(0,0,0,0)",
               "rgba(0,0,0,0)",
             ]}
-            locations={[0, 0.34, 0.45, 0.52, 0.58, 0.68, 1]}
+            locations={[0, 0.38, 0.47, 0.5, 0.53, 0.62, 1]}
             start={{ x: 0.08, y: 0 }}
             end={{ x: 0.92, y: 1 }}
             style={styles.matchShowcaseBorderSpinnerGradient}
@@ -440,6 +442,17 @@ export function MatchShowcaseCard(props: {
                   style={styles.matchShowcaseCompetitionLogo as ImageStyle}
                 />
               </View>
+
+              <RNText
+                style={[
+                  styles.matchShowcaseLeagueName,
+                  props.headerFontFamily
+                    ? { fontFamily: props.headerFontFamily }
+                    : null,
+                ]}
+              >
+                {props.competitionTitle}
+              </RNText>
             </View>
 
             <View style={styles.matchShowcaseTeamsRow}>

@@ -789,6 +789,147 @@ export function readBoolField(value: unknown) {
   return false;
 }
 
+export type AdminMembershipCardTier = "classic" | "gold" | "platinum";
+
+export function normalizeAdminCardTier(
+  value: unknown,
+): AdminMembershipCardTier | null {
+  if (value === "classic" || value === "gold" || value === "platinum") {
+    return value;
+  }
+
+  return null;
+}
+
+export function readCardTierField(value: unknown): AdminMembershipCardTier {
+  return normalizeAdminCardTier(value) ?? "classic";
+}
+
+function readProfileStringField(
+  profile: Record<string, unknown>,
+  key: string,
+) {
+  const value = profile[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function withRequiredProfileFields(
+  profile: Record<string, unknown>,
+  patch: Record<string, unknown>,
+) {
+  const role = readProfileStringField(profile, "role") || "member";
+  const username = readProfileStringField(profile, "username");
+  const admin =
+    readProfileStringField(profile, "admin") ||
+    (role === "admin" ? "VAR" : "MEMBER");
+
+  return {
+    role,
+    admin,
+    ...(username ? { username } : {}),
+    ...patch,
+  };
+}
+
+function resolveProfileDocumentId(profile: Record<string, unknown>) {
+  const documentId = readProfileStringField(profile, "$id");
+
+  if (!documentId) {
+    throw new Error("INVALID_PROFILE");
+  }
+
+  return documentId;
+}
+
+export async function updateProfileCardTier(
+  config: AdminConfig,
+  profile: Record<string, unknown>,
+  cardTier: AdminMembershipCardTier,
+) {
+  const payload = withRequiredProfileFields(profile, { cardTier });
+
+  return updateDocumentWithFallback(
+    config,
+    config.profilesCollectionId,
+    resolveProfileDocumentId(profile),
+    [payload, { ...payload, cardTier: String(cardTier) }],
+  );
+}
+
+export async function syncAccountCardTierPref(
+  config: AdminConfig,
+  userId: string,
+  cardTier: AdminMembershipCardTier,
+) {
+  requireServerKey(config);
+  const users = new Users(createServerClient(config));
+  const current = await users.get(userId);
+  const prefs = (current.prefs ?? {}) as Record<string, unknown>;
+
+  await users.updatePrefs(userId, {
+    prefs: {
+      ...prefs,
+      cardTier,
+    },
+  });
+}
+
+export async function migrateMissingCardTiersToClassic(config: AdminConfig) {
+  requireServerKey(config);
+  const databases = new Databases(createServerClient(config));
+  let offset = 0;
+  let migrated = 0;
+  const limit = 100;
+
+  while (true) {
+    const response = await databases.listDocuments(
+      config.databaseId,
+      config.profilesCollectionId,
+      [Query.limit(limit), Query.offset(offset)],
+    );
+
+    for (const document of response.documents) {
+      const profile = document as unknown as Record<string, unknown>;
+      const existingTier = normalizeAdminCardTier(profile.cardTier);
+
+      if (existingTier) {
+        continue;
+      }
+
+      const profileDocumentId =
+        typeof profile.$id === "string" ? profile.$id : "";
+      const userId =
+        typeof profile.userId === "string"
+          ? profile.userId
+          : profileDocumentId;
+
+      if (!profileDocumentId) {
+        continue;
+      }
+
+      await updateProfileCardTier(config, profile, "classic");
+
+      if (userId) {
+        try {
+          await syncAccountCardTierPref(config, userId, "classic");
+        } catch {
+          // optional prefs sync
+        }
+      }
+
+      migrated += 1;
+    }
+
+    offset += response.documents.length;
+
+    if (response.documents.length < limit) {
+      break;
+    }
+  }
+
+  return migrated;
+}
+
 export async function updateProfileVerification(
   config: AdminConfig,
   profileDocumentId: string,

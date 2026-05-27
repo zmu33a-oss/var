@@ -1,13 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
+import type { XFeedTab } from "../screens/x-feed/x-feed.types";
+
 const SHELL_WIDTH = 430;
 const VAR_WORDMARK_ICON = require("../../assets/icons/var.png");
 
 type XFeedHeaderProps = {
   windowWidth: number;
-  activeTab: "following" | "for-you" | "messages";
-  onChangeTab: (tab: "following" | "for-you" | "messages") => void;
+  activeTab: XFeedTab;
+  onChangeTab: (tab: XFeedTab) => void;
   notificationCount?: number;
   notificationsActive?: boolean;
   onOpenNotifications?: () => void;
@@ -27,8 +29,7 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
   const xHeaderLogoImageHeight = Math.round(82 * chromeScale);
   const xHeaderModePillHeight = Math.round(24 * chromeScale);
   const normalizedNotificationCount = Math.max(0, props.notificationCount ?? 0);
-  const isNotificationButtonActive =
-    props.notificationsActive ?? props.activeTab === "messages";
+  const isNotificationButtonActive = props.notificationsActive ?? false;
 
   return (
     <>
@@ -51,8 +52,9 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
           onPress={
             props.onOpenNotifications
               ? props.onOpenNotifications
-              : () => props.onChangeTab("messages")
+              : undefined
           }
+          disabled={!props.onOpenNotifications}
         >
           <View style={styles.xTopBarChatBubble}>
             <Text style={styles.xTopBarChatBubbleText}>VAR</Text>
@@ -115,6 +117,11 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
       <View style={styles.xTabsBar}>
         <View style={styles.xTabsInner}>
           <XHomeTab
+            label="ملفك"
+            active={props.activeTab === "profile"}
+            onPress={() => props.onChangeTab("profile")}
+          />
+          <XHomeTab
             label="المتابعون"
             active={props.activeTab === "following"}
             onPress={() => props.onChangeTab("following")}
@@ -123,11 +130,6 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
             active={props.activeTab === "for-you"}
             label="لأجلك"
             onPress={() => props.onChangeTab("for-you")}
-          />
-          <XHomeTab
-            active={props.activeTab === "messages"}
-            label="الرسائل"
-            onPress={() => props.onChangeTab("messages")}
           />
         </View>
       </View>

@@ -23,6 +23,7 @@ import IOSWheelPicker, {
 } from "../../components/IOSWheelPicker";
 import SealCheckIcon from "../../components/SealCheckIcon";
 import type { Post } from "../../app.types";
+import type { AppwriteLockedPrediction } from "../../lib/appwrite";
 import { XPostCard } from "./XPostCard";
 import {
   AUTHOR_PROFILE_TAB_DESCRIPTIONS,
@@ -48,6 +49,7 @@ export function XAuthorProfileScreen(props: {
   likesTotal: number;
   postsRepliesTotal: number;
   postsSharesTotal: number;
+  lockedPredictions: AppwriteLockedPrediction[];
   activeTab: AuthorProfileTab;
   canToggleFollow: boolean;
   isFollowing: boolean;
@@ -132,7 +134,7 @@ export function XAuthorProfileScreen(props: {
       id: "predictions",
       label: "التوقعات",
       emoji: "🎯",
-      count: 1,
+      count: props.lockedPredictions.length,
       iconName: AUTHOR_PROFILE_TAB_ICONS.predictions,
       isVisible: props.sectionVisibility.predictions,
       canToggleVisibility: isOwnProfile,
@@ -392,28 +394,41 @@ export function XAuthorProfileScreen(props: {
         {deferredActiveTab === "predictions" ? (
           !isOwnProfile && !isDeferredTabVisible ? (
             <XAuthorSectionHiddenCard tab={deferredActiveTab} />
-          ) : (
-            <View style={styles.xAuthorPredictionCard}>
-              <Text style={styles.xAuthorPredictionTitle}>التوقعات</Text>
-              <Text style={styles.xAuthorPredictionText}>
-                لا توجد بيانات توقعات مرتبطة بهذا الحساب داخل صفحة X حاليًا،
-                لذلك أبقينا هذا التبويب جاهزًا بنفس الشكل حتى نربطه لاحقًا.
-              </Text>
+          ) : props.lockedPredictions.length ? (
+            <View style={styles.xAuthorFeedSection}>
+              {props.lockedPredictions.map((prediction) => {
+                const predictionMeta = [prediction.choice, prediction.competition]
+                  .filter(Boolean)
+                  .join(" • ");
 
-              <View style={styles.xAuthorPredictionStatsRow}>
-                <View style={styles.xAuthorPredictionStatPill}>
-                  <Text style={styles.xAuthorPredictionStatValue}>
-                    {props.postsSharesTotal}
-                  </Text>
-                  <Text style={styles.xAuthorPredictionStatLabel}>مشاركات</Text>
-                </View>
-                <View style={styles.xAuthorPredictionStatPill}>
-                  <Text style={styles.xAuthorPredictionStatValue}>
-                    {props.postsRepliesTotal}
-                  </Text>
-                  <Text style={styles.xAuthorPredictionStatLabel}>ردود</Text>
-                </View>
-              </View>
+                return (
+                  <View key={prediction.id} style={styles.xAuthorPredictionItem}>
+                    <Text style={styles.xAuthorPredictionItemTitle}>
+                      {prediction.title || "توقع بدون عنوان"}
+                    </Text>
+                    <Text style={styles.xAuthorPredictionItemMeta}>
+                      {predictionMeta || prediction.status}
+                    </Text>
+                    <View style={styles.xAuthorPredictionItemFooter}>
+                      <Text style={styles.xAuthorPredictionItemPoints}>
+                        {prediction.pointsAwarded
+                          ? `+${prediction.pointsAwarded} نقطة`
+                          : prediction.status}
+                      </Text>
+                      <Text style={styles.xAuthorPredictionItemTime}>
+                        {prediction.lockedAt}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.xAuthorEmptyCard}>
+              <Text style={styles.xAuthorEmptyTitle}>لا توجد توقعات بعد</Text>
+              <Text style={styles.xAuthorEmptyText}>
+                ستظهر هنا التوقعات المقفلة المرتبطة بهذا الحساب من قسم الدوريات.
+              </Text>
             </View>
           )
         ) : null}
@@ -1034,6 +1049,45 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     textAlign: "right",
     marginTop: 8,
+  },
+  xAuthorPredictionItem: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 10,
+    alignItems: "flex-end",
+  },
+  xAuthorPredictionItemTitle: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  xAuthorPredictionItemMeta: {
+    color: "rgba(255,255,255,0.64)",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "right",
+    marginTop: 6,
+  },
+  xAuthorPredictionItemFooter: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 10,
+  },
+  xAuthorPredictionItemPoints: {
+    color: "#34D399",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  xAuthorPredictionItemTime: {
+    color: "rgba(255,255,255,0.48)",
+    fontSize: 11,
+    fontWeight: "700",
   },
   xAuthorPredictionStatsRow: {
     flexDirection: "row-reverse",

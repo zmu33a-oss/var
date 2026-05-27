@@ -1,13 +1,18 @@
+import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
+  ActivityIndicator,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import SealCheckIcon from "../../components/SealCheckIcon";
+import type { FollowingProfileCard } from "../../app.types";
 import type { MessageThreadEntry, XNotificationEntry } from "./x-feed.types";
 
 export function XMessagesScreen(props: {
@@ -15,7 +20,47 @@ export function XMessagesScreen(props: {
   threads: MessageThreadEntry[];
   onOpenThread: (thread: MessageThreadEntry) => void;
   onRequireAuth: () => void;
+  onComposeLookup: (displayVarId: string) => Promise<FollowingProfileCard | null>;
+  onOpenNewThread: (profile: FollowingProfileCard) => void;
 }) {
+  const [isComposeOpen, setIsComposeOpen] = useState(false);
+  const [varIdDraft, setVarIdDraft] = useState("");
+  const [composeError, setComposeError] = useState("");
+  const [isLookingUp, setIsLookingUp] = useState(false);
+
+  const closeCompose = () => {
+    setIsComposeOpen(false);
+    setVarIdDraft("");
+    setComposeError("");
+    setIsLookingUp(false);
+  };
+
+  const submitCompose = async () => {
+    const trimmedVarId = varIdDraft.trim();
+
+    if (!trimmedVarId) {
+      setComposeError("أدخل VAR ID للمستخدم.");
+      return;
+    }
+
+    setIsLookingUp(true);
+    setComposeError("");
+
+    try {
+      const profile = await props.onComposeLookup(trimmedVarId);
+
+      if (!profile) {
+        setComposeError("لم يتم العثور على مستخدم بهذا المعرف.");
+        return;
+      }
+
+      props.onOpenNewThread(profile);
+      closeCompose();
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
+
   if (!props.isLoggedIn) {
     return (
       <View style={styles.xMessagesEmptyCard}>
@@ -34,89 +79,142 @@ export function XMessagesScreen(props: {
     );
   }
 
-  if (!props.threads.length) {
-    return (
-      <View style={styles.xMessagesEmptyCard}>
-        <Text style={styles.xMessagesEmptyTitle}>لا توجد محادثات خاصة بعد</Text>
-        <Text style={styles.xMessagesEmptyText}>
-          تابع أي مستخدم أولاً ثم افتح هذا التبويب لتبدأ محادثة خاصة بينك وبينه
-          بعيدًا عن المنشورات العامة.
-        </Text>
-      </View>
-    );
-  }
+  const threadList = (
+    <>
+      <Pressable style={styles.xComposeButton} onPress={() => setIsComposeOpen(true)}>
+        <Ionicons name="create-outline" size={16} color="#FFFFFF" />
+        <Text style={styles.xComposeButtonText}>محادثة جديدة</Text>
+      </Pressable>
+
+      {!props.threads.length ? (
+        <View style={styles.xMessagesEmptyCard}>
+          <Text style={styles.xMessagesEmptyTitle}>لا توجد محادثات خاصة بعد</Text>
+          <Text style={styles.xMessagesEmptyText}>
+            اضغط «محادثة جديدة» وأدخل VAR ID للمستخدم لبدء رسالة خاصة.
+          </Text>
+        </View>
+      ) : (
+        props.threads.map((thread) => (
+          <Pressable
+            key={thread.id}
+            style={styles.xMessageCard}
+            onPress={() => props.onOpenThread(thread)}
+          >
+            <View style={styles.xMessageCardHeader}>
+              <View style={styles.xAvatarTiny}>
+                {thread.avatarUri ? (
+                  <Image
+                    source={{ uri: thread.avatarUri }}
+                    style={styles.xAvatarTinyImage}
+                  />
+                ) : (
+                  <Text style={styles.xAvatarTinyText}>
+                    {thread.displayName.slice(0, 1) || "V"}
+                  </Text>
+                )}
+              </View>
+
+              <View style={styles.xMessageCardMetaBlock}>
+                <View style={styles.xMessageCardStatusRow}>
+                  <Text style={styles.xMessageCardStatus}>
+                    {thread.statusLabel}
+                  </Text>
+                  {thread.unread ? (
+                    <View style={styles.xMessageUnreadDot} />
+                  ) : null}
+                </View>
+
+                <View style={styles.xPostMetaLine}>
+                  <Text style={styles.xPostAuthor}>{thread.displayName}</Text>
+                  {thread.verified ? (
+                    <SealCheckIcon size={14} style={styles.xVerifiedIcon} />
+                  ) : null}
+                  <Text style={styles.xPostHandle}>{thread.displayVarId}</Text>
+                  <Text style={styles.xPostDot}>·</Text>
+                  <Text style={styles.xPostTime}>{thread.timeLabel}</Text>
+                </View>
+              </View>
+            </View>
+
+            <Text numberOfLines={2} style={styles.xMessageCardPreview}>
+              {thread.preview}
+            </Text>
+
+            <View style={styles.xMessageCardMetricsRow}>
+              <View style={styles.xMessageMetricPill}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={13}
+                  color="rgba(255,255,255,0.62)"
+                />
+                <Text style={styles.xMessageMetricText}>خاص</Text>
+              </View>
+
+              <View style={styles.xMessageMetricPill}>
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={13}
+                  color="rgba(255,255,255,0.62)"
+                />
+                <Text style={styles.xMessageMetricText}>
+                  {thread.messageCount} رسالة
+                </Text>
+              </View>
+            </View>
+          </Pressable>
+        ))
+      )}
+    </>
+  );
 
   return (
     <View style={styles.xMessagesSection}>
-      {props.threads.map((thread) => (
-        <Pressable
-          key={thread.id}
-          style={styles.xMessageCard}
-          onPress={() => props.onOpenThread(thread)}
-        >
-          <View style={styles.xMessageCardHeader}>
-            <View style={styles.xAvatarTiny}>
-              {thread.avatarUri ? (
-                <Image
-                  source={{ uri: thread.avatarUri }}
-                  style={styles.xAvatarTinyImage}
-                />
-              ) : (
-                <Text style={styles.xAvatarTinyText}>
-                  {thread.displayName.slice(0, 1) || "V"}
-                </Text>
-              )}
-            </View>
+      {threadList}
 
-            <View style={styles.xMessageCardMetaBlock}>
-              <View style={styles.xMessageCardStatusRow}>
-                <Text style={styles.xMessageCardStatus}>
-                  {thread.statusLabel}
-                </Text>
-                {thread.unread ? (
-                  <View style={styles.xMessageUnreadDot} />
-                ) : null}
-              </View>
-
-              <View style={styles.xPostMetaLine}>
-                <Text style={styles.xPostAuthor}>{thread.displayName}</Text>
-                {thread.verified ? (
-                  <SealCheckIcon size={14} style={styles.xVerifiedIcon} />
-                ) : null}
-                <Text style={styles.xPostHandle}>{thread.displayVarId}</Text>
-                <Text style={styles.xPostDot}>·</Text>
-                <Text style={styles.xPostTime}>{thread.timeLabel}</Text>
-              </View>
-            </View>
-          </View>
-
-          <Text numberOfLines={2} style={styles.xMessageCardPreview}>
-            {thread.preview}
-          </Text>
-
-          <View style={styles.xMessageCardMetricsRow}>
-            <View style={styles.xMessageMetricPill}>
-              <Ionicons
-                name="lock-closed-outline"
-                size={13}
-                color="rgba(255,255,255,0.62)"
-              />
-              <Text style={styles.xMessageMetricText}>خاص</Text>
-            </View>
-
-            <View style={styles.xMessageMetricPill}>
-              <Ionicons
-                name="chatbubble-ellipses-outline"
-                size={13}
-                color="rgba(255,255,255,0.62)"
-              />
-              <Text style={styles.xMessageMetricText}>
-                {thread.messageCount} رسالة
-              </Text>
+      <Modal
+        transparent
+        animationType="slide"
+        visible={isComposeOpen}
+        onRequestClose={closeCompose}
+      >
+        <View style={styles.xComposeModalBackdrop}>
+          <View style={styles.xComposeModalCard}>
+            <Text style={styles.xComposeModalTitle}>بدء محادثة جديدة</Text>
+            <Text style={styles.xComposeModalHint}>
+              أدخل VAR ID للمستخدم (مثل 00001234)
+            </Text>
+            <TextInput
+              value={varIdDraft}
+              onChangeText={setVarIdDraft}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={styles.xComposeModalInput}
+              placeholder="VAR ID"
+              placeholderTextColor="rgba(255,255,255,0.36)"
+              textAlign="center"
+            />
+            {composeError ? (
+              <Text style={styles.xComposeModalError}>{composeError}</Text>
+            ) : null}
+            <View style={styles.xComposeModalActions}>
+              <Pressable style={styles.xComposeModalCancel} onPress={closeCompose}>
+                <Text style={styles.xComposeModalCancelText}>إلغاء</Text>
+              </Pressable>
+              <Pressable
+                style={styles.xComposeModalSubmit}
+                onPress={() => void submitCompose()}
+                disabled={isLookingUp}
+              >
+                {isLookingUp ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.xComposeModalSubmitText}>فتح المحادثة</Text>
+                )}
+              </Pressable>
             </View>
           </View>
-        </Pressable>
-      ))}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -416,6 +514,98 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   xFollowingAuthButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  xComposeButton: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    minHeight: 44,
+    borderRadius: 999,
+    marginBottom: 14,
+    backgroundColor: "#1D9BF0",
+  },
+  xComposeButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  xComposeModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.62)",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  xComposeModalCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "#111114",
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+  },
+  xComposeModalTitle: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  xComposeModalHint: {
+    color: "rgba(255,255,255,0.62)",
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "right",
+    marginTop: 8,
+    marginBottom: 14,
+  },
+  xComposeModalInput: {
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "800",
+    paddingHorizontal: 14,
+  },
+  xComposeModalError: {
+    color: "#F87171",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "right",
+    marginTop: 10,
+  },
+  xComposeModalActions: {
+    flexDirection: "row-reverse",
+    gap: 10,
+    marginTop: 16,
+  },
+  xComposeModalCancel: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  xComposeModalCancelText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  xComposeModalSubmit: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1D9BF0",
+  },
+  xComposeModalSubmitText: {
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "900",

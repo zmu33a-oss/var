@@ -2,12 +2,14 @@ import type {
   AppwritePostDocument,
   AppwritePostInput,
   AppwritePostRecord,
+  AppwritePostsPage,
 } from "./appwrite.types";
 import { APPWRITE_CONFIG, hasAppwritePostsConfig } from "./appwrite.config";
 import {
   normalizeAppwriteVarId,
   toAppwritePostRecord,
   shouldDisableAppwriteCollectionRead,
+  isAppwritePostHidden,
 } from "./appwrite.helpers";
 import {
   AppwriteID,
@@ -34,11 +36,29 @@ function getPostsDatabase() {
 
 // ─── Posts functions ──────────────────────────────────────────────────────────
 
-export async function listAppwritePosts(): Promise<AppwritePostRecord[]> {
+function mapVisibleAppwritePostRecords(
+  documents: unknown[],
+): AppwritePostRecord[] {
+  return documents
+    .filter(
+      (document) =>
+        !isAppwritePostHidden(document as AppwritePostDocument),
+    )
+    .map((document) =>
+      toAppwritePostRecord(document as AppwritePostDocument),
+    );
+}
+
+export async function listAppwritePosts(options?: {
+  limit?: number;
+  offset?: number;
+}): Promise<AppwritePostsPage> {
   if (!canAttemptAppwriteCollectionRead(APPWRITE_CONFIG.postsCollectionId)) {
-    return [];
+    return { records: [], total: 0 };
   }
 
+  const limit = options?.limit ?? 100;
+  const offset = options?.offset ?? 0;
   const databases = getPostsDatabase();
   let response;
 
@@ -46,23 +66,29 @@ export async function listAppwritePosts(): Promise<AppwritePostRecord[]> {
     response = await databases.listDocuments(
       APPWRITE_CONFIG.databaseId,
       APPWRITE_CONFIG.postsCollectionId,
+      [
+        AppwriteQuery.orderDesc("$createdAt"),
+        AppwriteQuery.limit(limit),
+        AppwriteQuery.offset(offset),
+      ],
     );
   } catch (error) {
     if (shouldDisableAppwriteCollectionRead(error)) {
       disableAppwriteCollectionRead(APPWRITE_CONFIG.postsCollectionId);
-      return [];
+      return { records: [], total: 0 };
     }
 
     throw error;
   }
 
-  return response.documents
-    .map((document) =>
-      toAppwritePostRecord(document as unknown as AppwritePostDocument),
-    )
-    .sort(
-      (left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt),
-    );
+  const records = mapVisibleAppwritePostRecords(response.documents).sort(
+    (left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt),
+  );
+
+  return {
+    records,
+    total: response.total,
+  };
 }
 
 export async function listAppwritePostsByVarId(
@@ -102,13 +128,9 @@ export async function listAppwritePostsByVarId(
     throw error;
   }
 
-  return response.documents
-    .map((document) =>
-      toAppwritePostRecord(document as unknown as AppwritePostDocument),
-    )
-    .sort(
-      (left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt),
-    );
+  return mapVisibleAppwritePostRecords(response.documents).sort(
+    (left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt),
+  );
 }
 
 export async function createAppwritePost(
@@ -125,8 +147,46 @@ export async function createAppwritePost(
       content: input.content.trim(),
       authorId: normalizedVarId,
       varId: normalizedVarId,
+      ...(input.mediaUri?.trim()
+        ? { mediaUri: input.mediaUri.trim() }
+        : {}),
     },
   );
 
   return toAppwritePostRecord(document as unknown as AppwritePostDocument);
+}
+
+export async function updateAppwritePost(
+  postId: string,
+  input: { title?: string; content?: string },
+): Promise<AppwritePostRecord> {
+  const databases = getPostsDatabase();
+  const payload: Record<string, string> = {};
+
+  if (typeof input.title === "string") {
+    payload.title = input.title.trim();
+  }
+
+  if (typeof input.content === "string") {
+    payload.content = input.content.trim();
+  }
+
+  const document = await databases.updateDocument(
+    APPWRITE_CONFIG.databaseId,
+    APPWRITE_CONFIG.postsCollectionId,
+    postId.trim(),
+    payload,
+  );
+
+  return toAppwritePostRecord(document as unknown as AppwritePostDocument);
+}
+
+export async function deleteAppwritePost(postId: string): Promise<void> {
+  const databases = getPostsDatabase();
+
+  await databases.deleteDocument(
+    APPWRITE_CONFIG.databaseId,
+    APPWRITE_CONFIG.postsCollectionId,
+    postId.trim(),
+  );
 }

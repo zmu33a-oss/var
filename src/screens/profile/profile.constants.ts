@@ -76,6 +76,9 @@ export const ARABIC_TO_LATIN_MAP: Record<string, string> = {
 export type ProfileScreenProps = {
   canOpenAdmin: boolean;
   onOpenAdmin: () => void;
+  onOpenAdminWeb: () => void;
+  adminDisplayVarId?: string;
+  adminRoleLabel?: string;
   posts: import("../../app.types").Post[];
   profile: import("../../app.types").ProfileData;
   onSaveProfile: (
@@ -95,7 +98,12 @@ export type SwipeActionControlProps = {
   onReachedEnd: () => void | Promise<void>;
 };
 
-export type ProfileFieldKey = "displayName" | "nationality" | "avatarUri";
+export type ProfileFieldKey =
+  | "displayName"
+  | "displayVarId"
+  | "nationality"
+  | "association"
+  | "avatarUri";
 
 export const NATIONALITY_LABELS: Record<
   string,

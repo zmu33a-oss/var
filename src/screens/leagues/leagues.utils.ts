@@ -6,6 +6,7 @@ import type {
 } from "../../app.types";
 import type {
   FieldLayerFrame,
+  LeagueOverviewCard,
   LeaguePollTweet,
   ShowcaseBenchPlayer,
   ShowcaseLineupPlayer,
@@ -13,6 +14,7 @@ import type {
 import {
   HILAL_ICON,
   KSA_ICON,
+  LEAGUE_OVERVIEW_CARDS,
   LEAGUE_POLL_AVATAR_GRADIENTS,
   LEAGUE_STANDINGS,
   LEAGUE_TOP_SCORERS,
@@ -316,4 +318,27 @@ export function getLeagueOverviewIconSource(leagueId: string) {
     default:
       return KSA_ICON;
   }
+}
+
+export function getSelectedLeagueOverview(
+  leagueId: string | null,
+  cards: LeagueOverviewCard[] = LEAGUE_OVERVIEW_CARDS,
+) {
+  return cards.find((card) => card.id === leagueId) ?? cards[0] ?? null;
+}
+
+export function getLeaguePageHeaderTitle(league: LeagueOverviewCard | null) {
+  if (!league) {
+    return "دوري روشن";
+  }
+
+  if (league.id === "spl") {
+    return "دوري روشن";
+  }
+
+  return league.title;
+}
+
+export function getLeagueCardCompetitionTitle(league: LeagueOverviewCard | null) {
+  return league?.title?.trim() || "دوري روشن السعودي";
 }

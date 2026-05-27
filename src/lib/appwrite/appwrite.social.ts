@@ -1,5 +1,6 @@
 import type {
   AppwriteDirectMessageRecord,
+  AppwritePostEngagementAggregate,
   AppwritePostReplyRecord,
   AppwriteSocialInteractionDocument,
   AppwriteSocialInteractionInput,
@@ -13,6 +14,7 @@ import {
   toAppwritePostReplyRecord,
   toAppwriteSocialInteractionRecord,
   createEmptyAppwriteVarSocialSummary,
+  createEmptyPostEngagementAggregate,
   summarizeAppwriteSocialInteractions,
   isPermissionDeniedAppwriteError,
   isInvalidAppwriteQueryError,
@@ -253,6 +255,155 @@ export async function listAppwriteXRepliesByTargetIds(
     .sort(
       (left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt),
     );
+}
+
+export async function listAppwriteXEngagementByTargetIds(
+  targetIds: string[],
+  viewerVarId?: string,
+): Promise<Map<string, AppwritePostEngagementAggregate>> {
+  const engagementByTargetId = new Map<string, AppwritePostEngagementAggregate>();
+
+  const normalizedTargetIds = Array.from(
+    new Set(targetIds.map((value) => value.trim()).filter(Boolean)),
+  );
+
+  for (const targetId of normalizedTargetIds) {
+    engagementByTargetId.set(targetId, createEmptyPostEngagementAggregate());
+  }
+
+  if (
+    !normalizedTargetIds.length ||
+    !hasConfiguredCollection(APPWRITE_CONFIG.socialInteractionsCollectionId) ||
+    !canReadSocialInteractionsCollection ||
+    !canAttemptAppwriteCollectionRead(
+      APPWRITE_CONFIG.socialInteractionsCollectionId,
+    )
+  ) {
+    return engagementByTargetId;
+  }
+
+  const normalizedViewerVarId = normalizeAppwriteVarId(viewerVarId?.trim() || "");
+
+  let engagementDocuments;
+
+  try {
+    engagementDocuments = await Promise.all(
+      chunkAppwriteQueryValues(normalizedTargetIds).map((targetIdChunk) =>
+        listCollectionDocumentsSafely(
+          APPWRITE_CONFIG.socialInteractionsCollectionId,
+          [
+            AppwriteQuery.equal("mode", "x"),
+            AppwriteQuery.equal("action", ["like", "repost", "share"]),
+            AppwriteQuery.equal("targetId", targetIdChunk),
+            AppwriteQuery.equal("active", true),
+          ],
+        ),
+      ),
+    );
+  } catch (error) {
+    if (
+      isPermissionDeniedAppwriteError(error) ||
+      isInvalidAppwriteQueryError(error)
+    ) {
+      setCanReadSocialInteractionsCollection(false);
+      return engagementByTargetId;
+    }
+
+    throw error;
+  }
+
+  restoreSocialInteractionsReadCapability();
+
+  engagementDocuments.flat().forEach((document) => {
+    const record = toAppwriteSocialInteractionRecord(
+      document as unknown as AppwriteSocialInteractionDocument,
+    );
+    const normalizedTargetId = record.targetId.trim();
+
+    if (!normalizedTargetId) {
+      return;
+    }
+
+    const aggregate =
+      engagementByTargetId.get(normalizedTargetId) ??
+      createEmptyPostEngagementAggregate();
+
+    if (record.action === "like") {
+      aggregate.likes += 1;
+
+      if (normalizedViewerVarId && record.varId === normalizedViewerVarId) {
+        aggregate.likedByMe = true;
+      }
+    } else if (record.action === "repost") {
+      aggregate.reposts += 1;
+
+      if (normalizedViewerVarId && record.varId === normalizedViewerVarId) {
+        aggregate.repostedByMe = true;
+      }
+    } else if (record.action === "share") {
+      aggregate.shares += 1;
+
+      if (normalizedViewerVarId && record.varId === normalizedViewerVarId) {
+        aggregate.sharedByMe = true;
+      }
+    }
+
+    engagementByTargetId.set(normalizedTargetId, aggregate);
+  });
+
+  return engagementByTargetId;
+}
+
+export async function listAppwriteXReposts(options?: {
+  limit?: number;
+  offset?: number;
+}): Promise<AppwriteSocialInteractionRecord[]> {
+  if (
+    !hasConfiguredCollection(APPWRITE_CONFIG.socialInteractionsCollectionId) ||
+    !canReadSocialInteractionsCollection ||
+    !canAttemptAppwriteCollectionRead(
+      APPWRITE_CONFIG.socialInteractionsCollectionId,
+    )
+  ) {
+    return [];
+  }
+
+  const limit = options?.limit ?? 50;
+  const offset = options?.offset ?? 0;
+
+  try {
+    const documents = await listCollectionDocumentsSafely(
+      APPWRITE_CONFIG.socialInteractionsCollectionId,
+      [
+        AppwriteQuery.equal("mode", "x"),
+        AppwriteQuery.equal("action", "repost"),
+        AppwriteQuery.equal("active", true),
+        AppwriteQuery.orderDesc("$createdAt"),
+        AppwriteQuery.limit(limit),
+        AppwriteQuery.offset(offset),
+      ],
+    );
+
+    restoreSocialInteractionsReadCapability();
+
+    return documents
+      .map((document) =>
+        toAppwriteSocialInteractionRecord(
+          document as unknown as AppwriteSocialInteractionDocument,
+        ),
+      )
+      .filter((record) => record.targetId.trim());
+  } catch (error) {
+    if (
+      isPermissionDeniedAppwriteError(error) ||
+      isInvalidAppwriteQueryError(error)
+    ) {
+      setCanReadSocialInteractionsCollection(false);
+      return [];
+    }
+
+    throw error;
+  }
 }
 
 export async function listAppwriteFollowingVarIds(

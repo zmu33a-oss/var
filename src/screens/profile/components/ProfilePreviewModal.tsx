@@ -178,7 +178,7 @@ export function ProfilePreviewModal(props: {
           <PreviewDetailRow
             arabicFontFamily={props.arabicFontFamily}
             label="الرابطة"
-            value={props.clubName}
+            value={props.profile.association?.trim() || props.clubName}
           />
           <PreviewDetailRow
             arabicFontFamily={props.arabicFontFamily}

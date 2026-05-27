@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 import {
   type AppwriteAuthUser,
   type AppwritePostReplyRecord,
@@ -6,8 +6,15 @@ import {
   type AppwriteProfileIndexRecord,
   type AppwriteVarProfile,
 } from "../lib/appwrite";
+import {
+  CONFIGURED_VAR_ADMIN_EMAIL,
+  VAR_ADMIN_USERNAME,
+  APPWRITE_CONFIG,
+} from "../lib/appwrite/appwrite.config";
+import { IS_WEB_RUNTIME } from "../lib/appwrite/appwrite.client";
 import { INITIAL_PROFILE } from "../app.data";
 import { normalizeAppwriteVarId } from "../lib/appwrite/appwrite.helpers";
+import { normalizeMembershipCardTier } from "../lib/membershipCardTier";
 import type {
   FollowingProfileCard,
   Post,
@@ -499,6 +506,12 @@ export function mergeProfileWithAuthUser(
         currentProfile.nationality,
         INITIAL_PROFILE.nationality,
       ),
+    association:
+      authUser.association ||
+      getProfileFallbackValue(
+        currentProfile.association,
+        INITIAL_PROFILE.association,
+      ),
     avatarUri:
       authUser.avatarUri ||
       currentProfile.avatarUri ||
@@ -510,7 +523,163 @@ export function mergeProfileWithAuthUser(
       authUser.isVerified ||
       authUser.role === "admin" ||
       currentProfile.isVerified,
+    cardTier: normalizeMembershipCardTier(
+      authUser.cardTier || currentProfile.cardTier,
+    ),
+    role:
+      authUser.role === "admin" ||
+      currentProfile.role === "admin" ||
+      (CONFIGURED_VAR_ADMIN_EMAIL &&
+        authUser.email.trim().toLowerCase() === CONFIGURED_VAR_ADMIN_EMAIL)
+        ? "admin"
+        : "member",
   };
+}
+
+export function mergeProfileWithProfileIndex(
+  currentProfile: ProfileData,
+  profileIndex: AppwriteProfileIndexRecord,
+): ProfileData {
+  const normalizedUsername = profileIndex.username.trim().replace(/^@+/, "");
+
+  return {
+    ...currentProfile,
+    varId: profileIndex.varId || currentProfile.varId,
+    displayVarId: profileIndex.displayVarId || currentProfile.displayVarId,
+    displayName: profileIndex.displayName || currentProfile.displayName,
+    username: normalizedUsername
+      ? `@${normalizedUsername}`
+      : currentProfile.username,
+    avatarUri: profileIndex.avatarUri || currentProfile.avatarUri,
+    isVerified: profileIndex.isVerified || currentProfile.isVerified,
+    cardTier: normalizeMembershipCardTier(
+      profileIndex.cardTier || currentProfile.cardTier,
+    ),
+    role:
+      profileIndex.role === "admin" || currentProfile.role === "admin"
+        ? "admin"
+        : "member",
+  };
+}
+
+export function resolveCanAccessAdminPanel(
+  appwriteUser: AppwriteAuthUser | null,
+  profile: ProfileData,
+): boolean {
+  if (!appwriteUser) {
+    return false;
+  }
+
+  const email = appwriteUser.email.trim().toLowerCase();
+  const username = appwriteUser.username.trim().toLowerCase();
+
+  if (appwriteUser.role === "admin" || profile.role === "admin") {
+    return true;
+  }
+
+  if (CONFIGURED_VAR_ADMIN_EMAIL && email === CONFIGURED_VAR_ADMIN_EMAIL) {
+    return true;
+  }
+
+  if (
+    username === VAR_ADMIN_USERNAME &&
+    (!CONFIGURED_VAR_ADMIN_EMAIL || email === CONFIGURED_VAR_ADMIN_EMAIL)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+export function resolveAdminPanelUrl() {
+  const configuredUrl =
+    process.env.EXPO_PUBLIC_ADMIN_PANEL_URL?.trim().replace(/\/+$/, "") || "";
+
+  if (configuredUrl) {
+    return configuredUrl.endsWith("/admin")
+      ? `${configuredUrl}/`
+      : `${configuredUrl}/admin/`;
+  }
+
+  if (IS_WEB_RUNTIME && typeof window !== "undefined") {
+    const { protocol, hostname, port } = window.location;
+
+    if (hostname === "localhost" && port === "8081") {
+      return `${protocol}//${hostname}:3000/admin/`;
+    }
+
+    if (hostname === "localhost" && port === "5174") {
+      return `${protocol}//${hostname}:3000/admin/`;
+    }
+
+    return `${protocol}//${hostname}${port ? `:${port}` : ""}/admin/`;
+  }
+
+  return "";
+}
+
+export function readWebAppwriteSessionSecret() {
+  if (!IS_WEB_RUNTIME || typeof window === "undefined") {
+    return "";
+  }
+
+  const sessionKey = `a_session_${APPWRITE_CONFIG.projectId}`;
+
+  try {
+    const rawCookieFallback = window.localStorage.getItem("cookieFallback");
+
+    if (rawCookieFallback) {
+      const parsedCookieFallback = JSON.parse(rawCookieFallback) as Record<
+        string,
+        unknown
+      > | null;
+      const sessionValue = parsedCookieFallback?.[sessionKey];
+
+      if (typeof sessionValue === "string" && sessionValue.trim()) {
+        return sessionValue.trim();
+      }
+    }
+  } catch {
+    // Ignore storage parsing failures and fall back to document cookies.
+  }
+
+  if (typeof document !== "undefined") {
+    const cookiePrefix = `${sessionKey}=`;
+    const matchedCookie = document.cookie
+      .split(";")
+      .map((entry) => entry.trim())
+      .find((entry) => entry.startsWith(cookiePrefix));
+
+    if (matchedCookie) {
+      return decodeURIComponent(matchedCookie.slice(cookiePrefix.length)).trim();
+    }
+  }
+
+  return "";
+}
+
+export async function openAdminWebPanel(options?: {
+  onMissingUrl?: () => void;
+}) {
+  const adminPanelUrl = resolveAdminPanelUrl();
+
+  if (!adminPanelUrl) {
+    options?.onMissingUrl?.();
+    return false;
+  }
+
+  const sessionSecret = readWebAppwriteSessionSecret();
+  const targetUrl = sessionSecret
+    ? `${adminPanelUrl}?session=${encodeURIComponent(sessionSecret)}`
+    : adminPanelUrl;
+
+  if (IS_WEB_RUNTIME && typeof window !== "undefined") {
+    window.open(targetUrl, "_blank", "noopener,noreferrer");
+    return true;
+  }
+
+  await Linking.openURL(targetUrl);
+  return true;
 }
 
 export function mergeProfileWithVarProfile(
@@ -632,6 +801,17 @@ export function buildFollowingProfileCard(
   };
 }
 
+export function hashFeedEntryId(seed: string) {
+  let hash = 0;
+
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash << 5) - hash + seed.charCodeAt(index);
+    hash |= 0;
+  }
+
+  return Math.abs(hash) + 1;
+}
+
 export function mapAppwritePostRecordToPost(
   record: AppwritePostRecord,
   index = 0,
@@ -654,6 +834,7 @@ export function mapAppwritePostRecordToPost(
     handle: trimmedHandle || buildProfilePostHandle("", normalizedAuthorId),
     time: formatPostTime(record.createdAt),
     content: record.content,
+    mediaUri: record.mediaUri?.trim() || undefined,
     replyItems: [],
     likes: 0,
     replies: 0,

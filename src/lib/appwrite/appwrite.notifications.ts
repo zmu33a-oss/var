@@ -53,7 +53,7 @@ export async function saveAppwriteNotification(
 
     await syncAppwriteSocialInteraction({
       varId: normalizedVarId,
-      mode: "notification",
+      mode: NOTIFICATION_MODE,
       action: "notify",
       targetId: notification.avatarUri || normalizedVarId,
       value: payload,
@@ -81,7 +81,7 @@ export async function loadAppwriteNotifications(
     const documents = await listCollectionDocumentsSafely(
       APPWRITE_CONFIG.socialInteractionsCollectionId,
       [
-        AppwriteQuery.equal("mode", NOTIFICATION_MODE),
+        AppwriteQuery.equal("mode", [NOTIFICATION_MODE, "notification"]),
         AppwriteQuery.equal("varId", normalizedVarId),
         AppwriteQuery.orderDesc("$createdAt"),
         AppwriteQuery.limit(MAX_STORED),

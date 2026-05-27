@@ -70,6 +70,14 @@ type HomeScreenProps = {
   resumeReplyPostId: number | null;
   onReplyIntentConsumed: () => void;
   onShowNotice?: (message: string) => void;
+  onRefreshPosts: () => void;
+  onLoadMorePosts: () => void;
+  isRefreshingPosts: boolean;
+  isLoadingMorePosts: boolean;
+  hasMorePosts: boolean;
+  onDeletePost: (postId: number) => void;
+  onUpdatePostContent: (postId: number, content: string) => void;
+  onReportPost: (postId: number) => void;
   onToggleVideoLike: (videoId: number) => void;
   onToggleVideoSave: (videoId: number) => void;
   onToggleVideoShare: (videoId: number) => void;
@@ -108,6 +116,14 @@ export default function HomeScreen(props: HomeScreenProps) {
     resumeReplyPostId,
     onReplyIntentConsumed,
     onShowNotice,
+    onRefreshPosts,
+    onLoadMorePosts,
+    isRefreshingPosts,
+    isLoadingMorePosts,
+    hasMorePosts,
+    onDeletePost,
+    onUpdatePostContent,
+    onReportPost,
     onToggleVideoLike,
     onToggleVideoSave,
     onToggleVideoShare,
@@ -185,6 +201,14 @@ export default function HomeScreen(props: HomeScreenProps) {
         resumeReplyPostId={resumeReplyPostId}
         onReplyIntentConsumed={onReplyIntentConsumed}
         onShowNotice={onShowNotice}
+        onRefreshPosts={onRefreshPosts}
+        onLoadMorePosts={onLoadMorePosts}
+        isRefreshingPosts={isRefreshingPosts}
+        isLoadingMorePosts={isLoadingMorePosts}
+        hasMorePosts={hasMorePosts}
+        onDeletePost={onDeletePost}
+        onUpdatePostContent={onUpdatePostContent}
+        onReportPost={onReportPost}
       />
     </View>
   );

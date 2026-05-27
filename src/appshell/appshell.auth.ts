@@ -3,10 +3,12 @@ import type { AppwriteAuthUser } from "../lib/appwrite";
 import {
   clearAppwriteGoogleOAuthChallenge,
   completeAppwriteGoogleOAuthSession,
+  findAppwriteProfileIndexByDisplayVarId,
   getCurrentAppwriteUser,
   hasAppwriteRecoveryChallenge,
   hasStoredAppwriteSession,
   logoutAppwriteUser,
+  normalizeAppwriteDisplayVarId,
   readAppwriteGoogleOAuthChallenge,
   saveAppwriteUserProfile,
 } from "../lib/appwrite";
@@ -131,6 +133,24 @@ export function useAppwriteAuth(callbacks: AppwriteAuthCallbacks) {
     }
 
     try {
+      const normalizedDisplayVarId =
+        normalizeAppwriteDisplayVarId(nextProfile.displayVarId) ||
+        currentAppwriteUser.displayVarId;
+
+      if (normalizedDisplayVarId !== currentAppwriteUser.displayVarId) {
+        const existingProfile = await findAppwriteProfileIndexByDisplayVarId(
+          normalizedDisplayVarId,
+        );
+
+        if (
+          existingProfile &&
+          existingProfile.userId !== currentAppwriteUser.id
+        ) {
+          setNotice("رقم VAR هذا مستخدم من حساب آخر.");
+          return;
+        }
+      }
+
       const savedUser = await saveAppwriteUserProfile({
         name: nextProfile.displayName,
         username: nextProfile.username,
@@ -141,6 +161,8 @@ export function useAppwriteAuth(callbacks: AppwriteAuthCallbacks) {
         profession: nextProfile.profession,
         birthDate: nextProfile.birthDate,
         nationality: nextProfile.nationality,
+        association: nextProfile.association,
+        displayVarId: normalizedDisplayVarId,
         avatarUri: nextProfile.avatarUri,
       });
 

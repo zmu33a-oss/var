@@ -1,13 +1,17 @@
 import { useCallback, useEffect } from "react";
 import type { AppwriteAuthUser } from "../lib/appwrite";
 import {
+  findAppwriteProfileIndexByDisplayVarId,
   getAppwriteVarProfile,
+  listAppwriteProfileIndexesByVarIds,
+  normalizeAppwriteDisplayVarId,
   saveAppwriteUserProfile,
   syncAppwriteSocialInteraction,
 } from "../lib/appwrite";
 import type { ProfileData } from "../app.types";
 import {
   mergeProfileWithAuthUser,
+  mergeProfileWithProfileIndex,
   mergeProfileWithVarProfile,
   storeProfileAvatar,
   writeStoredAuthUser,
@@ -26,11 +30,24 @@ export async function refreshVarProfile(
   }
 
   try {
-    const nextVarProfile = await getAppwriteVarProfile(varId);
+    const [nextVarProfile, profileIndexes] = await Promise.all([
+      getAppwriteVarProfile(varId),
+      listAppwriteProfileIndexesByVarIds([varId]),
+    ]);
+    const profileIndex = profileIndexes[0];
 
-    setProfile((currentProfile) =>
-      mergeProfileWithVarProfile(currentProfile, nextVarProfile),
-    );
+    setProfile((currentProfile) => {
+      let nextProfile = mergeProfileWithVarProfile(
+        currentProfile,
+        nextVarProfile,
+      );
+
+      if (profileIndex) {
+        nextProfile = mergeProfileWithProfileIndex(nextProfile, profileIndex);
+      }
+
+      return nextProfile;
+    });
   } catch (error) {
     if (quiet) {
       return;
@@ -96,6 +113,21 @@ export async function handleSaveProfile(
   }
 
   try {
+    const normalizedDisplayVarId =
+      normalizeAppwriteDisplayVarId(nextProfile.displayVarId) ||
+      appwriteUser.displayVarId;
+
+    if (normalizedDisplayVarId !== appwriteUser.displayVarId) {
+      const existingProfile = await findAppwriteProfileIndexByDisplayVarId(
+        normalizedDisplayVarId,
+      );
+
+      if (existingProfile && existingProfile.userId !== appwriteUser.id) {
+        setNotice("رقم VAR هذا مستخدم من حساب آخر.");
+        return;
+      }
+    }
+
     const savedUser = await saveAppwriteUserProfile({
       name: nextProfile.displayName,
       username: nextProfile.username,
@@ -106,6 +138,8 @@ export async function handleSaveProfile(
       profession: nextProfile.profession,
       birthDate: nextProfile.birthDate,
       nationality: nextProfile.nationality,
+      association: nextProfile.association,
+      displayVarId: normalizedDisplayVarId,
       avatarUri: nextProfile.avatarUri,
     });
 

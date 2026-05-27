@@ -20,6 +20,7 @@ import { styles } from "../leagues.styles";
 
 export function LeaguesListHeader(props: {
   headerFontFamily?: string;
+  headerTitle: string;
   isLeagueDrawerOpen: boolean;
   leagueDrawerItems: LeagueOverviewCard[];
   selectedLeagueId: string | null;
@@ -62,7 +63,7 @@ export function LeaguesListHeader(props: {
                 : null,
             ]}
           >
-            الدوريات
+            {props.headerTitle}
           </RNText>
         </View>
       </View>

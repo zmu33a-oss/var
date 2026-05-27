@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { FAN_CLUBS } from "../../../app.data";
 import type { ProfileData } from "../../../app.types";
 import {
   getArabicFontStyle,
@@ -101,10 +102,19 @@ export function ProfileEditModal(props: {
 
           <ProfileFieldInput
             arabicFontFamily={props.arabicFontFamily}
-            label="الاسم"
+            label="الاسم الشخصي"
             value={props.draftProfile.displayName}
             onChangeText={(value) => props.onChangeField("displayName", value)}
           />
+
+          <ProfileFieldInput
+            arabicFontFamily={props.arabicFontFamily}
+            label="VAR ID"
+            value={props.draftProfile.displayVarId}
+            onChangeText={(value) => props.onChangeField("displayVarId", value)}
+            autoCapitalize="characters"
+          />
+
           <ProfileFieldInput
             arabicFontFamily={props.arabicFontFamily}
             label="الجنسية"
@@ -112,8 +122,43 @@ export function ProfileEditModal(props: {
             onChangeText={(value) => props.onChangeField("nationality", value)}
           />
 
+          <View style={styles.fieldGroup}>
+            <Text style={[styles.fieldLabel, staticArabicTextStyle]}>
+              الرابطة
+            </Text>
+            <View style={styles.associationOptionsRow}>
+              {FAN_CLUBS.map((club) => {
+                const isActive =
+                  props.draftProfile.association.trim() === club.title;
+
+                return (
+                  <Pressable
+                    key={club.id}
+                    style={[
+                      styles.associationOption,
+                      isActive ? styles.associationOptionActive : null,
+                    ]}
+                    onPress={() =>
+                      props.onChangeField("association", club.title)
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.associationOptionText,
+                        staticArabicTextStyle,
+                        isActive ? styles.associationOptionTextActive : null,
+                      ]}
+                    >
+                      {club.title}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
           <Text style={[styles.editInfoNote, staticArabicTextStyle]}>
-            المسموح تعديله هنا فقط: الاسم، الجنسية، والصورة الشخصية.
+            يمكنك تعديل: الصورة الشخصية، الاسم، VAR ID، الجنسية، والرابطة.
           </Text>
         </View>
       </ScrollView>

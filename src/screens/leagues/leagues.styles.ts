@@ -896,7 +896,7 @@ export const styles = createCompatStyleSheet({
   },
   matchShowcaseBorderRing: {
     borderRadius: 24,
-    padding: 0.8,
+    padding: 0.75,
     overflow: "hidden",
     position: "relative",
   },
@@ -1017,10 +1017,10 @@ export const styles = createCompatStyleSheet({
   },
   matchShowcaseLeagueName: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "900",
     textAlign: "center",
-    marginTop: 0,
+    marginTop: 6,
   },
   matchShowcaseMetaRow: {
     flexDirection: "row",

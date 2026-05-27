@@ -1,4 +1,4 @@
-import React, { ReactNode, useEffect, useState } from "react";
+import React, { ReactNode, useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { StatusBar } from "expo-status-bar";
@@ -13,7 +13,6 @@ import {
 } from "react-native";
 import {
   HOME_PALETTES,
-  INITIAL_POSTS,
   INITIAL_PROFILE,
   INITIAL_SUPPORTERS,
   INITIAL_VIDEOS,
@@ -33,10 +32,12 @@ import BottomNav from "./components/BottomNav";
 import SealCheckIcon from "./components/SealCheckIcon";
 import {
   client as appwriteClient,
+  deleteAppwritePost,
   hasAppwriteProjectConfig,
   listAppwriteFollowingVarIds,
   listAppwriteProfileIndexesByVarIds,
   syncAppwriteSocialInteraction,
+  updateAppwritePost,
   type AppwriteAuthUser,
 } from "./lib/appwrite";
 import type {
@@ -58,6 +59,10 @@ import {
   buildFollowingProfileCard,
   buildCurrentUserPostIdentity,
   createPostHandle,
+  hashFeedEntryId,
+  formatPostTime,
+  resolveCanAccessAdminPanel,
+  openAdminWebPanel,
 } from "./appshell/appshell.helpers";
 import { PostComposerModal } from "./appshell/PostComposerModal";
 import { StudioModal } from "./appshell/StudioModal";
@@ -82,7 +87,7 @@ export default function AppShell(){
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
   const [notice, setNotice] = useState(INITIAL_NOTICE);
   const [videos, setVideos] = useState(INITIAL_VIDEOS);
-  const [posts, setPosts] = useState(INITIAL_POSTS);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [supporters, setSupporters] = useState(INITIAL_SUPPORTERS);
   const [supportedTeams, setSupportedTeams] = useState<FanClubId[]>([]);
   const [followedAuthorIds, setFollowedAuthorIds] = useState<string[]>([]);
@@ -99,6 +104,7 @@ export default function AppShell(){
   const [isPostComposerOpen, setIsPostComposerOpen] = useState(false);
   const [postTitle, setPostTitle] = useState(POST_COMPOSER_DEFAULT_TITLE);
   const [postContent, setPostContent] = useState("");
+  const [postMediaUri, setPostMediaUri] = useState("");
   const [postAuthorId, setPostAuthorId] = useState(
     buildDefaultPostAuthorId(INITIAL_PROFILE),
   );
@@ -121,7 +127,6 @@ export default function AppShell(){
   const {
     isLoggedIn,
     appwriteUser,
-    canOpenAdmin,
     completeAuthFlow,
     signOut,
     handleSaveProfile: persistAppwriteProfile,
@@ -150,6 +155,7 @@ export default function AppShell(){
       setIsPostComposerOpen(false);
       setPostTitle(POST_COMPOSER_DEFAULT_TITLE);
       setPostContent("");
+      setPostMediaUri("");
       setIsStudioOpen(false);
       setStudioAssetName("");
       setStudioAssetUri("");
@@ -278,13 +284,18 @@ export default function AppShell(){
     };
   }, [followedAuthorIds, isLoggedIn]);
 
-  useAppwritePostsSync({
+  const { refreshPosts, loadMorePosts, isRefreshingPosts, isLoadingMorePosts, hasMorePosts } = useAppwritePostsSync({
     isLoggedIn,
     appwriteUser,
     profile,
     setPosts,
     setNotice,
   });
+
+  const canAccessAdminPanel = useMemo(
+    () => resolveCanAccessAdminPanel(appwriteUser, profile),
+    [appwriteUser, profile, profile.role],
+  );
 
   useEffect(() => {
     if (currentTab !== "home" || homeMode !== "tiktok") {
@@ -323,6 +334,7 @@ export default function AppShell(){
   const resetPostComposerDraft = () => {
     setPostTitle(POST_COMPOSER_DEFAULT_TITLE);
     setPostContent("");
+    setPostMediaUri("");
     setPostAuthorId(getDefaultComposerAuthorId());
   };
 
@@ -453,6 +465,32 @@ export default function AppShell(){
     }
   };
 
+  const handleAttachPostImage = async () => {
+    try {
+      const pickerResult = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.82,
+      });
+
+      if (pickerResult.canceled) {
+        return;
+      }
+
+      const nextMediaUri = pickerResult.assets[0]?.uri?.trim() || "";
+
+      if (!nextMediaUri) {
+        setNotice("تعذر قراءة الصورة المختارة.");
+        return;
+      }
+
+      setPostMediaUri(nextMediaUri);
+      setPostComposerNotice("تم إرفاق الصورة. يمكنك النشر الآن.");
+    } catch {
+      setNotice("تعذر فتح مكتبة الصور على هذا الجهاز.");
+    }
+  };
+
   const handlePublishAppwritePost = () => {
     setPostComposerNotice("");
 
@@ -460,6 +498,7 @@ export default function AppShell(){
       postTitle,
       postContent,
       postAuthorId,
+      postMediaUri,
       appwriteUser,
       profile,
       onPublished: (post) => {
@@ -780,23 +819,82 @@ export default function AppShell(){
 
   const togglePostRepost = (postId: number) => {
     let nextReposted = false;
+    let targetPost: Post | undefined;
     const interactionTargetId = resolvePostInteractionTargetId(postId);
-
-    setPosts((currentPosts) =>
-      currentPosts.map((post) => {
-        if (post.id !== postId) {
-          return post;
-        }
-
-        nextReposted = !post.repostedByMe;
-
-        return {
-          ...post,
-          repostedByMe: nextReposted,
-          reposts: Math.max(0, post.reposts + (nextReposted ? 1 : -1)),
-        };
-      }),
+    const currentUserIdentity = buildCurrentUserPostIdentity({
+      varId: profile.varId || appwriteUser?.varId || "",
+      profile,
+      appwriteUser,
+    });
+    const currentUserVarId = normalizeAuthorId(
+      profile.varId || appwriteUser?.varId || "",
     );
+
+    setPosts((currentPosts) => {
+      targetPost = currentPosts.find((post) => post.id === postId);
+
+      if (!targetPost) {
+        return currentPosts;
+      }
+
+      nextReposted = !targetPost.repostedByMe;
+
+      const updatedPosts = currentPosts
+        .map((post) => {
+          if (post.id !== postId) {
+            return post;
+          }
+
+          return {
+            ...post,
+            repostedByMe: nextReposted,
+            reposts: Math.max(0, post.reposts + (nextReposted ? 1 : -1)),
+          };
+        })
+        .filter((post) => {
+          if (nextReposted || post.repostMeta?.varId !== currentUserVarId) {
+            return true;
+          }
+
+          const originalTargetId = post.sourceId?.trim() || String(postId);
+
+          return !(
+            originalTargetId === interactionTargetId &&
+            post.feedKey?.startsWith("repost-local-")
+          );
+        });
+
+      if (!nextReposted) {
+        return updatedPosts;
+      }
+
+      const localFeedKey = `repost-local-${interactionTargetId}-${Date.now()}`;
+
+      return [
+        {
+          ...targetPost,
+          id: hashFeedEntryId(localFeedKey),
+          feedKey: localFeedKey,
+          repostMeta: {
+            varId: currentUserVarId,
+            author:
+              currentUserIdentity.author?.trim() ||
+              profile.displayName.trim() ||
+              currentUserVarId,
+            authorAvatarUri:
+              currentUserIdentity.authorAvatarUri?.trim() ||
+              profile.avatarUri.trim() ||
+              undefined,
+            authorVerified: currentUserIdentity.authorVerified,
+            handle:
+              currentUserIdentity.handle?.trim() ||
+              createPostHandle(profile.username, currentUserVarId),
+            time: formatPostTime(new Date().toISOString()),
+          },
+        },
+        ...updatedPosts,
+      ];
+    });
     setNotice(
       nextReposted ? "تمت إعادة نشر المنشور." : "تم إلغاء إعادة النشر.",
     );
@@ -879,6 +977,87 @@ export default function AppShell(){
           : "تعذر فتح واجهة المشاركة على هذا الجهاز.",
       );
     }
+  };
+
+  const deletePost = async (postId: number) => {
+    const post = posts.find((candidate) => candidate.id === postId);
+
+    if (!post?.sourceId?.trim()) {
+      setNotice("تعذر حذف المنشور.");
+      return;
+    }
+
+    const authorVarId = normalizeAuthorId(post.authorId || "");
+    const currentVarId = normalizeAuthorId(
+      appwriteUser?.varId.trim() || profile.varId.trim(),
+    );
+
+    if (!currentVarId || authorVarId !== currentVarId) {
+      setNotice("لا يمكنك حذف منشور لا يخصك.");
+      return;
+    }
+
+    try {
+      await deleteAppwritePost(post.sourceId.trim());
+      setPosts((currentPosts) =>
+        currentPosts.filter((candidate) => candidate.id !== postId),
+      );
+      setNotice("تم حذف المنشور.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "تعذر حذف المنشور.",
+      );
+    }
+  };
+
+  const updatePostContent = async (postId: number, content: string) => {
+    const trimmedContent = content.trim();
+    const post = posts.find((candidate) => candidate.id === postId);
+
+    if (!trimmedContent || !post?.sourceId?.trim()) {
+      setNotice("اكتب محتوى المنشور قبل الحفظ.");
+      return;
+    }
+
+    const authorVarId = normalizeAuthorId(post.authorId || "");
+    const currentVarId = normalizeAuthorId(
+      appwriteUser?.varId.trim() || profile.varId.trim(),
+    );
+
+    if (!currentVarId || authorVarId !== currentVarId) {
+      setNotice("لا يمكنك تعديل منشور لا يخصك.");
+      return;
+    }
+
+    try {
+      await updateAppwritePost(post.sourceId.trim(), {
+        content: trimmedContent,
+      });
+      setPosts((currentPosts) =>
+        currentPosts.map((candidate) =>
+          candidate.id === postId
+            ? { ...candidate, content: trimmedContent }
+            : candidate,
+        ),
+      );
+      setNotice("تم تحديث المنشور.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "تعذر تحديث المنشور.",
+      );
+    }
+  };
+
+  const reportPost = (postId: number) => {
+    const interactionTargetId = resolvePostInteractionTargetId(postId);
+
+    trackVarInteraction({
+      mode: "x",
+      action: "comment",
+      targetId: interactionTargetId,
+      value: "[report]",
+    });
+    setNotice("تم إرسال الإبلاغ.");
   };
 
   const toggleSupport = (clubId: FanClubId) => {
@@ -1007,6 +1186,14 @@ export default function AppShell(){
           resumeReplyPostId={resumeReplyPostId}
           onReplyIntentConsumed={consumeReplyIntent}
           onShowNotice={setNotice}
+          onRefreshPosts={refreshPosts}
+          onLoadMorePosts={loadMorePosts}
+          isRefreshingPosts={isRefreshingPosts}
+          isLoadingMorePosts={isLoadingMorePosts}
+          hasMorePosts={hasMorePosts}
+          onDeletePost={deletePost}
+          onUpdatePostContent={updatePostContent}
+          onReportPost={reportPost}
           onToggleVideoLike={toggleVideoLike}
           onToggleVideoSave={toggleVideoSave}
           onToggleVideoShare={toggleVideoShare}
@@ -1034,8 +1221,24 @@ export default function AppShell(){
     case "account":
       screen = isLoggedIn ? (
         <ProfileScreen
-          canOpenAdmin={canOpenAdmin}
+          canOpenAdmin={canAccessAdminPanel}
           onOpenAdmin={() => setIsAdminDashboardOpen(true)}
+          onOpenAdminWeb={() => {
+            void openAdminWebPanel({
+              onMissingUrl: () =>
+                setNotice(
+                  "تعذر تحديد رابط لوحة الإدارة. اضبط EXPO_PUBLIC_ADMIN_PANEL_URL في .env.",
+                ),
+            });
+          }}
+          adminDisplayVarId={
+            profile.displayVarId ||
+            appwriteUser?.displayVarId ||
+            profile.varId ||
+            appwriteUser?.varId ||
+            ""
+          }
+          adminRoleLabel={profile.role === "admin" ? "ADMIN" : "MEMBER"}
           posts={posts}
           profile={profile}
           onSaveProfile={(nextProfile) => {
@@ -1135,6 +1338,13 @@ export default function AppShell(){
           onChangeTitle={setPostTitle}
           onChangeContent={setPostContent}
           onChangeAuthorId={setPostAuthorId}
+          mediaUri={postMediaUri}
+          onAttachImage={() => {
+            void handleAttachPostImage();
+          }}
+          onRemoveImage={() => {
+            setPostMediaUri("");
+          }}
           onClose={closePostComposer}
           onPublish={handlePublishAppwritePost}
         />
@@ -1154,7 +1364,7 @@ export default function AppShell(){
 
         <Modal
           visible={Boolean(
-            isAdminDashboardOpen && canOpenAdmin && appwriteUser,
+            isAdminDashboardOpen && canAccessAdminPanel && appwriteUser,
           )}
           animationType="slide"
           presentationStyle="fullScreen"

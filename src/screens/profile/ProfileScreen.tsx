@@ -36,6 +36,7 @@ import {
 } from "./profile.helpers";
 import { styles } from "./profile.styles";
 import { buildComposerDisplayVarId } from "../../appshell/appshell.helpers";
+import { normalizeAppwriteDisplayVarId } from "../../lib/appwrite";
 import type { ProfileFieldKey, ProfileScreenProps } from "./profile.constants";
 import { SwipeActionControl } from "./components/SwipeActionControl";
 import { ProfilePreviewModal } from "./components/ProfilePreviewModal";
@@ -43,7 +44,8 @@ import { ProfileEditModal } from "./components/ProfileEditModal";
 import { VarIdentityCard } from "./components/identity";
 
 export default function ProfileScreen(props: ProfileScreenProps) {
-  const { posts, profile, onOpenAdmin, onSaveProfile, onSignOut } = props;
+  const { posts, profile, onOpenAdmin, onOpenAdminWeb, onSaveProfile, onSignOut } =
+    props;
   const { width: viewportWidth } = useWindowDimensions();
   const [message, setMessage] = useState("");
   const [isWalletBusy, setIsWalletBusy] = useState(false);
@@ -84,7 +86,7 @@ export default function ProfileScreen(props: ProfileScreenProps) {
     // Sound loading disabled due to expo-av deprecation causing web bundler TDZ loop issue
   }, []);
 
-  const clubName = DEFAULT_CLUB_NAME;
+  const clubName = profile.association?.trim() || DEFAULT_CLUB_NAME;
   const totalPosts = posts.length;
   const totalReplies = useMemo(
     () => posts.reduce((sum, post) => sum + post.replies, 0),
@@ -262,11 +264,18 @@ export default function ProfileScreen(props: ProfileScreenProps) {
   const handleSaveProfileEdits = () => {
     const nextDisplayName = draftProfile.displayName.trim();
     const nextNationality = draftProfile.nationality.trim();
+    const nextAssociation =
+      draftProfile.association.trim() || profile.association || DEFAULT_CLUB_NAME;
+    const nextDisplayVarId =
+      normalizeAppwriteDisplayVarId(draftProfile.displayVarId) ||
+      buildComposerDisplayVarId(profile.displayVarId, profile.varId);
 
-    onSaveProfile({
+    void onSaveProfile({
       ...draftProfile,
       displayName: nextDisplayName || profile.displayName,
       nationality: nextNationality || profile.nationality,
+      association: nextAssociation,
+      displayVarId: nextDisplayVarId,
     });
     setIsEditModalOpen(false);
     setMessage("تم حفظ تعديل الملف الشخصي.");
@@ -323,12 +332,14 @@ export default function ProfileScreen(props: ProfileScreenProps) {
             <VarIdentityCard
               width={idCardWidth}
               avatarUri={profileAvatarUri}
+              displayName={profile.displayName}
               displayVarId={displayVarId}
+              association={clubName}
               joinDate={profile.joinDate}
               nationalityArabic={nationalityLabels.arabic}
               nationalityEnglish={nationalityLabels.english}
               arabicFontFamily={profileArabicFontFamily}
-              isVerified={profile.isVerified}
+              cardTier={profile.cardTier}
             />
           </View>
         </GestureDetector>
@@ -342,22 +353,51 @@ export default function ProfileScreen(props: ProfileScreenProps) {
         </View>
 
         {props.canOpenAdmin ? (
-          <Pressable style={styles.adminConsoleButton} onPress={onOpenAdmin}>
-            <View style={styles.adminConsoleCopy}>
-              <Text style={styles.adminConsoleEyebrow}>VAR CONTROL</Text>
-              <Text style={[styles.adminConsoleTitle, staticArabicTextStyle]}>
-                افتح لوحة التحكم
-              </Text>
-              <Text style={[styles.adminConsoleHint, staticArabicTextStyle]}>
-                ادخل إلى مركز الإدارة لمراجعة Appwrite والمنشورات وحالة تجهيز
-                النظام من داخل Expo.
+          <View style={styles.adminConsoleCard}>
+            <View style={styles.adminConsoleHeaderRow}>
+              <View style={styles.adminConsoleBadge}>
+                <Text style={styles.adminConsoleBadgeText}>
+                  {props.adminRoleLabel || "ADMIN"}
+                </Text>
+              </View>
+              <Text style={styles.adminConsoleVarId}>
+                {props.adminDisplayVarId?.trim() ||
+                  profile.displayVarId ||
+                  profile.varId ||
+                  "VAR ID"}
               </Text>
             </View>
 
-            <View style={styles.adminConsoleIconWrap}>
-              <Ionicons name="grid-outline" size={22} color="#09111C" />
-            </View>
-          </Pressable>
+            <Pressable
+              style={styles.adminConsoleButton}
+              onPress={onOpenAdminWeb}
+            >
+              <View style={styles.adminConsoleCopy}>
+                <Text style={styles.adminConsoleEyebrow}>VAR ADMIN</Text>
+                <Text style={[styles.adminConsoleTitle, staticArabicTextStyle]}>
+                  فتح لوحة الإدارة
+                </Text>
+                <Text style={[styles.adminConsoleHint, staticArabicTextStyle]}>
+                  ادخل إلى لوحة الإدارة الكاملة مربوطة ببروفايلك وجلسة Appwrite
+                  الحالية.
+                </Text>
+              </View>
+
+              <View style={styles.adminConsoleIconWrap}>
+                <Ionicons name="globe-outline" size={22} color="#09111C" />
+              </View>
+            </Pressable>
+
+            <Pressable
+              style={styles.adminConsoleSecondaryButton}
+              onPress={onOpenAdmin}
+            >
+              <Ionicons name="grid-outline" size={18} color="#D7E6FF" />
+              <Text style={styles.adminConsoleSecondaryText}>
+                لوحة سريعة داخل التطبيق
+              </Text>
+            </Pressable>
+          </View>
         ) : null}
 
         <View style={styles.slidersStack}>

@@ -245,6 +245,7 @@ function buildAppwriteProfileIndexBasePayload(user: AppwriteAuthUser) {
     username: normalizeAppwriteUsername(user.username),
     role: user.role,
     isVerified: user.isVerified ? "true" : "false",
+    cardTier: user.cardTier,
   };
 }
 

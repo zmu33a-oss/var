@@ -23,6 +23,9 @@ import {
   REGULAR_POLL_TWEET_CARD_HEIGHT,
 } from "./leagues.constants";
 import {
+  getLeagueCardCompetitionTitle,
+  getLeaguePageHeaderTitle,
+  getSelectedLeagueOverview,
   mapPostToLeaguePollTweet,
   remapBenchPlayers,
   remapLeaguePollTweets,
@@ -141,6 +144,14 @@ export default function LeaguesScreen(props: LeaguesScreenProps) {
   const selectedMatch =
     matchShowcaseCards.find((matchCard) => matchCard.id === selectedMatchId) ??
     null;
+  const selectedLeagueOverview = getSelectedLeagueOverview(
+    selectedLeagueOverviewId,
+    LEAGUE_OVERVIEW_CARDS,
+  );
+  const leaguePageHeaderTitle = getLeaguePageHeaderTitle(selectedLeagueOverview);
+  const leagueCardCompetitionTitle = getLeagueCardCompetitionTitle(
+    selectedLeagueOverview,
+  );
 
   return (
     <LeagueArabicFontContext.Provider value={leaguesArabicFontFamily}>
@@ -169,7 +180,9 @@ export default function LeaguesScreen(props: LeaguesScreenProps) {
           {matchShowcaseCards.map((matchCard) => (
             <MatchShowcaseCard
               key={matchCard.id}
+              competitionTitle={leagueCardCompetitionTitle}
               config={matchCard}
+              headerFontFamily={leagueHeaderArabicFontFamily}
               kickoffCountdownLabel={kickoffCountdownLabel}
               onOpenDetails={() => setSelectedMatchId(matchCard.id)}
               pollTweetCardHeight={pollTweetCardHeight}

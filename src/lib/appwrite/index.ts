@@ -4,6 +4,8 @@ export type {
   AppwriteSocialMode,
   AppwriteSocialAction,
   AppwritePostRecord,
+  AppwritePostsPage,
+  AppwritePostEngagementAggregate,
   AppwritePostReplyRecord,
   AppwriteLockedPrediction,
   AppwritePointsLedgerEntry,
@@ -61,6 +63,8 @@ export {
   toAppwriteProfilePrefs,
   resolveAdminRole,
   toAppwritePostRecord,
+  isAppwritePostHidden,
+  createEmptyPostEngagementAggregate,
   toAppwriteAuthUser,
   toAppwriteProfileIndexRecord,
   toAppwriteLockedPrediction,
@@ -145,7 +149,11 @@ export {
   listAppwritePosts,
   listAppwritePostsByVarId,
   createAppwritePost,
+  updateAppwritePost,
+  deleteAppwritePost,
 } from "./appwrite.posts";
+
+export { uploadAppwritePostImage, buildAppwriteFileViewUrl } from "./appwrite.storage";
 
 // ─── Social ───────────────────────────────────────────────────────────────────
 export {
@@ -153,6 +161,8 @@ export {
   sendAppwriteDirectMessage,
   listAppwriteVarSocialInteractions,
   listAppwriteXRepliesByTargetIds,
+  listAppwriteXEngagementByTargetIds,
+  listAppwriteXReposts,
   listAppwriteFollowingVarIds,
   syncAppwriteSocialInteraction,
 } from "./appwrite.social";

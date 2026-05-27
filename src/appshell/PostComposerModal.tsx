@@ -34,6 +34,9 @@ export function PostComposerModal(props: {
   onChangeTitle: (value: string) => void;
   onChangeContent: (value: string) => void;
   onChangeAuthorId: (value: string) => void;
+  mediaUri?: string;
+  onAttachImage: () => void;
+  onRemoveImage: () => void;
   onClose: () => void;
   onPublish: () => void;
 }) {
@@ -49,6 +52,7 @@ export function PostComposerModal(props: {
   const normalizedAuthorName =
     props.authorName.trim() || normalizeAuthorId(props.authorId);
   const normalizedAuthorAvatarUri = props.authorAvatarUri.trim();
+  const normalizedMediaUri = props.mediaUri?.trim() || "";
   const compactDisplayVarId = buildComposerDisplayVarId(
     props.displayVarId,
     props.authorId,
@@ -183,6 +187,21 @@ export function PostComposerModal(props: {
             />
           </View>
 
+          {normalizedMediaUri ? (
+            <View style={styles.postComposerMediaPreviewWrap}>
+              <Image
+                source={{ uri: normalizedMediaUri }}
+                style={styles.postComposerMediaPreview}
+              />
+              <Pressable
+                style={styles.postComposerMediaRemoveButton}
+                onPress={props.onRemoveImage}
+              >
+                <Ionicons name="close" size={16} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          ) : null}
+
           <Text style={styles.postComposerFooterHint}>
             <Text style={styles.postComposerFooterHintAccent}>ملاحظة:</Text> لقد
             اكرمنا ربي بدين يحثنا على حسن الخلق فاختر لكلماتك ما يناسب دينك.
@@ -211,13 +230,16 @@ export function PostComposerModal(props: {
               </Text>
             </Pressable>
 
-            <View style={styles.postComposerAttachAction}>
+            <Pressable
+              style={styles.postComposerAttachAction}
+              onPress={props.onAttachImage}
+            >
               <Ionicons
                 name="attach"
                 size={26}
                 color="rgba(255,255,255,0.86)"
               />
-            </View>
+            </Pressable>
 
             <View style={styles.postComposerActionSpacer} />
           </View>

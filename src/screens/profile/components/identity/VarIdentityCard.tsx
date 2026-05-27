@@ -16,6 +16,11 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import QRCode from "react-native-qrcode-svg";
+import type { MembershipCardTier } from "../../../../lib/membershipCardTier";
+import {
+  getMembershipCardTheme,
+  getMembershipCardTierLabel,
+} from "../../../../lib/membershipCardTier";
 import {
   getArabicFontStyle,
   resolveProfileAvatarUri,
@@ -26,12 +31,14 @@ const CARD_ASPECT_RATIO = 0.57;
 type VarIdentityCardProps = {
   width: number;
   avatarUri: string;
+  displayName: string;
   displayVarId: string;
+  association: string;
   joinDate: string;
   nationalityArabic: string;
   nationalityEnglish: string;
   arabicFontFamily?: string;
-  isVerified?: boolean;
+  cardTier?: MembershipCardTier;
 };
 
 function buildVarQrPayload(displayVarId: string) {
@@ -41,7 +48,11 @@ function buildVarQrPayload(displayVarId: string) {
   return appUrl ? `${appUrl}/add/${encodeURIComponent(id)}` : id;
 }
 
-function GoldenFrontQr(props: { value: string; compact: boolean }) {
+function CardFrontQr(props: {
+  value: string;
+  compact: boolean;
+  qrColor: string;
+}) {
   const size = props.compact ? 42 : 48;
 
   return (
@@ -49,7 +60,7 @@ function GoldenFrontQr(props: { value: string; compact: boolean }) {
       <QRCode
         value={props.value}
         size={size}
-        color="#2A1E08"
+        color={props.qrColor}
         backgroundColor="transparent"
         quietZone={2}
       />
@@ -57,95 +68,150 @@ function GoldenFrontQr(props: { value: string; compact: boolean }) {
   );
 }
 
-function GoldenCardFront(props: {
+function CardFront(props: {
   width: number;
   displayVarId: string;
-  isVerified?: boolean;
+  cardTier: MembershipCardTier;
 }) {
+  const theme = getMembershipCardTheme(props.cardTier);
   const cardHeight = props.width * CARD_ASPECT_RATIO;
   const compact = props.width < 360;
   const qrPayload = buildVarQrPayload(props.displayVarId);
+  const tierLabel = getMembershipCardTierLabel(props.cardTier);
+  const showIdBadge = props.cardTier === "classic";
 
   return (
     <LinearGradient
-      colors={["#D5B370", "#EED8A7", "#C29F5C", "#E6CC92", "#AF8C47"]}
+      colors={theme.frontGradient}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={[styles.card, { width: props.width, height: cardHeight }]}
+      style={[
+        styles.card,
+        {
+          width: props.width,
+          height: cardHeight,
+          borderColor: theme.borderColor,
+          shadowColor: theme.shadowColor,
+        },
+      ]}
     >
       <LinearGradient
-        colors={["rgba(255,255,255,0.18)", "transparent"]}
+        colors={theme.sheenGradient}
         style={StyleSheet.absoluteFillObject}
       />
 
       <View style={styles.watermarkContainer}>
-        <Text style={styles.watermarkText}>VAR</Text>
+        <Text style={[styles.watermarkText, { color: theme.watermark }]}>
+          VAR
+        </Text>
       </View>
 
-      <View style={styles.topRightContainer}>
-        <Text style={styles.varGoldText}>
-          <Text style={styles.serifBold}>VAR</Text>{" "}
-          {props.isVerified ? "GOLD" : "MEMBER"}
+      <View style={styles.topLeftContainer}>
+        <Text style={[styles.tierText, { color: theme.primaryText }]}>
+          {tierLabel}
         </Text>
       </View>
 
       <View style={styles.logoRow}>
         <View style={styles.logoContainer}>
-          <Text style={styles.logoMainText}>VAR</Text>
-          <Text style={styles.logoSubText}>VAR BANK FOR FANS</Text>
+          <Text style={[styles.logoMainText, { color: theme.primaryText }]}>
+            VAR
+          </Text>
+          <Text style={[styles.logoSubText, { color: theme.secondaryText }]}>
+            VAR BANK FOR FANS
+          </Text>
         </View>
 
-        <GoldenFrontQr value={qrPayload} compact={compact} />
+        <CardFrontQr
+          value={qrPayload}
+          compact={compact}
+          qrColor={theme.qrColor}
+        />
       </View>
 
       <View style={styles.footerRow}>
         <View style={styles.footerRight}>
-          <Text style={styles.farIdText}>
-            {props.displayVarId || "VAR-0000000"}
-          </Text>
-          <Text style={styles.idSubtitle}>VAR ID</Text>
+          {showIdBadge ? (
+            <View
+              style={[
+                styles.idBadge,
+                { backgroundColor: theme.idBadgeBackground },
+              ]}
+            >
+              <Text style={[styles.idBadgeText, { color: theme.idBadgeText }]}>
+                {props.displayVarId || "VAR-0000000"}
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={[styles.farIdText, { color: theme.idBadgeText }]}>
+                {props.displayVarId || "VAR-0000000"}
+              </Text>
+              <Text style={[styles.idSubtitle, { color: theme.mutedText }]}>
+                VAR ID
+              </Text>
+            </>
+          )}
         </View>
       </View>
     </LinearGradient>
   );
 }
 
-function GoldenCardBack(props: {
+function CardBack(props: {
   width: number;
   avatarUri: string;
+  displayName: string;
   displayVarId: string;
+  association: string;
   joinDate: string;
   nationalityArabic: string;
   nationalityEnglish: string;
   arabicTextStyle: object | undefined;
+  cardTier: MembershipCardTier;
 }) {
+  const theme = getMembershipCardTheme(props.cardTier);
   const cardHeight = props.width * CARD_ASPECT_RATIO;
   const qrSize = props.width < 340 ? 54 : 62;
   const qrPayload = buildVarQrPayload(props.displayVarId);
 
   return (
     <LinearGradient
-      colors={["#AF8C47", "#C29F5C", "#B8934E", "#9A7838"]}
+      colors={theme.backGradient}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[
         styles.card,
         styles.cardBack,
-        { width: props.width, height: cardHeight },
+        {
+          width: props.width,
+          height: cardHeight,
+          borderColor: theme.borderColor,
+          shadowColor: theme.shadowColor,
+        },
       ]}
     >
       <LinearGradient
-        colors={["rgba(255,255,255,0.10)", "transparent"]}
+        colors={theme.sheenGradient}
         style={StyleSheet.absoluteFillObject}
       />
 
       <View style={styles.backHeader}>
-        <Text style={styles.backTitle}>MEMBER DETAILS</Text>
-        <Text style={styles.backSubtitle}>VAR PRIVATE ID</Text>
+        <Text style={[styles.backTitle, { color: theme.primaryText }]}>
+          MEMBER DETAILS
+        </Text>
+        <Text style={[styles.backSubtitle, { color: theme.mutedText }]}>
+          VAR PRIVATE ID
+        </Text>
       </View>
 
       <View style={styles.backBody}>
-        <View style={styles.backAvatarWrap}>
+        <View
+          style={[
+            styles.backAvatarWrap,
+            { borderColor: theme.borderColor },
+          ]}
+        >
           <Image
             source={{ uri: resolveProfileAvatarUri(props.avatarUri) }}
             style={styles.backAvatarImage}
@@ -154,38 +220,97 @@ function GoldenCardBack(props: {
 
         <View style={styles.backInfoBlock}>
           <View style={styles.backInfoRow}>
-            <Text style={styles.backInfoLabel}>MEMBER SINCE</Text>
-            <Text style={[styles.backInfoValue, props.arabicTextStyle]}>
+            <Text style={[styles.backInfoLabel, { color: theme.mutedText }]}>
+              MEMBER NAME
+            </Text>
+            <Text
+              style={[
+                styles.backInfoValue,
+                props.arabicTextStyle,
+                { color: theme.primaryText },
+              ]}
+            >
+              {props.displayName || "—"}
+            </Text>
+          </View>
+
+          <View style={styles.backInfoRow}>
+            <Text style={[styles.backInfoLabel, { color: theme.mutedText }]}>
+              ASSOCIATION
+            </Text>
+            <Text
+              style={[
+                styles.backInfoValue,
+                props.arabicTextStyle,
+                { color: theme.primaryText },
+              ]}
+            >
+              {props.association || "—"}
+            </Text>
+          </View>
+
+          <View style={styles.backInfoRow}>
+            <Text style={[styles.backInfoLabel, { color: theme.mutedText }]}>
+              MEMBER SINCE
+            </Text>
+            <Text
+              style={[
+                styles.backInfoValue,
+                props.arabicTextStyle,
+                { color: theme.primaryText },
+              ]}
+            >
               {props.joinDate || "—"}
             </Text>
           </View>
 
           <View style={styles.backInfoRow}>
-            <Text style={styles.backInfoLabel}>NATIONALITY</Text>
-            <Text style={[styles.backInfoValue, props.arabicTextStyle]}>
+            <Text style={[styles.backInfoLabel, { color: theme.mutedText }]}>
+              NATIONALITY
+            </Text>
+            <Text
+              style={[
+                styles.backInfoValue,
+                props.arabicTextStyle,
+                { color: theme.primaryText },
+              ]}
+            >
               {props.nationalityArabic || "—"}
             </Text>
             {props.nationalityEnglish ? (
-              <Text style={styles.backInfoSubValue}>
+              <Text
+                style={[styles.backInfoSubValue, { color: theme.secondaryText }]}
+              >
                 {props.nationalityEnglish}
               </Text>
             ) : null}
           </View>
         </View>
 
-        <View style={styles.backQrPlate}>
+        <View
+          style={[
+            styles.backQrPlate,
+            {
+              backgroundColor:
+                props.cardTier === "classic" ? "#F5F0E6" : theme.qrBackground,
+              borderColor: theme.borderColor,
+            },
+          ]}
+        >
           <QRCode
             value={qrPayload}
             size={qrSize}
-            color="#0A0C10"
-            backgroundColor="#F5F0E6"
+            color={theme.qrColor}
+            backgroundColor={
+              props.cardTier === "classic" ? "#F5F0E6" : "transparent"
+            }
             quietZone={4}
           />
         </View>
       </View>
 
       <View style={styles.backFooter}>
-        <Text style={styles.backFooterId}>
+        <Text style={[styles.backFooterId, { color: theme.idBadgeText }]}>
           {props.displayVarId || "VAR-0000000"}
         </Text>
       </View>
@@ -194,6 +319,8 @@ function GoldenCardBack(props: {
 }
 
 export function VarIdentityCard(props: VarIdentityCardProps) {
+  const cardTier = props.cardTier ?? "classic";
+  const theme = getMembershipCardTheme(cardTier);
   const [isFlipped, setIsFlipped] = useState(false);
   const rotation = useSharedValue(0);
   const arabicTextStyle = getArabicFontStyle(props.arabicFontFamily);
@@ -232,10 +359,10 @@ export function VarIdentityCard(props: VarIdentityCardProps) {
                 : null,
             ]}
           >
-            <GoldenCardFront
+            <CardFront
               width={props.width}
               displayVarId={props.displayVarId}
-              isVerified={props.isVerified}
+              cardTier={cardTier}
             />
           </View>
 
@@ -248,27 +375,38 @@ export function VarIdentityCard(props: VarIdentityCardProps) {
                 : null,
             ]}
           >
-            <GoldenCardBack
+            <CardBack
               width={props.width}
               avatarUri={props.avatarUri}
+              displayName={props.displayName}
               displayVarId={props.displayVarId}
+              association={props.association}
               joinDate={props.joinDate}
               nationalityArabic={props.nationalityArabic}
               nationalityEnglish={props.nationalityEnglish}
               arabicTextStyle={arabicTextStyle}
+              cardTier={cardTier}
             />
           </View>
         </Animated.View>
       </View>
 
-      <Pressable style={styles.flipButton} onPress={toggleFlip}>
+      <Pressable
+        style={[
+          styles.flipButton,
+          {
+            borderColor: theme.flipButtonBorder,
+          },
+        ]}
+        onPress={toggleFlip}
+      >
         <Ionicons
           name="sync-outline"
           size={16}
-          color="#E8D5A3"
+          color={theme.flipButtonText}
           style={isFlipped ? styles.flipIconFlipped : null}
         />
-        <Text style={styles.flipButtonText}>
+        <Text style={[styles.flipButtonText, { color: theme.flipButtonText }]}>
           {isFlipped ? "عرض الوجه الأمامي" : "قلب البطاقة"}
         </Text>
       </Pressable>
@@ -297,18 +435,14 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 14,
     padding: 18,
-    shadowColor: "#bca168",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 15,
     elevation: 8,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
   },
-  cardBack: {
-    borderColor: "rgba(255, 255, 255, 0.16)",
-  },
+  cardBack: {},
   watermarkContainer: {
     position: "absolute",
     left: 0,
@@ -317,26 +451,21 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: "center",
     alignItems: "center",
-    opacity: 0.05,
   },
   watermarkText: {
     fontSize: 120,
     fontWeight: "900",
-    color: "#000000",
   },
-  topRightContainer: {
+  topLeftContainer: {
     position: "absolute",
     top: 18,
-    right: 20,
-    alignItems: "flex-end",
+    left: 20,
+    alignItems: "flex-start",
   },
-  varGoldText: {
+  tierText: {
     fontSize: 12,
-    color: "#111111",
-    letterSpacing: 1.2,
-  },
-  serifBold: {
-    fontWeight: "bold",
+    letterSpacing: 1.4,
+    fontWeight: "800",
   },
   logoRow: {
     marginTop: 35,
@@ -353,13 +482,11 @@ const styles = StyleSheet.create({
   logoMainText: {
     fontSize: 38,
     fontWeight: "900",
-    color: "#0a0a0a",
     letterSpacing: -1,
   },
   logoSubText: {
     fontSize: 8.5,
     fontWeight: "700",
-    color: "#1a1a1a",
     marginTop: -2,
     letterSpacing: 0.3,
   },
@@ -381,16 +508,24 @@ const styles = StyleSheet.create({
   footerRight: {
     alignItems: "flex-end",
   },
+  idBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  idBadgeText: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
   farIdText: {
     fontSize: 12.5,
     fontWeight: "bold",
-    color: "#050505",
     letterSpacing: 0.8,
   },
   idSubtitle: {
     fontSize: 8,
     fontWeight: "700",
-    color: "rgba(17,17,17,0.72)",
     marginTop: 2,
     letterSpacing: 0.6,
   },
@@ -398,13 +533,11 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   backTitle: {
-    color: "#111111",
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1.4,
   },
   backSubtitle: {
-    color: "rgba(17,17,17,0.72)",
     fontSize: 8.5,
     fontWeight: "700",
     letterSpacing: 1.1,
@@ -424,8 +557,7 @@ const styles = StyleSheet.create({
     borderRadius: 27,
     overflow: "hidden",
     borderWidth: 1.5,
-    borderColor: "rgba(17,17,17,0.25)",
-    backgroundColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   backAvatarImage: {
     width: "100%",
@@ -440,20 +572,17 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   backInfoLabel: {
-    color: "rgba(17,17,17,0.55)",
     fontSize: 7,
     fontWeight: "800",
     letterSpacing: 1,
   },
   backInfoValue: {
-    color: "#111111",
     fontSize: 11,
     fontWeight: "700",
     marginTop: 2,
     textAlign: "right",
   },
   backInfoSubValue: {
-    color: "rgba(17,17,17,0.62)",
     fontSize: 8.5,
     fontWeight: "600",
     marginTop: 1,
@@ -462,16 +591,13 @@ const styles = StyleSheet.create({
   backQrPlate: {
     borderRadius: 10,
     padding: 5,
-    backgroundColor: "#F5F0E6",
     borderWidth: 1,
-    borderColor: "rgba(17,17,17,0.18)",
   },
   backFooter: {
     alignItems: "flex-end",
     marginTop: 8,
   },
   backFooterId: {
-    color: "#050505",
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0.8,
@@ -486,11 +612,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(201,169,98,0.35)",
     backgroundColor: "rgba(255,255,255,0.04)",
   },
   flipButtonText: {
-    color: "#E8D5A3",
     fontSize: 13,
     fontWeight: "700",
   },

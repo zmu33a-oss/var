@@ -1,23 +1,63 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import SealCheckIcon from "../../components/SealCheckIcon";
 import type { IconName, Post, PostReply } from "../../app.types";
 
+function PostMediaPreview(props: { mediaUri: string }) {
+  return (
+    <View style={styles.xMediaCard}>
+      <Image
+        source={{ uri: props.mediaUri }}
+        style={styles.xMediaImage}
+        resizeMode="cover"
+      />
+    </View>
+  );
+}
+
+function PostBodyBlock(props: {
+  post: Post;
+  showQuotedShell?: boolean;
+}) {
+  const { post, showQuotedShell = false } = props;
+  const mediaUri = post.mediaUri?.trim() || "";
+  const body = (
+    <>
+      {post.title ? <Text style={styles.xPostTitle}>{post.title}</Text> : null}
+      <Text style={styles.xPostBody}>{post.content}</Text>
+      {mediaUri ? <PostMediaPreview mediaUri={mediaUri} /> : null}
+    </>
+  );
+
+  if (!showQuotedShell) {
+    return body;
+  }
+
+  return (
+    <View style={styles.xQuotedPostCard}>
+      <View style={styles.xPostMetaLine}>
+        <Text style={styles.xPostAuthor}>{post.author}</Text>
+        {post.authorVerified ? (
+          <SealCheckIcon size={14} style={styles.xVerifiedIcon} />
+        ) : null}
+        <Text style={styles.xPostHandle}>{post.handle}</Text>
+      </View>
+      {body}
+    </View>
+  );
+}
+
 export function XPostCard(props: {
   post: Post;
-  canToggleFollow?: boolean;
-  isFollowingAuthor?: boolean;
-  onToggleFollow?: () => void;
   onOpenAuthor?: () => void;
   onOpen: () => void;
   onReply: () => void;
   onRepost: () => void;
   onLike: () => void;
   onShare: () => void;
+  onOpenActions?: () => void;
   interactive?: boolean;
   showActionRow?: boolean;
-  showSyntheticMedia?: boolean;
 }) {
   const {
     post,
@@ -27,16 +67,19 @@ export function XPostCard(props: {
     onRepost,
     onLike,
     onShare,
+    onOpenActions,
     interactive = true,
     showActionRow = true,
-    showSyntheticMedia = true,
   } = props;
-  const verified = Boolean(post.authorVerified);
-  const showMedia =
-    showSyntheticMedia && (post.id % 2 === 1 || post.content.length > 60);
-  const headerActions = (
+  const repostMeta = post.repostMeta;
+  const headerAuthor = repostMeta?.author || post.author;
+  const headerHandle = repostMeta?.handle || post.handle;
+  const headerTime = repostMeta?.time || post.time;
+  const headerAvatarUri = repostMeta?.authorAvatarUri || post.authorAvatarUri;
+  const verified = Boolean(repostMeta?.authorVerified ?? post.authorVerified);
+  const headerActions = onOpenActions ? (
     <View style={styles.xPostHeadActions}>
-      <Pressable style={styles.xEllipsisButton}>
+      <Pressable style={styles.xEllipsisButton} onPress={onOpenActions}>
         <Ionicons
           name="ellipsis-horizontal"
           size={18}
@@ -44,6 +87,80 @@ export function XPostCard(props: {
         />
       </Pressable>
     </View>
+  ) : null;
+
+  const headerBlock = (
+    <View style={styles.xPostHead}>
+      {onOpenAuthor ? (
+        <Pressable
+          style={styles.xPostMetaBlockPressable}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onOpenAuthor();
+          }}
+        >
+          <View style={styles.xPostMetaBlock}>
+            {repostMeta ? (
+              <View style={styles.xRepostBanner}>
+                <Ionicons name="repeat" size={13} color="#6DE5AA" />
+                <Text style={styles.xRepostBannerText}>
+                  {headerAuthor} أعاد النشر
+                </Text>
+                <Text style={styles.xPostDot}>·</Text>
+                <Text style={styles.xPostTime}>{headerTime}</Text>
+              </View>
+            ) : null}
+            <View style={styles.xPostMetaLine}>
+              <Text style={styles.xPostAuthor}>{headerAuthor}</Text>
+              {verified ? (
+                <SealCheckIcon size={14} style={styles.xVerifiedIcon} />
+              ) : null}
+              {!repostMeta ? (
+                <>
+                  <Text style={styles.xPostHandle}>{headerHandle}</Text>
+                  <Text style={styles.xPostDot}>·</Text>
+                  <Text style={styles.xPostTime}>{headerTime}</Text>
+                </>
+              ) : null}
+            </View>
+          </View>
+        </Pressable>
+      ) : (
+        <View style={styles.xPostMetaBlock}>
+          {repostMeta ? (
+            <View style={styles.xRepostBanner}>
+              <Ionicons name="repeat" size={13} color="#6DE5AA" />
+              <Text style={styles.xRepostBannerText}>
+                {headerAuthor} أعاد النشر
+              </Text>
+              <Text style={styles.xPostDot}>·</Text>
+              <Text style={styles.xPostTime}>{headerTime}</Text>
+            </View>
+          ) : null}
+          <View style={styles.xPostMetaLine}>
+            <Text style={styles.xPostAuthor}>{headerAuthor}</Text>
+            {verified ? (
+              <SealCheckIcon size={14} style={styles.xVerifiedIcon} />
+            ) : null}
+            {!repostMeta ? (
+              <>
+                <Text style={styles.xPostHandle}>{headerHandle}</Text>
+                <Text style={styles.xPostDot}>·</Text>
+                <Text style={styles.xPostTime}>{headerTime}</Text>
+              </>
+            ) : null}
+          </View>
+        </View>
+      )}
+
+      {headerActions}
+    </View>
+  );
+
+  const contentBlock = repostMeta ? (
+    <PostBodyBlock post={post} showQuotedShell />
+  ) : (
+    <PostBodyBlock post={post} />
   );
 
   return (
@@ -51,27 +168,27 @@ export function XPostCard(props: {
       <View style={styles.xPostRow}>
         {onOpenAuthor ? (
           <Pressable style={styles.xAvatarTiny} onPress={onOpenAuthor}>
-            {post.authorAvatarUri?.trim() ? (
+            {headerAvatarUri?.trim() ? (
               <Image
-                source={{ uri: post.authorAvatarUri }}
+                source={{ uri: headerAvatarUri }}
                 style={styles.xAvatarTinyImage}
               />
             ) : (
               <Text style={styles.xAvatarTinyText}>
-                {post.author.slice(0, 1)}
+                {headerAuthor.slice(0, 1)}
               </Text>
             )}
           </Pressable>
         ) : (
           <View style={styles.xAvatarTiny}>
-            {post.authorAvatarUri?.trim() ? (
+            {headerAvatarUri?.trim() ? (
               <Image
-                source={{ uri: post.authorAvatarUri }}
+                source={{ uri: headerAvatarUri }}
                 style={styles.xAvatarTinyImage}
               />
             ) : (
               <Text style={styles.xAvatarTinyText}>
-                {post.author.slice(0, 1)}
+                {headerAuthor.slice(0, 1)}
               </Text>
             )}
           </View>
@@ -80,134 +197,13 @@ export function XPostCard(props: {
         <View style={styles.xPostContent}>
           {interactive ? (
             <Pressable style={styles.xPostOpenArea} onPress={onOpen}>
-              <View style={styles.xPostHead}>
-                {onOpenAuthor ? (
-                  <Pressable
-                    style={styles.xPostMetaBlockPressable}
-                    onPress={(event) => {
-                      event.stopPropagation?.();
-                      onOpenAuthor();
-                    }}
-                  >
-                    <View style={styles.xPostMetaBlock}>
-                      <View style={styles.xPostMetaLine}>
-                        <Text style={styles.xPostAuthor}>{post.author}</Text>
-                        {verified ? (
-                          <SealCheckIcon
-                            size={14}
-                            style={styles.xVerifiedIcon}
-                          />
-                        ) : null}
-                        <Text style={styles.xPostHandle}>{post.handle}</Text>
-                        <Text style={styles.xPostDot}>·</Text>
-                        <Text style={styles.xPostTime}>{post.time}</Text>
-                      </View>
-                    </View>
-                  </Pressable>
-                ) : (
-                  <View style={styles.xPostMetaBlock}>
-                    <View style={styles.xPostMetaLine}>
-                      <Text style={styles.xPostAuthor}>{post.author}</Text>
-                      {verified ? (
-                        <SealCheckIcon size={14} style={styles.xVerifiedIcon} />
-                      ) : null}
-                      <Text style={styles.xPostHandle}>{post.handle}</Text>
-                      <Text style={styles.xPostDot}>·</Text>
-                      <Text style={styles.xPostTime}>{post.time}</Text>
-                    </View>
-                  </View>
-                )}
-
-                {headerActions}
-              </View>
-
-              {post.title ? (
-                <Text style={styles.xPostTitle}>{post.title}</Text>
-              ) : null}
-
-              <Text style={styles.xPostBody}>{post.content}</Text>
-
-              {showMedia ? (
-                <View style={styles.xMediaCard}>
-                  <LinearGradient
-                    colors={["#15202B", "#0B1017"]}
-                    style={StyleSheet.absoluteFillObject}
-                  />
-                  <View style={styles.xMediaTopLabel}>
-                    <Text style={styles.xMediaTopLabelText}>VAR Replay</Text>
-                  </View>
-                  <View style={styles.xMediaOverlay}>
-                    <Text style={styles.xMediaTitle}>لقطة مرفقة بالمنشور</Text>
-                    <Text style={styles.xMediaSubtitle}>
-                      لوحة تحليل سريعة داخل feed أقرب لواجهة X.
-                    </Text>
-                  </View>
-                </View>
-              ) : null}
+              {headerBlock}
+              {contentBlock}
             </Pressable>
           ) : (
             <View style={styles.xPostOpenArea}>
-              <View style={styles.xPostHead}>
-                {onOpenAuthor ? (
-                  <Pressable
-                    style={styles.xPostMetaBlockPressable}
-                    onPress={onOpenAuthor}
-                  >
-                    <View style={styles.xPostMetaBlock}>
-                      <View style={styles.xPostMetaLine}>
-                        <Text style={styles.xPostAuthor}>{post.author}</Text>
-                        {verified ? (
-                          <SealCheckIcon
-                            size={14}
-                            style={styles.xVerifiedIcon}
-                          />
-                        ) : null}
-                        <Text style={styles.xPostHandle}>{post.handle}</Text>
-                        <Text style={styles.xPostDot}>·</Text>
-                        <Text style={styles.xPostTime}>{post.time}</Text>
-                      </View>
-                    </View>
-                  </Pressable>
-                ) : (
-                  <View style={styles.xPostMetaBlock}>
-                    <View style={styles.xPostMetaLine}>
-                      <Text style={styles.xPostAuthor}>{post.author}</Text>
-                      {verified ? (
-                        <SealCheckIcon size={14} style={styles.xVerifiedIcon} />
-                      ) : null}
-                      <Text style={styles.xPostHandle}>{post.handle}</Text>
-                      <Text style={styles.xPostDot}>·</Text>
-                      <Text style={styles.xPostTime}>{post.time}</Text>
-                    </View>
-                  </View>
-                )}
-
-                {headerActions}
-              </View>
-
-              {post.title ? (
-                <Text style={styles.xPostTitle}>{post.title}</Text>
-              ) : null}
-
-              <Text style={styles.xPostBody}>{post.content}</Text>
-
-              {showMedia ? (
-                <View style={styles.xMediaCard}>
-                  <LinearGradient
-                    colors={["#15202B", "#0B1017"]}
-                    style={StyleSheet.absoluteFillObject}
-                  />
-                  <View style={styles.xMediaTopLabel}>
-                    <Text style={styles.xMediaTopLabelText}>VAR Replay</Text>
-                  </View>
-                  <View style={styles.xMediaOverlay}>
-                    <Text style={styles.xMediaTitle}>لقطة مرفقة بالمنشور</Text>
-                    <Text style={styles.xMediaSubtitle}>
-                      لوحة تحليل سريعة داخل feed أقرب لواجهة X.
-                    </Text>
-                  </View>
-                </View>
-              ) : null}
+              {headerBlock}
+              {contentBlock}
             </View>
           )}
 
@@ -433,38 +429,31 @@ const styles = StyleSheet.create({
     marginTop: 12,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
-    justifyContent: "space-between",
     backgroundColor: "#15202B",
   },
-  xMediaTopLabel: {
-    alignSelf: "flex-end",
-    marginTop: 12,
-    marginRight: 12,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+  xMediaImage: {
+    width: "100%",
+    height: "100%",
   },
-  xMediaTopLabelText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "800",
+  xRepostBanner: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    marginBottom: 4,
   },
-  xMediaOverlay: {
-    paddingHorizontal: 14,
-    paddingBottom: 14,
-    alignItems: "flex-end",
-  },
-  xMediaTitle: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  xMediaSubtitle: {
+  xRepostBannerText: {
     color: "rgba(255,255,255,0.72)",
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 4,
+    fontSize: 13,
+    fontWeight: "700",
+    marginRight: 6,
+  },
+  xQuotedPostCard: {
+    alignSelf: "stretch",
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
   },
   xActionRow: {
     alignSelf: "stretch",
