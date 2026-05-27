@@ -48,12 +48,17 @@ export function LeaguesListHeader(props: {
     inputRange: [0, 1],
     outputRange: [0.96, 1],
   });
+  const selectedLeague = props.leagueDrawerItems.find(
+    (card) => card.id === props.selectedLeagueId,
+  );
+  const headerTitle = selectedLeague?.title ?? "الدوريات";
 
   return (
     <View style={styles.leaguesListHeader}>
       <View style={styles.leaguesListHeaderRow}>
         <View style={styles.leaguesListHeaderCenterBlock}>
           <RNText
+            numberOfLines={1}
             style={[
               styles.leaguesListTitle,
               styles.leaguesListTitleCentered,
@@ -62,7 +67,7 @@ export function LeaguesListHeader(props: {
                 : null,
             ]}
           >
-            الدوريات
+            {headerTitle}
           </RNText>
         </View>
       </View>
