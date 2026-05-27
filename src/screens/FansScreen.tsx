@@ -249,7 +249,7 @@ function SupportTongue(props: {
             <Text style={styles.topTongueRankText}>{props.rank}</Text>
           </View>
 
-          <Ionicons name="swap-horizontal" size={14} color="#FFFFFF" />
+          <Ionicons name="swap-horizontal" size={12} color="#FFFFFF" />
         </View>
 
         <View style={styles.topTongueCenter}>
@@ -709,14 +709,14 @@ const styles = createCompatStyleSheet({
   },
   topTongue: {
     alignSelf: "center",
-    width: "78%",
-    maxWidth: 296,
+    width: "68%",
+    maxWidth: 268,
     backgroundColor: "rgba(8, 12, 20, 0.98)",
     borderWidth: 1,
     borderColor: "rgba(245,189,88,0.26)",
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+    borderRadius: 16,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
   },
   topTongueRow: {
     flexDirection: "row-reverse",
@@ -730,49 +730,49 @@ const styles = createCompatStyleSheet({
   },
   topTongueLabel: {
     color: "#FFDE97",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "900",
-    marginLeft: 8,
+    marginLeft: 6,
   },
   topTongueRankBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: "#F3C96D",
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 8,
+    marginLeft: 6,
     borderWidth: 1,
     borderColor: "rgba(95,55,9,0.18)",
   },
   topTongueRankText: {
     color: "#5F3709",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "900",
   },
   topTongueCenter: {
     alignItems: "center",
     justifyContent: "center",
     flex: 1,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
   },
   topTongueSubLabel: {
     color: "rgba(255,255,255,0.58)",
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: "800",
-    marginTop: 5,
+    marginTop: 4,
   },
   topTongueCta: {
     backgroundColor: "#F3C96D",
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     borderWidth: 1,
     borderColor: "rgba(95,55,9,0.18)",
   },
   topTongueCtaText: {
     color: "#5F3709",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "900",
   },
   cardsColumn: {
@@ -1222,10 +1222,10 @@ const styles = createCompatStyleSheet({
     justifyContent: "center",
   },
   digitalDigitBox: {
-    minWidth: 20,
-    height: 26,
-    borderRadius: 8,
-    marginHorizontal: 2,
+    minWidth: 18,
+    height: 24,
+    borderRadius: 7,
+    marginHorizontal: 1.5,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#02050B",
@@ -1238,7 +1238,7 @@ const styles = createCompatStyleSheet({
   },
   digitalDigitText: {
     color: "#FFDE97",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "900",
     fontFamily: MONO_FONT,
   },
