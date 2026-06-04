@@ -17,7 +17,6 @@ import {
   Image,
   Platform,
   Pressable,
-  StyleSheet,
   Text as RNText,
   type TextProps,
   View,
@@ -52,9 +51,7 @@ const TONGUE_CARD_GAP = 14;
 const TONGUE_STACK_PADDING_V = 30;
 const TONGUE_STACK_PADDING_H = 14;
 const TONGUE_STACK_HEIGHT =
-  TONGUE_STACK_PADDING_V * 2 +
-  TONGUE_CARD_HEIGHT * 3 +
-  TONGUE_CARD_GAP * 2;
+  TONGUE_STACK_PADDING_V * 2 + TONGUE_CARD_HEIGHT * 3 + TONGUE_CARD_GAP * 2;
 const TONGUE_COLLAPSED_HEIGHT = 52;
 const TONGUE_FLOATING_CHEVRON_OFFSET = 18;
 export const FANS_TONGUE_RESERVED_HEIGHT =
@@ -111,7 +108,9 @@ export default function FansSupportTongue(props: FansSupportTongueProps) {
   const [areTongueFontsLoaded] = useFonts({
     [TONGUE_FONT_FAMILY]: TONGUE_FONT,
   });
-  const tongueFontFamily = areTongueFontsLoaded ? TONGUE_FONT_FAMILY : undefined;
+  const tongueFontFamily = areTongueFontsLoaded
+    ? TONGUE_FONT_FAMILY
+    : undefined;
   const [contentExpanded, setContentExpanded] = useState(false);
   const clickSoundRef = useRef<WebAudioInstance | null>(null);
   const expandAnim = useRef(new Animated.Value(0)).current;

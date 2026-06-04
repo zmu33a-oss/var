@@ -24,6 +24,7 @@ export const LIVE_STREAM_ICON = require("../../../assets/icons/live-stream.png")
 export const SMARTPHONE_ICON = require("../../../assets/icons/smartphone.png");
 export const PREVENTION_ICON = require("../../../assets/icons/prevention.png");
 export const VAR_WORDMARK_ICON = require("../../../assets/icons/var.png");
+export const VAR_CHAT_ICON = require("../../../assets/icons/varchat.png");
 export const CLICK_SOUND = require("../../../assets/audio/click.mp3.mp3");
 
 export const POLL_TWEET_COMPACT_BREAKPOINT = 390;
@@ -48,22 +49,22 @@ export const MATCH_DETAIL_TABS: Array<{
     key: "lineup",
     label: "التشكيلة",
     iconName: "apps-outline",
-    accentColor: "#FFB85C",
-    accentSurface: "rgba(255,214,126,0.12)",
+    accentColor: "#FFFFFF",
+    accentSurface: "rgba(255,255,255,0.08)",
   },
   {
     key: "statistics",
     label: "الإحصائيات",
     iconName: "stats-chart-outline",
-    accentColor: "#FFB85C",
-    accentSurface: "rgba(255,184,92,0.14)",
+    accentColor: "#FFFFFF",
+    accentSurface: "rgba(255,255,255,0.08)",
   },
   {
     key: "headToHead",
     label: "وجهاً لوجه",
     iconName: "swap-horizontal-outline",
-    accentColor: "#FFB85C",
-    accentSurface: "rgba(255,184,92,0.14)",
+    accentColor: "#FFFFFF",
+    accentSurface: "rgba(255,255,255,0.08)",
   },
 ];
 

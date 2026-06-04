@@ -1,1 +1,1 @@
-export { handler as default } from "../_lib/admin-routes/health";
+export { handler as default } from "../_lib/admin-routes/health.js";

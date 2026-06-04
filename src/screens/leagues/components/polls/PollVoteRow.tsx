@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, Text as RNText, View } from "react-native";
 import { ACTION_SUCCESS_FOREGROUND } from "../../leagues.constants";
 import { styles } from "../../leagues.styles";

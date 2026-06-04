@@ -5,7 +5,7 @@ import type {
   PostReply,
 } from "../../app.types";
 
-export type XFeedTab = "profile" | "following" | "for-you";
+export type XFeedTab = "profile" | "timeline" | "var-library";
 
 export type AuthorProfileTab =
   | "likes"

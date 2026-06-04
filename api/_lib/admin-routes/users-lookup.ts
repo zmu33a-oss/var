@@ -10,7 +10,7 @@ import {
   requireAdminSession,
   requireServerKey,
   sendJson,
-} from "../admin-shared";
+} from "../admin-shared.js";
 
 export async function handler(request: any, response: any) {
   if (handleOptions(request, response)) {
@@ -77,12 +77,9 @@ export async function handler(request: any, response: any) {
               : "",
         displayName:
           typeof profile.displayName === "string" ? profile.displayName : "",
-        username:
-          typeof profile.username === "string" ? profile.username : "",
+        username: typeof profile.username === "string" ? profile.username : "",
         displayVarId:
-          typeof profile.displayVarId === "string"
-            ? profile.displayVarId
-            : "",
+          typeof profile.displayVarId === "string" ? profile.displayVarId : "",
         varId,
         role: typeof profile.role === "string" ? profile.role : "member",
         verified: readBoolField(profile.isVerified),

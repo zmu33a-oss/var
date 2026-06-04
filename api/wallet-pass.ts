@@ -31,16 +31,18 @@ type WalletPassPayload = {
   totalLikes: string;
 };
 
-const PASS_ARTWORK_BUFFER = readFileSync(
-  join(process.cwd(), "assets", "icons", "VAR.png"),
-);
+const PASS_ARTWORK_PATH = join(process.cwd(), "assets", "icons", "var.png");
 
-const PASS_MODEL_BUFFERS = {
-  "icon.png": PASS_ARTWORK_BUFFER,
-  "icon@2x.png": PASS_ARTWORK_BUFFER,
-  "logo.png": PASS_ARTWORK_BUFFER,
-  "logo@2x.png": PASS_ARTWORK_BUFFER,
-};
+function getPassModelBuffers() {
+  const passArtworkBuffer = readFileSync(PASS_ARTWORK_PATH);
+
+  return {
+    "icon.png": passArtworkBuffer,
+    "icon@2x.png": passArtworkBuffer,
+    "logo.png": passArtworkBuffer,
+    "logo@2x.png": passArtworkBuffer,
+  };
+}
 
 const REQUIRED_WALLET_ENV_NAMES = [
   "APPLE_WALLET_PASS_TYPE_IDENTIFIER",
@@ -308,7 +310,7 @@ export default function handler(request: any, response: any) {
     const serialNumber = getPassSerialNumber(payload);
     const pass = new PKPass(
       {
-        ...PASS_MODEL_BUFFERS,
+        ...getPassModelBuffers(),
         "pass.json": Buffer.from(
           JSON.stringify(buildPassJson(configuration, payload, serialNumber)),
           "utf8",

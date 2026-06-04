@@ -1,12 +1,6 @@
 import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import SealCheckIcon from "../../components/SealCheckIcon";
 import type { FollowingProfileCard } from "../../app.types";
 import type { MessageThreadEntry } from "./x-feed.types";
@@ -19,12 +13,15 @@ type XProfileHubProps = {
   avatarUri: string;
   isVerified?: boolean;
   role?: "admin" | "member";
+  followedProfiles: FollowingProfileCard[];
   messageThreads: MessageThreadEntry[];
   unreadMessageCount: number;
   onRequireAuth: () => void;
   onOpenPublicProfile: () => void;
   onOpenThread: (thread: MessageThreadEntry) => void;
-  onComposeLookup: (displayVarId: string) => Promise<FollowingProfileCard | null>;
+  onComposeLookup: (
+    displayVarId: string,
+  ) => Promise<FollowingProfileCard | null>;
   onOpenNewThread: (profile: FollowingProfileCard) => void;
 };
 
@@ -69,6 +66,7 @@ export function XProfileHub(props: XProfileHubProps) {
   const displayVarId = props.displayVarId.trim() || "VAR ID";
   const avatarUri = props.avatarUri.trim();
   const roleLabel = props.role === "admin" ? "ADMIN" : "MEMBER";
+  const followedProfilesPreview = props.followedProfiles.slice(0, 5);
 
   return (
     <View style={styles.root}>
@@ -98,7 +96,10 @@ export function XProfileHub(props: XProfileHubProps) {
           </View>
         </View>
 
-        <Pressable style={styles.publicProfileButton} onPress={props.onOpenPublicProfile}>
+        <Pressable
+          style={styles.publicProfileButton}
+          onPress={props.onOpenPublicProfile}
+        >
           <Text style={styles.publicProfileButtonText}>عرض ملفك العام</Text>
           <Ionicons name="open-outline" size={16} color="#7DD3FC" />
         </Pressable>
@@ -139,6 +140,68 @@ export function XProfileHub(props: XProfileHubProps) {
             />
           </View>
         </Pressable>
+      </View>
+
+      <View style={styles.followingSection}>
+        <View style={styles.followingSectionHeader}>
+          <View style={styles.followingHeaderIconWrap}>
+            <Ionicons name="people" size={18} color="#34D399" />
+          </View>
+          <View style={styles.followingHeaderCopy}>
+            <Text style={styles.followingTitle}>المضافون</Text>
+            <Text style={styles.followingHint}>
+              {props.followedProfiles.length
+                ? `${props.followedProfiles.length} حساب تتابعه من البطاقة أو X`
+                : "أضف مستخدمين عبر باركود VAR ليظهروا هنا"}
+            </Text>
+          </View>
+        </View>
+
+        {followedProfilesPreview.length ? (
+          <View style={styles.followingList}>
+            {followedProfilesPreview.map((profile) => (
+              <Pressable
+                key={profile.varId}
+                style={styles.followingCard}
+                onPress={() => props.onOpenNewThread(profile)}
+              >
+                <View style={styles.followingAvatarWrap}>
+                  {profile.avatarUri ? (
+                    <Image
+                      source={{ uri: profile.avatarUri }}
+                      style={styles.followingAvatarImage}
+                    />
+                  ) : (
+                    <Text style={styles.followingAvatarFallback}>
+                      {profile.displayName.slice(0, 1) || "V"}
+                    </Text>
+                  )}
+                </View>
+
+                <View style={styles.followingCardCopy}>
+                  <Text numberOfLines={1} style={styles.followingName}>
+                    {profile.displayName || profile.displayVarId}
+                  </Text>
+                  <Text numberOfLines={1} style={styles.followingVarId}>
+                    {profile.displayVarId || profile.varId}
+                  </Text>
+                </View>
+
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={17}
+                  color="rgba(255,255,255,0.58)"
+                />
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.followingEmptyCard}>
+            <Text style={styles.followingEmptyText}>
+              لا توجد حسابات مضافة بعد.
+            </Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -355,5 +418,116 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 11,
     fontWeight: "900",
+  },
+  followingSection: {
+    marginTop: 18,
+    marginHorizontal: 16,
+    borderRadius: 20,
+    padding: 14,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(52,211,153,0.18)",
+  },
+  followingSectionHeader: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+  },
+  followingHeaderIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(52,211,153,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(52,211,153,0.22)",
+  },
+  followingHeaderCopy: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: "flex-end",
+  },
+  followingTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  followingHint: {
+    color: "rgba(255,255,255,0.58)",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 3,
+    textAlign: "right",
+  },
+  followingList: {
+    gap: 8,
+    marginTop: 12,
+  },
+  followingCard: {
+    minHeight: 56,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    backgroundColor: "rgba(0,0,0,0.24)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  followingAvatarWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1D9BF0",
+  },
+  followingAvatarImage: {
+    width: "100%",
+    height: "100%",
+  },
+  followingAvatarFallback: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  followingCardCopy: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: "flex-end",
+  },
+  followingName: {
+    maxWidth: "100%",
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  followingVarId: {
+    maxWidth: "100%",
+    color: "rgba(255,255,255,0.56)",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 3,
+    textAlign: "right",
+  },
+  followingEmptyCard: {
+    marginTop: 12,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: "rgba(0,0,0,0.22)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  followingEmptyText: {
+    color: "rgba(255,255,255,0.62)",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "right",
   },
 });

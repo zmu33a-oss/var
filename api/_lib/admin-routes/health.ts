@@ -1,8 +1,4 @@
-import {
-  handleOptions,
-  readAdminConfig,
-  sendJson,
-} from "../admin-shared";
+import { handleOptions, readAdminConfig, sendJson } from "../admin-shared.js";
 
 export async function handler(request: any, response: any) {
   if (handleOptions(request, response)) {

@@ -1,5 +1,10 @@
 const { spawn } = require("node:child_process");
+const path = require("node:path");
 
+require("./sync-preview.cjs");
+
+const previewDir =
+  process.env.VAR_PREVIEW_DIR?.trim() || path.join("/tmp", "var-preview");
 const rawArgs = process.argv.slice(2);
 const normalizedArgs = [];
 let hasHost = false;
@@ -24,12 +29,15 @@ if (!hasHost) {
   normalizedArgs.push("--host", "localhost");
 }
 
-const expoCliPath = require.resolve("expo/bin/cli");
+const expoCliPath = require.resolve("expo/bin/cli", {
+  paths: [path.join(previewDir, "node_modules")],
+});
 const child = spawn(
   process.execPath,
-  [expoCliPath, "start", "--web", ...normalizedArgs],
+  [expoCliPath, "start", "--web", "--clear", ...normalizedArgs],
   {
     stdio: "inherit",
+    cwd: previewDir,
   },
 );
 

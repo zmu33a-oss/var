@@ -75,7 +75,9 @@ export function MatchDetailTabButton(props: {
           ]}
         >
           <Ionicons
-            color={props.isActive ? props.accentColor : "rgba(255,184,92,0.88)"}
+            color={
+              props.isActive ? props.accentColor : "rgba(255,255,255,0.52)"
+            }
             name={props.iconName}
             size={18}
           />

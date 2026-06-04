@@ -13,7 +13,6 @@ import {
   toAppwriteDirectMessageRecord,
   toAppwritePostReplyRecord,
   toAppwriteSocialInteractionRecord,
-  createEmptyAppwriteVarSocialSummary,
   createEmptyPostEngagementAggregate,
   summarizeAppwriteSocialInteractions,
   isPermissionDeniedAppwriteError,
@@ -261,7 +260,10 @@ export async function listAppwriteXEngagementByTargetIds(
   targetIds: string[],
   viewerVarId?: string,
 ): Promise<Map<string, AppwritePostEngagementAggregate>> {
-  const engagementByTargetId = new Map<string, AppwritePostEngagementAggregate>();
+  const engagementByTargetId = new Map<
+    string,
+    AppwritePostEngagementAggregate
+  >();
 
   const normalizedTargetIds = Array.from(
     new Set(targetIds.map((value) => value.trim()).filter(Boolean)),
@@ -282,7 +284,9 @@ export async function listAppwriteXEngagementByTargetIds(
     return engagementByTargetId;
   }
 
-  const normalizedViewerVarId = normalizeAppwriteVarId(viewerVarId?.trim() || "");
+  const normalizedViewerVarId = normalizeAppwriteVarId(
+    viewerVarId?.trim() || "",
+  );
 
   let engagementDocuments;
 

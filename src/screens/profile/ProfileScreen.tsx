@@ -5,12 +5,10 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import {
-  Animated,
   Linking,
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -18,6 +16,7 @@ import {
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import type { ProfileData } from "../../app.types";
+import { PullToRefreshScrollView } from "../../components/PullToRefreshScrollView";
 import {
   getNativePointerEventsProps,
   getWebPointerEventsStyle,
@@ -39,13 +38,20 @@ import { buildComposerDisplayVarId } from "../../appshell/appshell.helpers";
 import { normalizeAppwriteDisplayVarId } from "../../lib/appwrite";
 import type { ProfileFieldKey, ProfileScreenProps } from "./profile.constants";
 import { SwipeActionControl } from "./components/SwipeActionControl";
-import { ProfilePreviewModal } from "./components/ProfilePreviewModal";
+import { ProfileUserPreviewScreen } from "./components/ProfileUserPreviewScreen";
 import { ProfileEditModal } from "./components/ProfileEditModal";
+import { ProfileCardConnectPanel } from "./components/ProfileCardConnectPanel";
 import { VarIdentityCard } from "./components/identity";
 
 export default function ProfileScreen(props: ProfileScreenProps) {
-  const { posts, profile, onOpenAdmin, onOpenAdminWeb, onSaveProfile, onSignOut } =
-    props;
+  const {
+    posts,
+    profile,
+    onOpenAdmin,
+    onOpenAdminWeb,
+    onSaveProfile,
+    onSignOut,
+  } = props;
   const { width: viewportWidth } = useWindowDimensions();
   const [message, setMessage] = useState("");
   const [isWalletBusy, setIsWalletBusy] = useState(false);
@@ -265,7 +271,9 @@ export default function ProfileScreen(props: ProfileScreenProps) {
     const nextDisplayName = draftProfile.displayName.trim();
     const nextNationality = draftProfile.nationality.trim();
     const nextAssociation =
-      draftProfile.association.trim() || profile.association || DEFAULT_CLUB_NAME;
+      draftProfile.association.trim() ||
+      profile.association ||
+      DEFAULT_CLUB_NAME;
     const nextDisplayVarId =
       normalizeAppwriteDisplayVarId(draftProfile.displayVarId) ||
       buildComposerDisplayVarId(profile.displayVarId, profile.varId);
@@ -322,10 +330,12 @@ export default function ProfileScreen(props: ProfileScreenProps) {
         <View style={styles.profileGlowOrbSecondary} />
       </View>
 
-      <ScrollView
+      <PullToRefreshScrollView
         style={styles.profileScroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.profileContent}
+        refreshing={props.isRefreshing}
+        onRefresh={props.onRefresh}
       >
         <GestureDetector gesture={portraitTapGesture}>
           <View collapsable={false}>
@@ -343,6 +353,14 @@ export default function ProfileScreen(props: ProfileScreenProps) {
             />
           </View>
         </GestureDetector>
+
+        <ProfileCardConnectPanel
+          arabicFontFamily={profileArabicFontFamily}
+          cardTier={profile.cardTier}
+          cardWidth={idCardWidth}
+          displayVarId={displayVarId}
+          onAddUserByDisplayVarId={props.onAddUserByDisplayVarId}
+        />
 
         <View style={styles.gestureHintPanel}>
           <Ionicons name="finger-print" size={16} color="#F4C565" />
@@ -428,7 +446,7 @@ export default function ProfileScreen(props: ProfileScreenProps) {
             {message}
           </Text>
         ) : null}
-      </ScrollView>
+      </PullToRefreshScrollView>
 
       <Modal
         visible={isPreviewModalOpen}
@@ -436,13 +454,11 @@ export default function ProfileScreen(props: ProfileScreenProps) {
         presentationStyle="fullScreen"
         onRequestClose={() => setIsPreviewModalOpen(false)}
       >
-        <ProfilePreviewModal
+        <ProfileUserPreviewScreen
           arabicFontFamily={profileArabicFontFamily}
           clubName={clubName}
+          followedProfiles={props.followedProfiles}
           profile={profile}
-          totalLikes={totalLikes}
-          totalPosts={totalPosts}
-          totalReplies={totalReplies}
           onClose={() => setIsPreviewModalOpen(false)}
         />
       </Modal>

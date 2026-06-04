@@ -5,8 +5,8 @@ import XFeedScreen from "./XFeedScreen";
 import {
   Animated,
   Modal,
-  Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -53,7 +53,7 @@ type HomeScreenProps = {
   onRequireAuth: (message?: string, pendingIntent?: PendingAuthIntent) => void;
   onTogglePostLike: (postId: number) => void;
   onTogglePostRepost: (postId: number) => void;
-  onSharePost: (postId: number) => void;
+  onSharePost: (postId: number) => Promise<boolean>;
   currentUserVarId: string;
   currentUserDisplayName: string;
   currentUserDisplayVarId: string;
@@ -150,6 +150,14 @@ export default function HomeScreen(props: HomeScreenProps) {
           snapToInterval={tiktokCardHeight}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.tiktokScreenContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshingPosts}
+              onRefresh={onRefreshPosts}
+              tintColor="#FFFFFF"
+              colors={["#1D9BF0"]}
+            />
+          }
         >
           {videos.map((video) => (
             <TikTokVideoCard

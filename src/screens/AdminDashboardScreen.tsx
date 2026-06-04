@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Pressable,
   Share,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,6 +12,7 @@ import {
   View,
 } from "react-native";
 import type { ProfileData } from "../app.types";
+import { PullToRefreshScrollView } from "../components/PullToRefreshScrollView";
 import {
   APPWRITE_CONFIG,
   findAppwriteProfileIndexByDisplayVarId,
@@ -30,6 +30,7 @@ import {
   type AppwriteAuthUser,
   type AppwriteProfileIndexRecord,
   type AppwritePostRecord,
+  type AppwritePostsPage,
   type AppwriteSocialAction,
   type AppwriteSocialMode,
   type AppwriteVarProfile,
@@ -60,6 +61,7 @@ type AdminDashboardScreenProps = {
   adminUser: AppwriteAuthUser;
   profile: ProfileData;
   localPostsCount: number;
+  onRefreshAppData?: () => void | Promise<void>;
   onClose: () => void;
 };
 
@@ -81,7 +83,9 @@ async function readAdminDashboardSnapshot(
   adminVarId: string,
 ): Promise<AdminDashboardSnapshot> {
   const tasks: Array<
-    Promise<AppwritePostRecord[] | AppwriteVarProfile | null>
+    Promise<
+      AppwritePostsPage | AppwritePostRecord[] | AppwriteVarProfile | null
+    >
   > = [];
   const taskLabels: string[] = [];
 
@@ -123,9 +127,7 @@ async function readAdminDashboardSnapshot(
     }
 
     if (label === "posts") {
-      nextSnapshot.appwritePosts = (
-        result.value as import("../lib/appwrite").AppwritePostsPage
-      ).records;
+      nextSnapshot.appwritePosts = (result.value as AppwritePostsPage).records;
       return;
     }
 
@@ -457,13 +459,17 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    const nextSnapshot = await readAdminDashboardSnapshot(
-      props.adminUser.varId,
-    );
-    setAppwritePosts(nextSnapshot.appwritePosts);
-    setAdminVarProfile(nextSnapshot.varProfile);
-    setLoadErrors(nextSnapshot.errors);
-    setIsRefreshing(false);
+    try {
+      const nextSnapshot = await readAdminDashboardSnapshot(
+        props.adminUser.varId,
+      );
+      await props.onRefreshAppData?.();
+      setAppwritePosts(nextSnapshot.appwritePosts);
+      setAdminVarProfile(nextSnapshot.varProfile);
+      setLoadErrors(nextSnapshot.errors);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const refreshApiModerationUser = async (query: string) => {
@@ -601,7 +607,7 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
         <View style={styles.secondaryGlow} />
       </View>
 
-      <ScrollView
+      <PullToRefreshScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.content,
@@ -611,6 +617,8 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
             paddingBottom: Math.round(36 * chromeScale),
           },
         ]}
+        refreshing={isRefreshing}
+        onRefresh={handleRefresh}
       >
         <View style={styles.header}>
           <Pressable style={styles.headerButton} onPress={props.onClose}>
@@ -691,455 +699,489 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
 
         {activePanel === "overview" ? (
           <>
-        <SectionCard title="بحث الدعم" eyebrow="DISPLAY VAR LOOKUP">
-          <Text style={styles.lookupLead}>
-            أدخل رقم VAR الظاهر للعميل، وسنحوّله داخليًا إلى الحساب المرتبط وVAR
-            ID الفعلي.
-          </Text>
-
-          <View style={styles.lookupControlsRow}>
-            <Pressable
-              disabled={isLookupLoading || !canLookupProfiles}
-              onPress={() => void handleLookup()}
-              style={[
-                styles.lookupButton,
-                isLookupLoading || !canLookupProfiles
-                  ? styles.lookupButtonDisabled
-                  : null,
-              ]}
-            >
-              {isLookupLoading ? (
-                <ActivityIndicator color="#09111C" size="small" />
-              ) : (
-                <>
-                  <Ionicons name="search" size={16} color="#09111C" />
-                  <Text style={styles.lookupButtonText}>بحث</Text>
-                </>
-              )}
-            </Pressable>
-
-            <TextInput
-              autoCapitalize="characters"
-              autoCorrect={false}
-              editable={!isLookupLoading}
-              onChangeText={(value) => {
-                setLookupValue(value);
-                if (lookupError) {
-                  setLookupError("");
-                }
-                if (lookupWarning) {
-                  setLookupWarning("");
-                }
-              }}
-              onSubmitEditing={() => void handleLookup()}
-              placeholder="VAR-12345678 أو @username"
-              placeholderTextColor="rgba(255,255,255,0.34)"
-              style={styles.lookupInput}
-              value={lookupValue}
-            />
-          </View>
-
-          <Text style={styles.lookupHint}>
-            يدعم البحث برقم VAR أو اسم المستخدم. الأوامر الإدارية تعمل عبر API.
-          </Text>
-
-          {!canLookupProfiles ? (
-            <View
-              style={[styles.lookupFeedbackCard, styles.lookupFeedbackWarning]}
-            >
-              <Ionicons name="construct-outline" size={16} color="#63C6FF" />
-              <Text style={styles.lookupFeedbackText}>
-                profiles collection غير مفعلة في Appwrite لهذا التشغيل، لذلك
-                البحث الإداري معروض لكن غير جاهز بعد.
+            <SectionCard title="بحث الدعم" eyebrow="DISPLAY VAR LOOKUP">
+              <Text style={styles.lookupLead}>
+                أدخل رقم VAR الظاهر للعميل، وسنحوّله داخليًا إلى الحساب المرتبط
+                وVAR ID الفعلي.
               </Text>
-            </View>
-          ) : null}
 
-          {lookupError ? (
-            <View
-              style={[styles.lookupFeedbackCard, styles.lookupFeedbackError]}
-            >
-              <Ionicons name="alert-circle-outline" size={16} color="#FFB85C" />
-              <Text style={styles.lookupFeedbackText}>{lookupError}</Text>
-            </View>
-          ) : null}
+              <View style={styles.lookupControlsRow}>
+                <Pressable
+                  disabled={isLookupLoading || !canLookupProfiles}
+                  onPress={() => void handleLookup()}
+                  style={[
+                    styles.lookupButton,
+                    isLookupLoading || !canLookupProfiles
+                      ? styles.lookupButtonDisabled
+                      : null,
+                  ]}
+                >
+                  {isLookupLoading ? (
+                    <ActivityIndicator color="#09111C" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="search" size={16} color="#09111C" />
+                      <Text style={styles.lookupButtonText}>بحث</Text>
+                    </>
+                  )}
+                </Pressable>
 
-          {lookupWarning ? (
-            <View
-              style={[styles.lookupFeedbackCard, styles.lookupFeedbackWarning]}
-            >
-              <Ionicons
-                name="information-circle-outline"
-                size={16}
-                color="#63C6FF"
-              />
-              <Text style={styles.lookupFeedbackText}>{lookupWarning}</Text>
-            </View>
-          ) : null}
-
-          {lookupProfile ? (
-            <View style={styles.lookupResultCard}>
-              <View style={styles.lookupResultHeader}>
-                <View style={styles.lookupResultBadge}>
-                  <Ionicons
-                    name="person-circle-outline"
-                    size={15}
-                    color="#09111C"
-                  />
-                  <Text style={styles.lookupResultBadgeText}>MATCHED</Text>
-                </View>
-                <Text style={styles.lookupResultStamp}>
-                  {formatRelativeStamp(lookupProfile.createdAt)}
-                </Text>
+                <TextInput
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  editable={!isLookupLoading}
+                  onChangeText={(value) => {
+                    setLookupValue(value);
+                    if (lookupError) {
+                      setLookupError("");
+                    }
+                    if (lookupWarning) {
+                      setLookupWarning("");
+                    }
+                  }}
+                  onSubmitEditing={() => void handleLookup()}
+                  placeholder="VAR-12345678 أو @username"
+                  placeholderTextColor="rgba(255,255,255,0.34)"
+                  style={styles.lookupInput}
+                  value={lookupValue}
+                />
               </View>
 
-              <Text style={styles.lookupResultName}>
-                {lookupProfile.displayName || "بدون اسم ظاهر"}
-              </Text>
-              <Text style={styles.lookupResultMeta}>
-                @{lookupProfile.username || "no-username"} •{" "}
-                {formatRoleLabel(lookupProfile.role)}
+              <Text style={styles.lookupHint}>
+                يدعم البحث برقم VAR أو اسم المستخدم. الأوامر الإدارية تعمل عبر
+                API.
               </Text>
 
-              <View style={styles.lookupMetricsRow}>
-                <View style={styles.lookupMetricPill}>
-                  <Text style={styles.lookupMetricValue}>
-                    {String(lookupVarProfile?.earnedPoints ?? 0)}
+              {!canLookupProfiles ? (
+                <View
+                  style={[
+                    styles.lookupFeedbackCard,
+                    styles.lookupFeedbackWarning,
+                  ]}
+                >
+                  <Ionicons
+                    name="construct-outline"
+                    size={16}
+                    color="#63C6FF"
+                  />
+                  <Text style={styles.lookupFeedbackText}>
+                    profiles collection غير مفعلة في Appwrite لهذا التشغيل، لذلك
+                    البحث الإداري معروض لكن غير جاهز بعد.
                   </Text>
-                  <Text style={styles.lookupMetricLabel}>النقاط</Text>
                 </View>
-                <View style={styles.lookupMetricPill}>
-                  <Text style={styles.lookupMetricValue}>
-                    {String(lookupVarProfile?.lockedPredictions.length ?? 0)}
+              ) : null}
+
+              {lookupError ? (
+                <View
+                  style={[
+                    styles.lookupFeedbackCard,
+                    styles.lookupFeedbackError,
+                  ]}
+                >
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={16}
+                    color="#FFB85C"
+                  />
+                  <Text style={styles.lookupFeedbackText}>{lookupError}</Text>
+                </View>
+              ) : null}
+
+              {lookupWarning ? (
+                <View
+                  style={[
+                    styles.lookupFeedbackCard,
+                    styles.lookupFeedbackWarning,
+                  ]}
+                >
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={16}
+                    color="#63C6FF"
+                  />
+                  <Text style={styles.lookupFeedbackText}>{lookupWarning}</Text>
+                </View>
+              ) : null}
+
+              {lookupProfile ? (
+                <View style={styles.lookupResultCard}>
+                  <View style={styles.lookupResultHeader}>
+                    <View style={styles.lookupResultBadge}>
+                      <Ionicons
+                        name="person-circle-outline"
+                        size={15}
+                        color="#09111C"
+                      />
+                      <Text style={styles.lookupResultBadgeText}>MATCHED</Text>
+                    </View>
+                    <Text style={styles.lookupResultStamp}>
+                      {formatRelativeStamp(lookupProfile.createdAt)}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.lookupResultName}>
+                    {lookupProfile.displayName || "بدون اسم ظاهر"}
                   </Text>
-                  <Text style={styles.lookupMetricLabel}>المقفلة</Text>
+                  <Text style={styles.lookupResultMeta}>
+                    @{lookupProfile.username || "no-username"} •{" "}
+                    {formatRoleLabel(lookupProfile.role)}
+                  </Text>
+
+                  <View style={styles.lookupMetricsRow}>
+                    <View style={styles.lookupMetricPill}>
+                      <Text style={styles.lookupMetricValue}>
+                        {String(lookupVarProfile?.earnedPoints ?? 0)}
+                      </Text>
+                      <Text style={styles.lookupMetricLabel}>النقاط</Text>
+                    </View>
+                    <View style={styles.lookupMetricPill}>
+                      <Text style={styles.lookupMetricValue}>
+                        {String(
+                          lookupVarProfile?.lockedPredictions.length ?? 0,
+                        )}
+                      </Text>
+                      <Text style={styles.lookupMetricLabel}>المقفلة</Text>
+                    </View>
+                    <View style={styles.lookupMetricPill}>
+                      <Text style={styles.lookupMetricValue}>
+                        {String(
+                          lookupVarProfile?.social.totalActiveInteractions ?? 0,
+                        )}
+                      </Text>
+                      <Text style={styles.lookupMetricLabel}>التفاعل</Text>
+                    </View>
+                  </View>
+
+                  <DetailRow
+                    label="Display VAR"
+                    value={lookupProfile.displayVarId}
+                  />
+                  <DetailRow label="Internal VAR" value={lookupProfile.varId} />
+                  <DetailRow label="User ID" value={lookupProfile.userId} />
+
+                  <View style={styles.supportActionsRow}>
+                    <Pressable
+                      onPress={() =>
+                        void handleCopySupportField(
+                          "الرقم الداخلي",
+                          lookupProfile.varId,
+                        )
+                      }
+                      style={styles.supportActionButton}
+                    >
+                      <Ionicons name="copy-outline" size={15} color="#09111C" />
+                      <Text style={styles.supportActionButtonText}>
+                        نسخ الداخلي
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() =>
+                        void handleCopySupportField(
+                          "User ID",
+                          lookupProfile.userId,
+                        )
+                      }
+                      style={styles.supportActionButtonSecondary}
+                    >
+                      <Ionicons
+                        name="id-card-outline"
+                        size={15}
+                        color="#FFFFFF"
+                      />
+                      <Text style={styles.supportActionButtonSecondaryText}>
+                        نسخ User ID
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => void handleShareSupportSummary()}
+                      style={styles.supportActionButtonSecondary}
+                    >
+                      <Ionicons
+                        name="share-social-outline"
+                        size={15}
+                        color="#FFFFFF"
+                      />
+                      <Text style={styles.supportActionButtonSecondaryText}>
+                        مشاركة الملخص
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  {supportActionMessage ? (
+                    <Text style={styles.supportActionMessage}>
+                      {supportActionMessage}
+                    </Text>
+                  ) : null}
+
+                  {apiReady && apiModerationUser ? (
+                    <AdminUserModerationBar
+                      displayVarId={apiModerationUser.displayVarId}
+                      verified={apiModerationUser.verified}
+                      cardTier={apiModerationUser.cardTier || "classic"}
+                      accountStatus={apiModerationUser.accountStatus}
+                      role={apiModerationUser.role}
+                      onUpdated={(message) => {
+                        setSupportActionMessage(message);
+                        void refreshApiModerationUser(
+                          apiModerationUser.displayVarId || lookupValue,
+                        );
+                      }}
+                    />
+                  ) : null}
                 </View>
-                <View style={styles.lookupMetricPill}>
-                  <Text style={styles.lookupMetricValue}>
-                    {String(
-                      lookupVarProfile?.social.totalActiveInteractions ?? 0,
+              ) : null}
+
+              {!lookupProfile && apiModerationUser ? (
+                <View style={styles.lookupResultCard}>
+                  <View style={styles.lookupResultHeader}>
+                    <View style={styles.lookupResultBadge}>
+                      <Ionicons
+                        name="person-circle-outline"
+                        size={15}
+                        color="#09111C"
+                      />
+                      <Text style={styles.lookupResultBadgeText}>
+                        API MATCH
+                      </Text>
+                    </View>
+                    <Text style={styles.lookupResultStamp}>
+                      {formatRelativeStamp(apiModerationUser.createdAt)}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.lookupResultName}>
+                    {apiModerationUser.displayName || "بدون اسم ظاهر"}
+                  </Text>
+                  <Text style={styles.lookupResultMeta}>
+                    @{apiModerationUser.username || "no-username"} •{" "}
+                    {formatRoleLabel(
+                      apiModerationUser.role === "admin" ? "admin" : "member",
                     )}
                   </Text>
-                  <Text style={styles.lookupMetricLabel}>التفاعل</Text>
-                </View>
-              </View>
 
-              <DetailRow
-                label="Display VAR"
-                value={lookupProfile.displayVarId}
-              />
-              <DetailRow label="Internal VAR" value={lookupProfile.varId} />
-              <DetailRow label="User ID" value={lookupProfile.userId} />
-
-              <View style={styles.supportActionsRow}>
-                <Pressable
-                  onPress={() =>
-                    void handleCopySupportField(
-                      "الرقم الداخلي",
-                      lookupProfile.varId,
-                    )
-                  }
-                  style={styles.supportActionButton}
-                >
-                  <Ionicons name="copy-outline" size={15} color="#09111C" />
-                  <Text style={styles.supportActionButtonText}>
-                    نسخ الداخلي
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() =>
-                    void handleCopySupportField("User ID", lookupProfile.userId)
-                  }
-                  style={styles.supportActionButtonSecondary}
-                >
-                  <Ionicons name="id-card-outline" size={15} color="#FFFFFF" />
-                  <Text style={styles.supportActionButtonSecondaryText}>
-                    نسخ User ID
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => void handleShareSupportSummary()}
-                  style={styles.supportActionButtonSecondary}
-                >
-                  <Ionicons
-                    name="share-social-outline"
-                    size={15}
-                    color="#FFFFFF"
+                  <DetailRow
+                    label="Display VAR"
+                    value={apiModerationUser.displayVarId}
                   />
-                  <Text style={styles.supportActionButtonSecondaryText}>
-                    مشاركة الملخص
-                  </Text>
-                </Pressable>
-              </View>
-
-              {supportActionMessage ? (
-                <Text style={styles.supportActionMessage}>
-                  {supportActionMessage}
-                </Text>
-              ) : null}
-
-              {apiReady && apiModerationUser ? (
-                <AdminUserModerationBar
-                  displayVarId={apiModerationUser.displayVarId}
-                  verified={apiModerationUser.verified}
-                  cardTier={apiModerationUser.cardTier || "classic"}
-                  accountStatus={apiModerationUser.accountStatus}
-                  role={apiModerationUser.role}
-                  onUpdated={(message) => {
-                    setSupportActionMessage(message);
-                    void refreshApiModerationUser(
-                      apiModerationUser.displayVarId || lookupValue,
-                    );
-                  }}
-                />
-              ) : null}
-            </View>
-          ) : null}
-
-          {!lookupProfile && apiModerationUser ? (
-            <View style={styles.lookupResultCard}>
-              <View style={styles.lookupResultHeader}>
-                <View style={styles.lookupResultBadge}>
-                  <Ionicons
-                    name="person-circle-outline"
-                    size={15}
-                    color="#09111C"
+                  <DetailRow
+                    label="Internal VAR"
+                    value={apiModerationUser.varId}
                   />
-                  <Text style={styles.lookupResultBadgeText}>API MATCH</Text>
-                </View>
-                <Text style={styles.lookupResultStamp}>
-                  {formatRelativeStamp(apiModerationUser.createdAt)}
-                </Text>
-              </View>
+                  <DetailRow label="User ID" value={apiModerationUser.userId} />
 
-              <Text style={styles.lookupResultName}>
-                {apiModerationUser.displayName || "بدون اسم ظاهر"}
-              </Text>
-              <Text style={styles.lookupResultMeta}>
-                @{apiModerationUser.username || "no-username"} •{" "}
-                {formatRoleLabel(
-                  apiModerationUser.role === "admin" ? "admin" : "member",
+                  {apiReady ? (
+                    <AdminUserModerationBar
+                      displayVarId={apiModerationUser.displayVarId}
+                      verified={apiModerationUser.verified}
+                      cardTier={apiModerationUser.cardTier || "classic"}
+                      accountStatus={apiModerationUser.accountStatus}
+                      role={apiModerationUser.role}
+                      onUpdated={(message) => {
+                        setSupportActionMessage(message);
+                        void refreshApiModerationUser(
+                          apiModerationUser.displayVarId || lookupValue,
+                        );
+                      }}
+                    />
+                  ) : null}
+
+                  {supportActionMessage ? (
+                    <Text style={styles.supportActionMessage}>
+                      {supportActionMessage}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+            </SectionCard>
+
+            {lookupProfile ? (
+              <SectionCard title="أحدث منشورات الحساب" eyebrow="MATCHED POSTS">
+                {lookupRecentPosts.length ? (
+                  lookupRecentPosts.map((post) => (
+                    <LookupActivityRow
+                      key={post.id}
+                      badge={formatRelativeStamp(post.createdAt)}
+                      summary={post.content}
+                      title={post.title || "منشور بدون عنوان"}
+                    />
+                  ))
+                ) : (
+                  <EmptySectionCopy text="لا توجد منشورات لهذا الحساب داخل Appwrite حتى الآن، أو أن قناة المنشورات غير مفعلة." />
                 )}
-              </Text>
+              </SectionCard>
+            ) : null}
 
-              <DetailRow
-                label="Display VAR"
-                value={apiModerationUser.displayVarId}
-              />
-              <DetailRow label="Internal VAR" value={apiModerationUser.varId} />
-              <DetailRow label="User ID" value={apiModerationUser.userId} />
-
-              {apiReady ? (
-                <AdminUserModerationBar
-                  displayVarId={apiModerationUser.displayVarId}
-                  verified={apiModerationUser.verified}
-                  cardTier={apiModerationUser.cardTier || "classic"}
-                  accountStatus={apiModerationUser.accountStatus}
-                  role={apiModerationUser.role}
-                  onUpdated={(message) => {
-                    setSupportActionMessage(message);
-                    void refreshApiModerationUser(
-                      apiModerationUser.displayVarId || lookupValue,
-                    );
-                  }}
-                />
-              ) : null}
-
-              {supportActionMessage ? (
-                <Text style={styles.supportActionMessage}>
-                  {supportActionMessage}
-                </Text>
-              ) : null}
-            </View>
-          ) : null}
-        </SectionCard>
-
-        {lookupProfile ? (
-          <SectionCard title="أحدث منشورات الحساب" eyebrow="MATCHED POSTS">
-            {lookupRecentPosts.length ? (
-              lookupRecentPosts.map((post) => (
-                <LookupActivityRow
-                  key={post.id}
-                  badge={formatRelativeStamp(post.createdAt)}
-                  summary={post.content}
-                  title={post.title || "منشور بدون عنوان"}
-                />
-              ))
-            ) : (
-              <EmptySectionCopy text="لا توجد منشورات لهذا الحساب داخل Appwrite حتى الآن، أو أن قناة المنشورات غير مفعلة." />
-            )}
-          </SectionCard>
-        ) : null}
-
-        {lookupProfile ? (
-          <SectionCard
-            title="أحدث التوقعات المقفلة"
-            eyebrow="MATCHED PREDICTIONS"
-          >
-            {lookupRecentPredictions.length ? (
-              lookupRecentPredictions.map((prediction) => (
-                <LookupActivityRow
-                  key={prediction.id}
-                  badge={formatRelativeStamp(prediction.lockedAt)}
-                  summary={`${prediction.competition || "بدون بطولة"} • ${prediction.choice || "بدون اختيار"} • ${prediction.pointsAwarded} نقطة`}
-                  title={prediction.title || "توقع بدون عنوان"}
-                />
-              ))
-            ) : (
-              <EmptySectionCopy text="لا توجد توقعات مقفلة لهذا الحساب حتى الآن، أو أن collection التوقعات غير مفعلة." />
-            )}
-          </SectionCard>
-        ) : null}
-
-        {lookupProfile ? (
-          <SectionCard
-            title="آخر التفاعلات النشطة"
-            eyebrow="MATCHED INTERACTIONS"
-          >
-            {lookupRecentInteractions.length ? (
-              lookupRecentInteractions.map((interaction) => (
-                <LookupActivityRow
-                  key={interaction.id}
-                  badge={formatRelativeStamp(interaction.createdAt)}
-                  summary={
-                    interaction.value.trim()
-                      ? interaction.value
-                      : `الهدف: ${interaction.targetId}`
-                  }
-                  title={`${formatSocialModeLabel(interaction.mode)} • ${formatSocialActionLabel(interaction.action)}`}
-                />
-              ))
-            ) : (
-              <EmptySectionCopy text="لا توجد تفاعلات نشطة مسجلة لهذا الحساب حتى الآن، أو أن collection التفاعل غير مفعلة." />
-            )}
-          </SectionCard>
-        ) : null}
-
-        <View style={styles.metricsGrid}>
-          <MetricCard
-            accent="#63C6FF"
-            icon="chatbox-ellipses-outline"
-            label="منشورات Appwrite"
-            value={String(appwritePosts.length)}
-          />
-          <MetricCard
-            accent="#41F17B"
-            icon="sparkles-outline"
-            label="النقاط الحالية"
-            value={String(metrics.earnedPoints)}
-          />
-          <MetricCard
-            accent="#F4C565"
-            icon="lock-closed-outline"
-            label="التوقعات المقفلة"
-            value={String(metrics.lockedPredictions)}
-          />
-          <MetricCard
-            accent="#F985FF"
-            icon="pulse-outline"
-            label="إجمالي التفاعل"
-            value={String(metrics.totalInteractions)}
-          />
-        </View>
-
-        <SectionCard title="جاهزية النظام" eyebrow="SYSTEM HEALTH">
-          {healthRows.map((row) => (
-            <View key={row.id} style={styles.healthRow}>
-              <View style={styles.healthCopy}>
-                <Text style={styles.healthTitle}>{row.label}</Text>
-                <Text style={styles.healthDetail}>{row.detail}</Text>
-              </View>
-              <View
-                style={[
-                  styles.healthIconWrap,
-                  row.ready
-                    ? styles.healthIconWrapReady
-                    : styles.healthIconWrapPending,
-                ]}
+            {lookupProfile ? (
+              <SectionCard
+                title="أحدث التوقعات المقفلة"
+                eyebrow="MATCHED PREDICTIONS"
               >
-                <Ionicons
-                  name={row.icon}
-                  size={16}
-                  color={row.ready ? "#0B1A12" : "#FFF1D6"}
-                />
-              </View>
+                {lookupRecentPredictions.length ? (
+                  lookupRecentPredictions.map((prediction) => (
+                    <LookupActivityRow
+                      key={prediction.id}
+                      badge={formatRelativeStamp(prediction.lockedAt)}
+                      summary={`${prediction.competition || "بدون بطولة"} • ${prediction.choice || "بدون اختيار"} • ${prediction.pointsAwarded} نقطة`}
+                      title={prediction.title || "توقع بدون عنوان"}
+                    />
+                  ))
+                ) : (
+                  <EmptySectionCopy text="لا توجد توقعات مقفلة لهذا الحساب حتى الآن، أو أن collection التوقعات غير مفعلة." />
+                )}
+              </SectionCard>
+            ) : null}
+
+            {lookupProfile ? (
+              <SectionCard
+                title="آخر التفاعلات النشطة"
+                eyebrow="MATCHED INTERACTIONS"
+              >
+                {lookupRecentInteractions.length ? (
+                  lookupRecentInteractions.map((interaction) => (
+                    <LookupActivityRow
+                      key={interaction.id}
+                      badge={formatRelativeStamp(interaction.createdAt)}
+                      summary={
+                        interaction.value.trim()
+                          ? interaction.value
+                          : `الهدف: ${interaction.targetId}`
+                      }
+                      title={`${formatSocialModeLabel(interaction.mode)} • ${formatSocialActionLabel(interaction.action)}`}
+                    />
+                  ))
+                ) : (
+                  <EmptySectionCopy text="لا توجد تفاعلات نشطة مسجلة لهذا الحساب حتى الآن، أو أن collection التفاعل غير مفعلة." />
+                )}
+              </SectionCard>
+            ) : null}
+
+            <View style={styles.metricsGrid}>
+              <MetricCard
+                accent="#63C6FF"
+                icon="chatbox-ellipses-outline"
+                label="منشورات Appwrite"
+                value={String(appwritePosts.length)}
+              />
+              <MetricCard
+                accent="#41F17B"
+                icon="sparkles-outline"
+                label="النقاط الحالية"
+                value={String(metrics.earnedPoints)}
+              />
+              <MetricCard
+                accent="#F4C565"
+                icon="lock-closed-outline"
+                label="التوقعات المقفلة"
+                value={String(metrics.lockedPredictions)}
+              />
+              <MetricCard
+                accent="#F985FF"
+                icon="pulse-outline"
+                label="إجمالي التفاعل"
+                value={String(metrics.totalInteractions)}
+              />
             </View>
-          ))}
-        </SectionCard>
 
-        <SectionCard title="هوية المشروع" eyebrow="APPWRITE MAP">
-          <DetailRow
-            label="Project ID"
-            value={APPWRITE_CONFIG.projectId || "غير محدد"}
-          />
-          <DetailRow
-            label="Database ID"
-            value={APPWRITE_CONFIG.databaseId || "غير محدد"}
-          />
-          <DetailRow
-            label="Endpoint"
-            value={APPWRITE_CONFIG.endpoint || "غير محدد"}
-            multiline
-          />
-          <DetailRow
-            label="Web Platform"
-            value={APPWRITE_CONFIG.platform || "غير محدد"}
-          />
-        </SectionCard>
+            <SectionCard title="جاهزية النظام" eyebrow="SYSTEM HEALTH">
+              {healthRows.map((row) => (
+                <View key={row.id} style={styles.healthRow}>
+                  <View style={styles.healthCopy}>
+                    <Text style={styles.healthTitle}>{row.label}</Text>
+                    <Text style={styles.healthDetail}>{row.detail}</Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.healthIconWrap,
+                      row.ready
+                        ? styles.healthIconWrapReady
+                        : styles.healthIconWrapPending,
+                    ]}
+                  >
+                    <Ionicons
+                      name={row.icon}
+                      size={16}
+                      color={row.ready ? "#0B1A12" : "#FFF1D6"}
+                    />
+                  </View>
+                </View>
+              ))}
+            </SectionCard>
 
-        <SectionCard title="أحدث المنشورات" eyebrow="CONTENT FEED">
-          {recentPosts.length ? (
-            recentPosts.map((post) => (
-              <View key={post.id} style={styles.postRow}>
-                <View style={styles.postMetaColumn}>
-                  <Text style={styles.postMetaValue}>{post.varId}</Text>
-                  <Text style={styles.postMetaTime}>
-                    {formatRelativeStamp(post.createdAt)}
-                  </Text>
-                </View>
+            <SectionCard title="هوية المشروع" eyebrow="APPWRITE MAP">
+              <DetailRow
+                label="Project ID"
+                value={APPWRITE_CONFIG.projectId || "غير محدد"}
+              />
+              <DetailRow
+                label="Database ID"
+                value={APPWRITE_CONFIG.databaseId || "غير محدد"}
+              />
+              <DetailRow
+                label="Endpoint"
+                value={APPWRITE_CONFIG.endpoint || "غير محدد"}
+                multiline
+              />
+              <DetailRow
+                label="Web Platform"
+                value={APPWRITE_CONFIG.platform || "غير محدد"}
+              />
+            </SectionCard>
 
-                <View style={styles.postCopyColumn}>
-                  <Text numberOfLines={1} style={styles.postTitle}>
-                    {post.title || "منشور بدون عنوان"}
-                  </Text>
-                  <Text numberOfLines={2} style={styles.postExcerpt}>
-                    {post.content}
-                  </Text>
-                </View>
-              </View>
-            ))
-          ) : (
-            <EmptySectionCopy text="لا توجد منشورات Appwrite معروضة بعد، أو أن صلاحيات collection لم تُفعّل بعد." />
-          )}
-        </SectionCard>
+            <SectionCard title="أحدث المنشورات" eyebrow="CONTENT FEED">
+              {recentPosts.length ? (
+                recentPosts.map((post) => (
+                  <View key={post.id} style={styles.postRow}>
+                    <View style={styles.postMetaColumn}>
+                      <Text style={styles.postMetaValue}>{post.varId}</Text>
+                      <Text style={styles.postMetaTime}>
+                        {formatRelativeStamp(post.createdAt)}
+                      </Text>
+                    </View>
 
-        <SectionCard title="أكثر الحسابات نشاطًا" eyebrow="AUTHOR SIGNALS">
-          {topAuthors.length ? (
-            topAuthors.map((author, index) => (
-              <View key={author.varId} style={styles.authorRow}>
-                <View style={styles.authorCountWrap}>
-                  <Text style={styles.authorCount}>{author.totalPosts}</Text>
-                </View>
-                <View style={styles.authorCopy}>
-                  <Text style={styles.authorVarId}>{author.varId}</Text>
-                  <Text style={styles.authorHint}>
-                    عدد المنشورات المنشورة داخل Appwrite
-                  </Text>
-                </View>
-                <View style={styles.authorRankWrap}>
-                  <Text style={styles.authorRank}>#{index + 1}</Text>
-                </View>
-              </View>
-            ))
-          ) : (
-            <EmptySectionCopy text="سيظهر ترتيب الحسابات هنا بعد توفر منشورات كافية داخل collection الخاصة بالمنشورات." />
-          )}
-        </SectionCard>
+                    <View style={styles.postCopyColumn}>
+                      <Text numberOfLines={1} style={styles.postTitle}>
+                        {post.title || "منشور بدون عنوان"}
+                      </Text>
+                      <Text numberOfLines={2} style={styles.postExcerpt}>
+                        {post.content}
+                      </Text>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <EmptySectionCopy text="لا توجد منشورات Appwrite معروضة بعد، أو أن صلاحيات collection لم تُفعّل بعد." />
+              )}
+            </SectionCard>
+
+            <SectionCard title="أكثر الحسابات نشاطًا" eyebrow="AUTHOR SIGNALS">
+              {topAuthors.length ? (
+                topAuthors.map((author, index) => (
+                  <View key={author.varId} style={styles.authorRow}>
+                    <View style={styles.authorCountWrap}>
+                      <Text style={styles.authorCount}>
+                        {author.totalPosts}
+                      </Text>
+                    </View>
+                    <View style={styles.authorCopy}>
+                      <Text style={styles.authorVarId}>{author.varId}</Text>
+                      <Text style={styles.authorHint}>
+                        عدد المنشورات المنشورة داخل Appwrite
+                      </Text>
+                    </View>
+                    <View style={styles.authorRankWrap}>
+                      <Text style={styles.authorRank}>#{index + 1}</Text>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <EmptySectionCopy text="سيظهر ترتيب الحسابات هنا بعد توفر منشورات كافية داخل collection الخاصة بالمنشورات." />
+              )}
+            </SectionCard>
           </>
         ) : null}
-      </ScrollView>
+      </PullToRefreshScrollView>
     </View>
   );
 }
@@ -1232,24 +1274,6 @@ function LookupActivityRow(props: {
         <Text numberOfLines={2} style={styles.lookupActivitySummary}>
           {props.summary}
         </Text>
-      </View>
-    </View>
-  );
-}
-
-function RoadmapRow(props: {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  summary: string;
-}) {
-  return (
-    <View style={styles.roadmapRow}>
-      <View style={styles.roadmapCopy}>
-        <Text style={styles.roadmapTitle}>{props.title}</Text>
-        <Text style={styles.roadmapSummary}>{props.summary}</Text>
-      </View>
-      <View style={styles.roadmapIconWrap}>
-        <Ionicons name={props.icon} size={16} color="#63C6FF" />
       </View>
     </View>
   );
@@ -1882,42 +1906,6 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.52)",
     fontSize: 11,
     fontWeight: "800",
-  },
-  roadmapRow: {
-    flexDirection: "row-reverse",
-    alignItems: "flex-start",
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.08)",
-  },
-  roadmapCopy: {
-    flex: 1,
-    alignItems: "flex-end",
-    marginLeft: 12,
-  },
-  roadmapTitle: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "800",
-    textAlign: "right",
-  },
-  roadmapSummary: {
-    color: "rgba(255,255,255,0.64)",
-    fontSize: 12,
-    fontWeight: "700",
-    textAlign: "right",
-    lineHeight: 20,
-    marginTop: 6,
-  },
-  roadmapIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(99,198,255,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(99,198,255,0.22)",
   },
   emptyCopy: {
     color: "rgba(255,255,255,0.64)",

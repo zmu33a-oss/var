@@ -1,4 +1,12 @@
-import { Account, AppwriteException, Client, Databases, ID, Query, Users } from "node-appwrite";
+import {
+  Account,
+  AppwriteException,
+  Client,
+  Databases,
+  ID,
+  Query,
+  Users,
+} from "node-appwrite";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -113,7 +121,11 @@ export function readAdminConfig(): AdminConfig {
 }
 
 export function sendJson(
-  response: { statusCode: number; setHeader: (k: string, v: string) => void; end: (b: string) => void },
+  response: {
+    statusCode: number;
+    setHeader: (k: string, v: string) => void;
+    end: (b: string) => void;
+  },
   statusCode: number,
   payload: Record<string, unknown>,
 ) {
@@ -128,11 +140,14 @@ export function sendJson(
   response.end(JSON.stringify(payload));
 }
 
-export function handleOptions(request: { method?: string }, response: {
-  statusCode: number;
-  setHeader: (k: string, v: string) => void;
-  end: (b?: string) => void;
-}) {
+export function handleOptions(
+  request: { method?: string },
+  response: {
+    statusCode: number;
+    setHeader: (k: string, v: string) => void;
+    end: (b?: string) => void;
+  },
+) {
   if ((request.method ?? "GET") === "OPTIONS") {
     response.statusCode = 204;
     response.setHeader("Access-Control-Allow-Origin", "*");
@@ -148,12 +163,16 @@ export function handleOptions(request: { method?: string }, response: {
   return false;
 }
 
-export function readSessionHeader(request: { headers?: Record<string, string | string[] | undefined> }) {
+export function readSessionHeader(request: {
+  headers?: Record<string, string | string[] | undefined>;
+}) {
   const raw = request.headers?.["x-appwrite-session"];
   return typeof raw === "string" ? raw.trim() : "";
 }
 
-export function readJwtHeader(request: { headers?: Record<string, string | string[] | undefined> }) {
+export function readJwtHeader(request: {
+  headers?: Record<string, string | string[] | undefined>;
+}) {
   const raw = request.headers?.["x-appwrite-jwt"];
   return typeof raw === "string" ? raw.trim() : "";
 }
@@ -163,9 +182,9 @@ export type AdminAuth = {
   token: string;
 };
 
-export function readAuthHeader(
-  request: { headers?: Record<string, string | string[] | undefined> },
-): AdminAuth | null {
+export function readAuthHeader(request: {
+  headers?: Record<string, string | string[] | undefined>;
+}): AdminAuth | null {
   const jwt = readJwtHeader(request);
   if (jwt) {
     return { type: "jwt", token: jwt };
@@ -252,12 +271,13 @@ export async function requireAdminSession(
   const account = new Account(createAuthClient(config, auth));
   const user = await account.get();
   const prefs = (user.prefs ?? {}) as Record<string, unknown>;
-  const username =
-    typeof prefs.username === "string" ? prefs.username : "";
+  const username = typeof prefs.username === "string" ? prefs.username : "";
   const role = typeof prefs.role === "string" ? prefs.role : "member";
   const email = (user.email ?? "").trim().toLowerCase();
 
-  if (!isAdminAccount({ email, username, role, adminEmail: config.adminEmail })) {
+  if (
+    !isAdminAccount({ email, username, role, adminEmail: config.adminEmail })
+  ) {
     throw new Error("NOT_ADMIN");
   }
 
@@ -270,10 +290,6 @@ export async function requireAdminSession(
     session: auth.token,
   } satisfies AdminActor;
 }
-
-type AppwriteSession = {
-  secret?: string;
-};
 
 type AppwriteJwt = {
   jwt?: string;
@@ -393,7 +409,10 @@ export function mapLoginError(error: unknown) {
       : undefined;
   const message = error instanceof Error ? error.message : "UNKNOWN";
 
-  if (type === "user_invalid_credentials" || message.includes("Invalid credentials")) {
+  if (
+    type === "user_invalid_credentials" ||
+    message.includes("Invalid credentials")
+  ) {
     return {
       status: 401,
       code: "INVALID_CREDENTIALS",
@@ -515,8 +534,7 @@ export async function updateDocumentWithFallback(
       );
     } catch (error) {
       lastError = error;
-      const message =
-        error instanceof Error ? error.message.toLowerCase() : "";
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
       if (message.includes("unknown") && message.includes("attribute")) {
         continue;
       }
@@ -805,10 +823,7 @@ export function readCardTierField(value: unknown): AdminMembershipCardTier {
   return normalizeAdminCardTier(value) ?? "classic";
 }
 
-function readProfileStringField(
-  profile: Record<string, unknown>,
-  key: string,
-) {
+function readProfileStringField(profile: Record<string, unknown>, key: string) {
   const value = profile[key];
   return typeof value === "string" ? value.trim() : "";
 }
@@ -899,9 +914,7 @@ export async function migrateMissingCardTiersToClassic(config: AdminConfig) {
       const profileDocumentId =
         typeof profile.$id === "string" ? profile.$id : "";
       const userId =
-        typeof profile.userId === "string"
-          ? profile.userId
-          : profileDocumentId;
+        typeof profile.userId === "string" ? profile.userId : profileDocumentId;
 
       if (!profileDocumentId) {
         continue;
@@ -1019,10 +1032,8 @@ export async function listAdminAuditLogs(config: AdminConfig, limit = 40) {
 
     return response.documents.map((document) => ({
       id: document.$id,
-      action:
-        typeof document.action === "string" ? document.action : "عملية",
-      targetId:
-        typeof document.targetId === "string" ? document.targetId : "",
+      action: typeof document.action === "string" ? document.action : "عملية",
+      targetId: typeof document.targetId === "string" ? document.targetId : "",
       adminEmail:
         typeof document.adminEmail === "string" ? document.adminEmail : "",
       details: typeof document.details === "string" ? document.details : "",
@@ -1112,8 +1123,7 @@ export async function deleteProfileAndUser(
 ) {
   requireServerKey(config);
 
-  const profileId =
-    typeof profile.$id === "string" ? profile.$id.trim() : "";
+  const profileId = typeof profile.$id === "string" ? profile.$id.trim() : "";
   const userId =
     typeof profile.userId === "string" && profile.userId.trim()
       ? profile.userId.trim()

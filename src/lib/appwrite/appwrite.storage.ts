@@ -2,6 +2,14 @@ import { Platform } from "react-native";
 import { APPWRITE_CONFIG } from "./appwrite.config";
 import { AppwriteID, appwriteStorage } from "./appwrite.client";
 
+type AppwriteStorageBridge = {
+  createFile: (
+    bucketId: string,
+    fileId: string,
+    file: unknown,
+  ) => Promise<{ $id: string }>;
+};
+
 export function buildAppwriteFileViewUrl(bucketId: string, fileId: string) {
   const projectId = APPWRITE_CONFIG.projectId.trim();
 
@@ -23,6 +31,8 @@ export async function uploadAppwritePostImage(
     return normalizedUri;
   }
 
+  const storage = appwriteStorage as unknown as AppwriteStorageBridge;
+
   const fileName = `post-${varId.replace(/[^a-zA-Z0-9_-]/g, "")}-${Date.now()}.jpg`;
 
   if (Platform.OS === "web") {
@@ -31,7 +41,7 @@ export async function uploadAppwritePostImage(
     const file = new File([blob], fileName, {
       type: blob.type || "image/jpeg",
     });
-    const created = await appwriteStorage.createFile(
+    const created = await storage.createFile(
       bucketId,
       AppwriteID.unique(),
       file,
@@ -40,16 +50,12 @@ export async function uploadAppwritePostImage(
     return buildAppwriteFileViewUrl(bucketId, created.$id);
   }
 
-  const created = await appwriteStorage.createFile(
-    bucketId,
-    AppwriteID.unique(),
-    {
-      name: fileName,
-      type: "image/jpeg",
-      size: 0,
-      uri: normalizedUri,
-    },
-  );
+  const created = await storage.createFile(bucketId, AppwriteID.unique(), {
+    name: fileName,
+    type: "image/jpeg",
+    size: 0,
+    uri: normalizedUri,
+  });
 
   return buildAppwriteFileViewUrl(bucketId, created.$id);
 }

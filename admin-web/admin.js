@@ -32,9 +32,12 @@
   function resolveApiBase() {
     if (typeof window === "undefined") return "";
     const { protocol, hostname, port } = window.location;
-    if (hostname === "localhost" && port && port !== "3000") {
+    const expoDevPorts = new Set(["8081", "5174", "19006", "8082"]);
+
+    if (expoDevPorts.has(port)) {
       return `${protocol}//${hostname}:3000`;
     }
+
     return "";
   }
 

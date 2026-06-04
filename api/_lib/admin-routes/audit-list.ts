@@ -5,7 +5,7 @@ import {
   requireAdminSession,
   requireServerKey,
   sendJson,
-} from "../admin-shared";
+} from "../admin-shared.js";
 
 export async function handler(request: any, response: any) {
   if (handleOptions(request, response)) {
@@ -32,9 +32,25 @@ export async function handler(request: any, response: any) {
     });
   } catch (error) {
     const code = error instanceof Error ? error.message : "UNKNOWN";
-    sendJson(response, code === "MISSING_API_KEY" ? 503 : 500, {
+    const status =
+      code === "MISSING_SESSION"
+        ? 401
+        : code === "NOT_ADMIN"
+          ? 403
+          : code === "MISSING_API_KEY"
+            ? 503
+            : 500;
+
+    sendJson(response, status, {
       ok: false,
-      error: "تعذر تحميل سجل العمليات.",
+      error:
+        code === "MISSING_API_KEY"
+          ? "أضف APPWRITE_API_KEY لعرض سجل العمليات."
+          : code === "MISSING_SESSION"
+            ? "الجلسة منتهية، أعد تسجيل الدخول."
+            : code === "NOT_ADMIN"
+              ? "هذا الحساب ليس لديه صلاحية أدمن."
+              : "تعذر تحميل سجل العمليات.",
       code,
     });
   }

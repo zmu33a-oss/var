@@ -15,7 +15,6 @@ import {
   AppwriteID,
   AppwriteQuery,
   getDatabasesBridge,
-  hasConfiguredCollection,
 } from "./appwrite.client";
 import {
   canAttemptAppwriteCollectionRead,
@@ -41,12 +40,9 @@ function mapVisibleAppwritePostRecords(
 ): AppwritePostRecord[] {
   return documents
     .filter(
-      (document) =>
-        !isAppwritePostHidden(document as AppwritePostDocument),
+      (document) => !isAppwritePostHidden(document as AppwritePostDocument),
     )
-    .map((document) =>
-      toAppwritePostRecord(document as AppwritePostDocument),
-    );
+    .map((document) => toAppwritePostRecord(document as AppwritePostDocument));
 }
 
 export async function listAppwritePosts(options?: {
@@ -147,9 +143,7 @@ export async function createAppwritePost(
       content: input.content.trim(),
       authorId: normalizedVarId,
       varId: normalizedVarId,
-      ...(input.mediaUri?.trim()
-        ? { mediaUri: input.mediaUri.trim() }
-        : {}),
+      ...(input.mediaUri?.trim() ? { mediaUri: input.mediaUri.trim() } : {}),
     },
   );
 

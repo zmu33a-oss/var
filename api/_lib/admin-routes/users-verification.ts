@@ -10,7 +10,7 @@ import {
   syncAccountVerifiedPref,
   updateProfileVerification,
   writeAdminAuditLog,
-} from "../admin-shared";
+} from "../admin-shared.js";
 
 export async function handler(request: any, response: any) {
   if (handleOptions(request, response)) {

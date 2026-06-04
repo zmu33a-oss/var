@@ -338,7 +338,3 @@ export function getLeaguePageHeaderTitle(league: LeagueOverviewCard | null) {
 
   return league.title;
 }
-
-export function getLeagueCardCompetitionTitle(league: LeagueOverviewCard | null) {
-  return league?.title?.trim() || "دوري روشن السعودي";
-}

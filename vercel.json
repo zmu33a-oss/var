@@ -4,5 +4,28 @@
   "installCommand": "npm install",
   "buildCommand": "npm run vercel-build",
   "devCommand": "node scripts/vercel-dev-static.cjs",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "functions": {
+    "api/wallet-pass.ts": {
+      "includeFiles": "assets/icons/var.png"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/admin/users/:action",
+      "destination": "/api/admin/users?action=:action"
+    },
+    {
+      "source": "/api/admin/posts/:action",
+      "destination": "/api/admin/posts?action=:action"
+    },
+    {
+      "source": "/api/admin/audit/:action",
+      "destination": "/api/admin/audit?action=:action"
+    },
+    {
+      "source": "/add/:path*",
+      "destination": "/"
+    }
+  ]
 }

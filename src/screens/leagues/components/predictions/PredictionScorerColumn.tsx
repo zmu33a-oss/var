@@ -22,7 +22,14 @@ export function PredictionScorerColumn(props: {
   }
 
   return (
-    <View style={styles.predictionsScorerColumn}>
+    <View
+      style={[
+        styles.predictionsScorerColumn,
+        isLeftSide
+          ? styles.predictionsScorerColumnLeft
+          : styles.predictionsScorerColumnRight,
+      ]}
+    >
       <View
         style={[
           styles.predictionsScorerMetaRow,
@@ -32,6 +39,9 @@ export function PredictionScorerColumn(props: {
         ]}
       >
         <RNText style={styles.predictionsScorerMetaLabel}>الهداف</RNText>
+        <RNText numberOfLines={1} style={styles.predictionsScorerTeamLabel}>
+          {props.teamLabel}
+        </RNText>
       </View>
 
       <View style={styles.predictionsScorersCell}>

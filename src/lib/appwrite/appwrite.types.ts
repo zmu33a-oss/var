@@ -209,6 +209,7 @@ export type AppwriteProfilePrefs = {
   role?: AppwriteUserRole;
   adminLabel?: string;
   isVerified?: boolean;
+  cardTier?: "classic" | "gold" | "platinum";
 };
 
 export type AppwritePostInput = {

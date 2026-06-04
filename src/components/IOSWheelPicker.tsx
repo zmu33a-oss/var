@@ -1,4 +1,4 @@
-import React, { type ComponentProps, useEffect, useRef } from "react";
+import { type ComponentProps, useEffect, useRef } from "react";
 import { FlatList, Pressable, View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {

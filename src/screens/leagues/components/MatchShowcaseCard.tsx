@@ -10,7 +10,14 @@ import {
   Text as RNText,
   View,
 } from "react-native";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  createElement,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type SyntheticEvent,
+} from "react";
 import {
   getNativePointerEventsProps,
   getWebPointerEventsStyle,
@@ -23,8 +30,8 @@ import {
   POLL_TWEET_MACHINE_STEP_PAUSE,
   POLL_TWEET_MACHINE_STEPS,
   PREVENTION_ICON,
-  ROSHN_ICON,
   SMARTPHONE_ICON,
+  VAR_CHAT_ICON,
 } from "../leagues.constants";
 import {
   parsePredictionGoalCount,
@@ -32,6 +39,7 @@ import {
   sanitizePredictionValue,
 } from "../leagues.utils";
 import type { LeagueTab } from "../../../app.types";
+import type { MatchPredictionLockInput } from "../../../lib/predictions/matchPrediction.utils";
 import type { MatchShowcaseCardConfig } from "../leagues.types";
 import { LeagueText as Text } from "./common/LeagueText";
 import { GlassCard } from "./common/GlassCard";
@@ -43,6 +51,7 @@ import { PollVoteRow } from "./polls/PollVoteRow";
 import { PollTweetCard } from "./polls/PollTweetCard";
 import { PredictionScoreColumn } from "./predictions/PredictionScoreColumn";
 import { PredictionScorerColumn } from "./predictions/PredictionScorerColumn";
+import { VarChatSettingsModal } from "./VarChatSettingsModal";
 import { styles } from "../leagues.styles";
 
 type WebAudioInstance = {
@@ -54,12 +63,86 @@ type WebAudioInstance = {
 
 type WebAudioConstructor = new (src?: string) => WebAudioInstance;
 
+const PREDICTION_VIDEO_CLIP_SECONDS = 30;
+const PREDICTION_VIDEO_URI = "https://media.w3.org/2010/05/sintel/trailer.mp4";
+const PREDICTION_VIDEO_POSTER_URI =
+  "https://media.w3.org/2010/05/sintel/poster.png";
+
+function PredictionVideoCard(props: { matchupLabel: string }) {
+  const handleTimeUpdate = (event: SyntheticEvent<HTMLVideoElement>) => {
+    const videoElement = event.currentTarget;
+
+    if (videoElement.currentTime >= PREDICTION_VIDEO_CLIP_SECONDS) {
+      videoElement.pause();
+      videoElement.currentTime = 0;
+    }
+  };
+
+  const videoPlayer =
+    Platform.OS === "web"
+      ? createElement("video", {
+          controls: true,
+          muted: true,
+          onTimeUpdate: handleTimeUpdate,
+          playsInline: true,
+          poster: PREDICTION_VIDEO_POSTER_URI,
+          preload: "metadata",
+          src: PREDICTION_VIDEO_URI,
+          style: {
+            backgroundColor: "#02040A",
+            display: "block",
+            height: "100%",
+            objectFit: "cover",
+            width: "100%",
+          },
+        })
+      : null;
+
+  return (
+    <View style={styles.predictionsVideoCard}>
+      <View style={styles.predictionsVideoHeaderRow}>
+        <View style={styles.predictionsVideoDurationBadge}>
+          <RNText style={styles.predictionsVideoDurationText}>00:30</RNText>
+        </View>
+
+        <View style={styles.predictionsVideoTitleBlock}>
+          <RNText style={styles.predictionsVideoTitle}>فيديو التوقع</RNText>
+          <RNText style={styles.predictionsVideoSubtitle} numberOfLines={1}>
+            {props.matchupLabel}
+          </RNText>
+        </View>
+      </View>
+
+      <View style={styles.predictionsVideoFrame}>
+        {videoPlayer ?? (
+          <LinearGradient
+            colors={["#10213D", "#050A13", "#1D314F"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.predictionsVideoFallback}
+          >
+            <View style={styles.predictionsVideoPlayHalo}>
+              <Ionicons name="play" size={20} color="#111827" />
+            </View>
+          </LinearGradient>
+        )}
+
+        <View pointerEvents="none" style={styles.predictionsVideoOverlay}>
+          <View style={styles.predictionsVideoLivePill}>
+            <View style={styles.predictionsVideoLiveDot} />
+            <RNText style={styles.predictionsVideoLiveText}>30 SEC</RNText>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export function MatchShowcaseCard(props: {
-  competitionTitle: string;
   config: MatchShowcaseCardConfig;
-  headerFontFamily?: string;
   kickoffCountdownLabel: string;
   onOpenDetails: () => void;
+  onLockMatchPrediction?: (input: MatchPredictionLockInput) => void;
   pollTweetCardHeight: number;
   pollTweetViewportHeight: number;
   pollTweetMachineStepDistance: number;
@@ -82,6 +165,7 @@ export function MatchShowcaseCard(props: {
     team: "home" | "away";
     slotIndex: number;
   } | null>(null);
+  const [isVarChatSettingsOpen, setIsVarChatSettingsOpen] = useState(false);
   const clickSoundRef = useRef<WebAudioInstance | null>(null);
   const pollTickerProgress = useRef(new Animated.Value(0)).current;
   const rotatingBorderProgress = useRef(new Animated.Value(0)).current;
@@ -346,6 +430,27 @@ export function MatchShowcaseCard(props: {
   };
 
   const handleSavePrediction = () => {
+    const homeScore = homePredictionScore.trim();
+    const awayScore = awayPredictionScore.trim();
+
+    if (!homeScore || !awayScore) {
+      return;
+    }
+
+    props.onLockMatchPrediction?.({
+      matchId: props.config.id,
+      leagueName: props.config.leagueName,
+      homeTeamTitle: props.config.homeTeam.title,
+      awayTeamTitle: props.config.awayTeam.title,
+      homeScore,
+      awayScore,
+      homeScorerIds: homePredictionScorers,
+      awayScorerIds: awayPredictionScorers,
+      homePlayers: props.config.homeTeam.lineup,
+      awayPlayers: props.config.awayTeam.lineup,
+      selectedVoteTeam,
+    });
+
     setIsPredictionSaved(true);
     void playCardClickSound();
   };
@@ -356,454 +461,466 @@ export function MatchShowcaseCard(props: {
   };
 
   return (
-    <GlassCard style={styles.matchCard}>
-      <LinearGradient
-        colors={[
-          "rgba(255,152,0,0.28)",
-          "rgba(255,152,0,0.08)",
-          "rgba(255,152,0,0.28)",
-        ]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.matchShowcaseBorderRing}
-      >
-        <Animated.View
-          {...getNativePointerEventsProps("none")}
-          style={[
-            styles.matchShowcaseBorderSpinner,
-            { transform: [{ rotate: rotatingBorderSpin }] },
-            getWebPointerEventsStyle("none"),
+    <>
+      <GlassCard style={styles.matchCard}>
+        <LinearGradient
+          colors={[
+            "rgba(255,255,255,0.38)",
+            "rgba(255,255,255,0.14)",
+            "rgba(255,255,255,0.05)",
           ]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.matchShowcaseBorderRing}
         >
-          <LinearGradient
-            colors={[
-              "rgba(0,0,0,0)",
-              "rgba(0,0,0,0)",
-              "rgba(255,152,0,0.98)",
-              "rgba(255,193,7,1)",
-              "rgba(255,152,0,0.98)",
-              "rgba(0,0,0,0)",
-              "rgba(0,0,0,0)",
+          <Animated.View
+            {...getNativePointerEventsProps("none")}
+            style={[
+              styles.matchShowcaseBorderSpinner,
+              { transform: [{ rotate: rotatingBorderSpin }] },
+              getWebPointerEventsStyle("none"),
             ]}
-            locations={[0, 0.38, 0.47, 0.5, 0.53, 0.62, 1]}
-            start={{ x: 0.08, y: 0 }}
-            end={{ x: 0.92, y: 1 }}
-            style={styles.matchShowcaseBorderSpinnerGradient}
-          />
-        </Animated.View>
-
-        <View style={styles.matchShowcaseShell}>
-          <View style={styles.matchShowcaseHeaderActionsRow}>
-            <View style={styles.matchShowcaseLiveBadge}>
-              <View style={styles.matchShowcaseLiveDot} />
-              <RNText style={styles.matchShowcaseLiveBadgeText}>
-                DEMO LIVE
-              </RNText>
-            </View>
-
-            <View style={styles.matchShowcaseUtilityActions}>
-              <Pressable
-                onPress={() => {
-                  void playCardClickSound();
-                }}
-                style={styles.matchShowcaseUtilityButton}
-              >
-                <Ionicons
-                  name="share-social-outline"
-                  size={15}
-                  color="rgba(148,163,184,0.96)"
-                />
-              </Pressable>
-
-              <Pressable
-                onPress={() => {
-                  void playCardClickSound();
-                }}
-                style={styles.matchShowcaseUtilityButton}
-              >
-                <Ionicons
-                  name="notifications-outline"
-                  size={15}
-                  color="rgba(148,163,184,0.96)"
-                />
-              </Pressable>
-            </View>
-          </View>
-
-          <Pressable
-            onPress={props.onOpenDetails}
-            style={styles.matchShowcaseHeroPressable}
           >
-            <View style={styles.matchShowcaseContextBlock}>
-              <View style={styles.matchShowcaseCompetitionLogoWrap}>
-                <Image
-                  source={ROSHN_ICON}
-                  resizeMode="contain"
-                  style={styles.matchShowcaseCompetitionLogo as ImageStyle}
-                />
+            <LinearGradient
+              colors={[
+                "rgba(0,0,0,0)",
+                "rgba(0,0,0,0)",
+                "rgba(255,255,255,0.96)",
+                "rgba(255,255,255,0.96)",
+                "rgba(0,0,0,0)",
+                "rgba(0,0,0,0)",
+                "rgba(0,0,0,0)",
+              ]}
+              locations={[0, 0.34, 0.45, 0.52, 0.58, 0.68, 1]}
+              start={{ x: 0.08, y: 0 }}
+              end={{ x: 0.92, y: 1 }}
+              style={styles.matchShowcaseBorderSpinnerGradient}
+            />
+          </Animated.View>
+
+          <View style={styles.matchShowcaseShell}>
+            <View style={styles.matchShowcaseHeaderActionsRow}>
+              <View style={styles.matchShowcaseLiveBadge}>
+                <View style={styles.matchShowcaseLiveDot} />
+                <RNText style={styles.matchShowcaseLiveBadgeText}>
+                  DEMO LIVE
+                </RNText>
               </View>
 
-              <RNText
-                style={[
-                  styles.matchShowcaseLeagueName,
-                  props.headerFontFamily
-                    ? { fontFamily: props.headerFontFamily }
-                    : null,
+              <View style={styles.matchShowcaseUtilityActions}>
+                <Pressable
+                  onPress={() => {
+                    void playCardClickSound();
+                    setIsVarChatSettingsOpen(true);
+                  }}
+                  style={styles.matchShowcaseVarChatButton}
+                >
+                  <Image
+                    source={VAR_CHAT_ICON}
+                    resizeMode="contain"
+                    style={styles.matchShowcaseVarChatIcon as ImageStyle}
+                  />
+                </Pressable>
+              </View>
+            </View>
+
+            <Pressable
+              onPress={props.onOpenDetails}
+              style={styles.matchShowcaseHeroPressable}
+            >
+              <View style={styles.matchShowcaseTeamsRow}>
+                <MatchShowcaseHeroTeamPanel
+                  title={props.config.homeTeam.title}
+                  shortName={props.config.homeTeam.shortName}
+                  gradient={props.config.homeTeam.gradient}
+                  iconSource={props.config.homeTeam.iconSource}
+                  caption="المضيف"
+                />
+
+                <View style={styles.matchShowcaseScoreCenter}>
+                  <View style={styles.matchShowcaseScoreDigitsRow}>
+                    <RNText style={styles.matchShowcaseScoreDigit}>0</RNText>
+                    <RNText style={styles.matchShowcaseVersus}>VS</RNText>
+                    <RNText style={styles.matchShowcaseScoreDigit}>0</RNText>
+                  </View>
+
+                  <View style={styles.matchShowcaseCountdownBadge}>
+                    <RNText style={styles.matchShowcaseCountdownText}>
+                      {props.kickoffCountdownLabel}
+                    </RNText>
+                  </View>
+                </View>
+
+                <MatchShowcaseHeroTeamPanel
+                  title={props.config.awayTeam.title}
+                  shortName={props.config.awayTeam.shortName}
+                  gradient={props.config.awayTeam.gradient}
+                  iconSource={props.config.awayTeam.iconSource}
+                  caption="الضيف"
+                />
+              </View>
+            </Pressable>
+
+            <View style={styles.matchShowcaseFooterTabsRow}>
+              <MatchShowcaseFooterTabButton
+                label="مباشر الآن"
+                isActive={leagueTab === "live"}
+                onPress={() => toggleLeagueTab("live")}
+                showDivider
+                accentColor="#FF6677"
+                accentSurface="rgba(255,82,112,0.16)"
+                iconSource={LIVE_STREAM_ICON}
+              />
+              <MatchShowcaseFooterTabButton
+                label="التوقعات"
+                isActive={leagueTab === "predictions"}
+                onPress={() => toggleLeagueTab("predictions")}
+                showDivider
+                accentColor="#FFDE97"
+                accentSurface="rgba(255,214,126,0.14)"
+                iconSource={PREVENTION_ICON}
+                iconStyle={[
+                  styles.matchShowcaseFooterAssetIconLarge as ImageStyle,
+                  styles.matchShowcaseFooterPredictionIcon as ImageStyle,
                 ]}
-              >
-                {props.competitionTitle}
-              </RNText>
-            </View>
-
-            <View style={styles.matchShowcaseTeamsRow}>
-              <MatchShowcaseHeroTeamPanel
-                title={props.config.homeTeam.title}
-                shortName={props.config.homeTeam.shortName}
-                gradient={props.config.homeTeam.gradient}
-                iconSource={props.config.homeTeam.iconSource}
-                caption="المضيف"
               />
-
-              <View style={styles.matchShowcaseScoreCenter}>
-                <View style={styles.matchShowcaseScoreDigitsRow}>
-                  <RNText style={styles.matchShowcaseScoreDigit}>0</RNText>
-                  <RNText style={styles.matchShowcaseVersus}>VS</RNText>
-                  <RNText style={styles.matchShowcaseScoreDigit}>0</RNText>
-                </View>
-
-                <View style={styles.matchShowcaseCountdownBadge}>
-                  <RNText style={styles.matchShowcaseCountdownText}>
-                    {props.kickoffCountdownLabel}
-                  </RNText>
-                </View>
-              </View>
-
-              <MatchShowcaseHeroTeamPanel
-                title={props.config.awayTeam.title}
-                shortName={props.config.awayTeam.shortName}
-                gradient={props.config.awayTeam.gradient}
-                iconSource={props.config.awayTeam.iconSource}
-                caption="الضيف"
+              <MatchShowcaseFooterTabButton
+                label="الأحداث"
+                isActive={leagueTab === "events"}
+                onPress={() => toggleLeagueTab("events")}
+                accentColor="#63C6FF"
+                accentSurface="rgba(99,198,255,0.14)"
+                iconSource={SMARTPHONE_ICON}
+                iconStyle={styles.matchShowcaseFooterAssetIconLarge as ImageStyle}
               />
             </View>
-          </Pressable>
 
-          <View style={styles.matchShowcaseFooterTabsRow}>
-            <MatchShowcaseFooterTabButton
-              label="مباشر الآن"
-              isActive={leagueTab === "live"}
-              onPress={() => toggleLeagueTab("live")}
-              showDivider
-              accentColor="#FF6677"
-              accentSurface="rgba(255,82,112,0.16)"
-              icon={
-                <Image
-                  source={LIVE_STREAM_ICON}
-                  resizeMode="contain"
-                  style={styles.matchShowcaseFooterAssetIcon as ImageStyle}
-                />
-              }
-            />
-            <MatchShowcaseFooterTabButton
-              label="التوقعات"
-              isActive={leagueTab === "predictions"}
-              onPress={() => toggleLeagueTab("predictions")}
-              showDivider
-              accentColor="#FFDE97"
-              accentSurface="rgba(255,214,126,0.14)"
-              icon={
-                <Image
-                  source={PREVENTION_ICON}
-                  resizeMode="contain"
-                  style={[
-                    styles.matchShowcaseFooterAssetIcon as ImageStyle,
-                    styles.matchShowcaseFooterAssetIconLarge as ImageStyle,
-                    styles.matchShowcaseFooterPredictionIcon as ImageStyle,
-                  ]}
-                />
-              }
-            />
-            <MatchShowcaseFooterTabButton
-              label="الأحداث"
-              isActive={leagueTab === "events"}
-              onPress={() => toggleLeagueTab("events")}
-              accentColor="#63C6FF"
-              accentSurface="rgba(99,198,255,0.14)"
-              icon={
-                <Image
-                  source={SMARTPHONE_ICON}
-                  resizeMode="contain"
-                  style={[
-                    styles.matchShowcaseFooterAssetIcon as ImageStyle,
-                    styles.matchShowcaseFooterAssetIconLarge as ImageStyle,
-                  ]}
-                />
-              }
-            />
-          </View>
-
-          {leagueTab === "events" ? (
-            <View>
-              {props.config.events.map((event) => (
-                <View key={event.id} style={styles.eventCard}>
-                  <View style={styles.eventMinuteBadge}>
-                    <Text style={styles.eventMinuteText}>{event.minute}</Text>
-                  </View>
-                  <View style={styles.eventTextBlock}>
-                    <View style={styles.eventTextRow}>
-                      <Text style={styles.eventSummaryText} numberOfLines={1}>
-                        {`${event.title} · ${event.detail}`}
-                      </Text>
-                      <Text style={styles.eventMoreText}>المزيد</Text>
+            {leagueTab === "events" ? (
+              <View>
+                {props.config.events.map((event) => (
+                  <View key={event.id} style={styles.eventCard}>
+                    <View style={styles.eventMinuteBadge}>
+                      <Text style={styles.eventMinuteText}>{event.minute}</Text>
+                    </View>
+                    <View style={styles.eventTextBlock}>
+                      <View style={styles.eventTextRow}>
+                        <Text style={styles.eventSummaryText} numberOfLines={1}>
+                          {`${event.title} · ${event.detail}`}
+                        </Text>
+                        <Text style={styles.eventMoreText}>المزيد</Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          {leagueTab === "lineup" ? (
-            <View>
-              <View style={styles.lineupSwitchRow}>
-                <ModeSwitchButton
-                  label={props.config.homeTeam.title}
-                  isActive={lineupTeam === "home"}
-                  onPress={() => setLineupTeam("home")}
-                />
-                <ModeSwitchButton
-                  label={props.config.awayTeam.title}
-                  isActive={lineupTeam === "away"}
-                  onPress={() => setLineupTeam("away")}
-                />
+                ))}
               </View>
+            ) : null}
 
-              <View style={styles.lineupSummaryCard}>
-                <Text style={styles.lineupSummaryTitle}>
-                  {selectedTeamLabel}
-                </Text>
-                <Text style={styles.lineupSummaryText}>
-                  التشكيلة الأساسية جاهزة · 11 لاعبًا ظاهرين على الملعب
-                </Text>
-              </View>
-
-              <Pitch players={selectedPlayers} />
-
-              <View style={styles.benchWrap}>
-                <Text style={styles.benchTitle}>دكة البدلاء</Text>
-                <View style={styles.benchGrid}>
-                  {selectedBench.map((player) => (
-                    <View key={player.id} style={styles.benchPill}>
-                      <Text style={styles.benchPillNumber}>
-                        #{player.number}
-                      </Text>
-                      <Text style={styles.benchPillName}>{player.name}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            </View>
-          ) : null}
-
-          {leagueTab === "predictions" ? (
-            <View>
-              <View style={styles.predictionsBoard}>
-                <View style={styles.predictionsTitleRow}>
-                  <RNText style={styles.predictionsTitleText}>التوقع</RNText>
-                </View>
-
-                <View style={styles.predictionsScoreRow}>
-                  <PredictionScoreColumn
-                    side="left"
-                    onChangeScore={(nextValue) =>
-                      setHomePredictionScore(sanitizePredictionValue(nextValue))
-                    }
-                    scoreValue={homePredictionScore}
-                    teamLabel={props.config.homeTeam.title}
+            {leagueTab === "lineup" ? (
+              <View>
+                <View style={styles.lineupSwitchRow}>
+                  <ModeSwitchButton
+                    label={props.config.homeTeam.title}
+                    isActive={lineupTeam === "home"}
+                    onPress={() => setLineupTeam("home")}
                   />
-
-                  <RNText style={styles.predictionsVsText}>VS</RNText>
-
-                  <PredictionScoreColumn
-                    side="right"
-                    onChangeScore={(nextValue) =>
-                      setAwayPredictionScore(sanitizePredictionValue(nextValue))
-                    }
-                    scoreValue={awayPredictionScore}
-                    teamLabel={props.config.awayTeam.title}
+                  <ModeSwitchButton
+                    label={props.config.awayTeam.title}
+                    isActive={lineupTeam === "away"}
+                    onPress={() => setLineupTeam("away")}
                   />
                 </View>
 
-                {homePredictionGoalCount > 0 || awayPredictionGoalCount > 0 ? (
-                  <View style={styles.predictionsScorersRow}>
-                    <PredictionScorerColumn
+                <View style={styles.lineupSummaryCard}>
+                  <Text style={styles.lineupSummaryTitle}>
+                    {selectedTeamLabel}
+                  </Text>
+                  <Text style={styles.lineupSummaryText}>
+                    التشكيلة الأساسية جاهزة · 11 لاعبًا ظاهرين على الملعب
+                  </Text>
+                </View>
+
+                <Pitch players={selectedPlayers} />
+
+                <View style={styles.benchWrap}>
+                  <Text style={styles.benchTitle}>دكة البدلاء</Text>
+                  <View style={styles.benchGrid}>
+                    {selectedBench.map((player) => (
+                      <View key={player.id} style={styles.benchPill}>
+                        <Text style={styles.benchPillNumber}>
+                          #{player.number}
+                        </Text>
+                        <Text style={styles.benchPillName}>{player.name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            ) : null}
+
+            {leagueTab === "predictions" ? (
+              <View style={styles.predictionsSection}>
+                <View style={styles.predictionsBoard}>
+                  <View style={styles.predictionsTitleRow}>
+                    <View style={styles.predictionsHeaderBadge}>
+                      <Ionicons name="flash" size={14} color="#111827" />
+                    </View>
+                    <View style={styles.predictionsTitleCopy}>
+                      <RNText style={styles.predictionsTitleText}>
+                        التوقع
+                      </RNText>
+                      <RNText
+                        style={styles.predictionsMatchText}
+                        numberOfLines={1}
+                      >
+                        {props.config.leagueName}
+                      </RNText>
+                    </View>
+                  </View>
+
+                  <View style={styles.predictionsScoreRow}>
+                    <PredictionScoreColumn
                       side="left"
                       iconSource={props.config.homeTeam.iconSource}
-                      isMenuOpen={(slotIndex) =>
-                        openScorerPicker?.team === "home" &&
-                        openScorerPicker.slotIndex === slotIndex
-                      }
-                      onSelectScorer={(slotIndex, playerId) =>
-                        handleSelectPredictionScorer(
-                          "home",
-                          slotIndex,
-                          playerId,
+                      onChangeScore={(nextValue) =>
+                        setHomePredictionScore(
+                          sanitizePredictionValue(nextValue),
                         )
                       }
-                      onTogglePicker={(slotIndex) =>
-                        toggleScorerPicker("home", slotIndex)
-                      }
-                      players={props.config.homeTeam.lineup}
-                      scorerIds={homePredictionScorers}
+                      scoreValue={homePredictionScore}
                       teamGradient={props.config.homeTeam.gradient}
                       teamLabel={props.config.homeTeam.title}
                       teamShortName={props.config.homeTeam.shortName}
                     />
 
-                    <PredictionScorerColumn
+                    <View style={styles.predictionsVsBadge}>
+                      <RNText style={styles.predictionsVsText}>VS</RNText>
+                    </View>
+
+                    <PredictionScoreColumn
                       side="right"
                       iconSource={props.config.awayTeam.iconSource}
-                      isMenuOpen={(slotIndex) =>
-                        openScorerPicker?.team === "away" &&
-                        openScorerPicker.slotIndex === slotIndex
-                      }
-                      onSelectScorer={(slotIndex, playerId) =>
-                        handleSelectPredictionScorer(
-                          "away",
-                          slotIndex,
-                          playerId,
+                      onChangeScore={(nextValue) =>
+                        setAwayPredictionScore(
+                          sanitizePredictionValue(nextValue),
                         )
                       }
-                      onTogglePicker={(slotIndex) =>
-                        toggleScorerPicker("away", slotIndex)
-                      }
-                      players={props.config.awayTeam.lineup}
-                      scorerIds={awayPredictionScorers}
+                      scoreValue={awayPredictionScore}
                       teamGradient={props.config.awayTeam.gradient}
                       teamLabel={props.config.awayTeam.title}
                       teamShortName={props.config.awayTeam.shortName}
                     />
                   </View>
-                ) : null}
-              </View>
 
-              <View style={styles.pollVotePanel}>
-                <PollVoteRow
-                  isSelected={selectedVoteTeam === "home"}
-                  onPress={() => handleVoteTeam("home")}
-                  teamLabel={props.config.homeTeam.title}
-                  votes={props.config.homeTeam.support}
-                  percentage={Math.round(homeShare * 100)}
-                />
-                <View style={styles.pollVoteDivider} />
-                <PollVoteRow
-                  isSelected={selectedVoteTeam === "away"}
-                  onPress={() => handleVoteTeam("away")}
-                  teamLabel={props.config.awayTeam.title}
-                  votes={props.config.awayTeam.support}
-                  percentage={Math.round(awayShare * 100)}
-                />
-              </View>
+                  {homePredictionGoalCount > 0 ||
+                  awayPredictionGoalCount > 0 ? (
+                    <View style={styles.predictionsScorersRow}>
+                      <PredictionScorerColumn
+                        side="left"
+                        iconSource={props.config.homeTeam.iconSource}
+                        isMenuOpen={(slotIndex) =>
+                          openScorerPicker?.team === "home" &&
+                          openScorerPicker.slotIndex === slotIndex
+                        }
+                        onSelectScorer={(slotIndex, playerId) =>
+                          handleSelectPredictionScorer(
+                            "home",
+                            slotIndex,
+                            playerId,
+                          )
+                        }
+                        onTogglePicker={(slotIndex) =>
+                          toggleScorerPicker("home", slotIndex)
+                        }
+                        players={props.config.homeTeam.lineup}
+                        scorerIds={homePredictionScorers}
+                        teamGradient={props.config.homeTeam.gradient}
+                        teamLabel={props.config.homeTeam.title}
+                        teamShortName={props.config.homeTeam.shortName}
+                      />
 
-              <Pressable
-                onPress={handleSavePrediction}
-                style={[
-                  styles.predictionsSaveButton,
-                  isPredictionSaved ? styles.predictionsSaveButtonSaved : null,
-                ]}
-              >
-                <View style={styles.actionButtonContent}>
-                  <RNText style={styles.predictionsSaveButtonText}>
-                    حفظ التوقع
-                  </RNText>
-                  {isPredictionSaved ? (
-                    <Ionicons
-                      color="#111111"
-                      name="checkmark"
-                      size={14}
-                      style={styles.actionButtonSuccessIcon}
-                    />
+                      <PredictionScorerColumn
+                        side="right"
+                        iconSource={props.config.awayTeam.iconSource}
+                        isMenuOpen={(slotIndex) =>
+                          openScorerPicker?.team === "away" &&
+                          openScorerPicker.slotIndex === slotIndex
+                        }
+                        onSelectScorer={(slotIndex, playerId) =>
+                          handleSelectPredictionScorer(
+                            "away",
+                            slotIndex,
+                            playerId,
+                          )
+                        }
+                        onTogglePicker={(slotIndex) =>
+                          toggleScorerPicker("away", slotIndex)
+                        }
+                        players={props.config.awayTeam.lineup}
+                        scorerIds={awayPredictionScorers}
+                        teamGradient={props.config.awayTeam.gradient}
+                        teamLabel={props.config.awayTeam.title}
+                        teamShortName={props.config.awayTeam.shortName}
+                      />
+                    </View>
                   ) : null}
                 </View>
-              </Pressable>
-            </View>
-          ) : null}
 
-          {leagueTab === "live" ? (
-            <View>
-              <View style={styles.pollTweetSection}>
-                <View style={styles.pollTweetSectionHeader}>
-                  <View style={styles.pollTweetSectionTitleRow}>
-                    <View style={styles.pollTweetSectionLiveDot} />
-                    <Text style={styles.pollTweetSectionKicker}>
-                      مباشر الان
-                    </Text>
-                  </View>
-                  <Text style={styles.pollTweetSectionHint}>
-                    {props.config.hashtag}
-                  </Text>
+                <View style={styles.pollVotePanel}>
+                  <PollVoteRow
+                    isSelected={selectedVoteTeam === "home"}
+                    onPress={() => handleVoteTeam("home")}
+                    teamLabel={props.config.homeTeam.title}
+                    votes={props.config.homeTeam.support}
+                    percentage={Math.round(homeShare * 100)}
+                  />
+                  <View style={styles.pollVoteDivider} />
+                  <PollVoteRow
+                    isSelected={selectedVoteTeam === "away"}
+                    onPress={() => handleVoteTeam("away")}
+                    teamLabel={props.config.awayTeam.title}
+                    votes={props.config.awayTeam.support}
+                    percentage={Math.round(awayShare * 100)}
+                  />
                 </View>
 
-                <View
+                <Pressable
+                  onPress={() => {
+                    void playCardClickSound();
+                    toggleLeagueTab("lineup");
+                  }}
+                  style={styles.predictionsVarLineupButton}
+                >
+                  <View style={styles.predictionsVarLineupIconWrap}>
+                    <Ionicons name="shirt-outline" size={20} color="#111827" />
+                  </View>
+                  <View style={styles.predictionsVarLineupCopy}>
+                    <RNText style={styles.predictionsVarLineupTitle}>
+                      تشكيلة VAR
+                    </RNText>
+                    <RNText style={styles.predictionsVarLineupSubtitle}>
+                      عرض التشكيلة قبل تثبيت التوقع
+                    </RNText>
+                  </View>
+                </Pressable>
+
+                <PredictionVideoCard matchupLabel={props.config.leagueName} />
+
+                <Pressable
+                  onPress={handleSavePrediction}
                   style={[
-                    styles.pollTweetViewport,
-                    { height: props.pollTweetViewportHeight },
+                    styles.predictionsSaveButton,
+                    isPredictionSaved
+                      ? styles.predictionsSaveButtonSaved
+                      : null,
                   ]}
                 >
-                  <Animated.View
+                  <View style={styles.actionButtonContent}>
+                    <RNText style={styles.predictionsSaveButtonText}>
+                      حفظ التوقع
+                    </RNText>
+                    {isPredictionSaved ? (
+                      <Ionicons
+                        color="#111111"
+                        name="checkmark"
+                        size={14}
+                        style={styles.actionButtonSuccessIcon}
+                      />
+                    ) : null}
+                  </View>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {leagueTab === "live" ? (
+              <View>
+                <View style={styles.pollTweetSection}>
+                  <View style={styles.pollTweetSectionHeader}>
+                    <View style={styles.pollTweetSectionTitleRow}>
+                      <View style={styles.pollTweetSectionLiveDot} />
+                      <Text style={styles.pollTweetSectionKicker}>
+                        مباشر الان
+                      </Text>
+                    </View>
+                    <Text style={styles.pollTweetSectionHint}>
+                      {props.config.hashtag}
+                    </Text>
+                  </View>
+
+                  <View
                     style={[
-                      styles.pollTweetTrack,
-                      {
-                        transform: [{ translateY: pollTickerProgress }],
-                      },
+                      styles.pollTweetViewport,
+                      { height: props.pollTweetViewportHeight },
                     ]}
                   >
-                    {loopedLeaguePollTweets.map((tweet, index) => (
-                      <PollTweetCard
-                        key={`${props.config.id}-${tweet.id}-${index}`}
-                        cardHeight={props.pollTweetCardHeight}
-                        tweet={tweet}
-                      />
-                    ))}
-                  </Animated.View>
+                    <Animated.View
+                      style={[
+                        styles.pollTweetTrack,
+                        {
+                          transform: [{ translateY: pollTickerProgress }],
+                        },
+                      ]}
+                    >
+                      {loopedLeaguePollTweets.map((tweet, index) => (
+                        <PollTweetCard
+                          key={`${props.config.id}-${tweet.id}-${index}`}
+                          cardHeight={props.pollTweetCardHeight}
+                          tweet={tweet}
+                        />
+                      ))}
+                    </Animated.View>
 
-                  <LinearGradient
-                    {...getNativePointerEventsProps("none")}
-                    colors={["#05070D", "rgba(5,7,13,0.92)", "rgba(5,7,13,0)"]}
-                    start={{ x: 0.5, y: 0 }}
-                    end={{ x: 0.5, y: 1 }}
-                    style={[
-                      styles.pollTweetFadeTop,
-                      getWebPointerEventsStyle("none"),
-                    ]}
-                  />
+                    <LinearGradient
+                      {...getNativePointerEventsProps("none")}
+                      colors={[
+                        "#05070D",
+                        "rgba(5,7,13,0.92)",
+                        "rgba(5,7,13,0)",
+                      ]}
+                      start={{ x: 0.5, y: 0 }}
+                      end={{ x: 0.5, y: 1 }}
+                      style={[
+                        styles.pollTweetFadeTop,
+                        getWebPointerEventsStyle("none"),
+                      ]}
+                    />
 
-                  <LinearGradient
-                    {...getNativePointerEventsProps("none")}
-                    colors={["rgba(5,7,13,0)", "rgba(5,7,13,0.92)", "#05070D"]}
-                    start={{ x: 0.5, y: 0 }}
-                    end={{ x: 0.5, y: 1 }}
-                    style={[
-                      styles.pollTweetFadeBottom,
-                      getWebPointerEventsStyle("none"),
-                    ]}
+                    <LinearGradient
+                      {...getNativePointerEventsProps("none")}
+                      colors={[
+                        "rgba(5,7,13,0)",
+                        "rgba(5,7,13,0.92)",
+                        "#05070D",
+                      ]}
+                      start={{ x: 0.5, y: 0 }}
+                      end={{ x: 0.5, y: 1 }}
+                      style={[
+                        styles.pollTweetFadeBottom,
+                        getWebPointerEventsStyle("none"),
+                      ]}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.pollCommentComposer}>
+                  <Ionicons
+                    name="chatbubble-ellipses-outline"
+                    size={16}
+                    color="rgba(255,255,255,0.58)"
                   />
+                  <Text style={styles.pollCommentComposerText}>
+                    اكتب تعليقًا سريعًا...
+                  </Text>
                 </View>
               </View>
+            ) : null}
+          </View>
+        </LinearGradient>
+      </GlassCard>
 
-              <View style={styles.pollCommentComposer}>
-                <Ionicons
-                  name="chatbubble-ellipses-outline"
-                  size={16}
-                  color="rgba(255,255,255,0.58)"
-                />
-                <Text style={styles.pollCommentComposerText}>
-                  اكتب تعليقًا سريعًا...
-                </Text>
-              </View>
-            </View>
-          ) : null}
-        </View>
-      </LinearGradient>
-    </GlassCard>
+      <VarChatSettingsModal
+        visible={isVarChatSettingsOpen}
+        onClose={() => setIsVarChatSettingsOpen(false)}
+      />
+    </>
   );
 }

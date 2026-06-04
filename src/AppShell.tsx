@@ -1,10 +1,11 @@
-import React, { ReactNode, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { StatusBar } from "expo-status-bar";
 import {
   Modal,
-  Pressable,
+  Platform,
   SafeAreaView,
   Share,
   Text,
@@ -29,16 +30,17 @@ import ProfileScreen from "./screens/profile";
 import AdminDashboardScreen from "./screens/AdminDashboardScreen";
 import FloatingThemeSwitch from "./components/FloatingThemeSwitch";
 import BottomNav from "./components/BottomNav";
-import SealCheckIcon from "./components/SealCheckIcon";
 import {
   client as appwriteClient,
   deleteAppwritePost,
+  findAppwriteProfileIndexByDisplayVarId,
   hasAppwriteProjectConfig,
   listAppwriteFollowingVarIds,
   listAppwriteProfileIndexesByVarIds,
+  normalizeAppwriteDisplayVarId,
+  saveAppwriteNotification,
   syncAppwriteSocialInteraction,
   updateAppwritePost,
-  type AppwriteAuthUser,
 } from "./lib/appwrite";
 import type {
   AuthMode,
@@ -49,7 +51,6 @@ import type {
   PendingAuthIntent,
   Post,
   PostReply,
-  ProfileData,
 } from "./app.types";
 import { styles, SHELL_WIDTH } from "./appshell/appshell.styles";
 import {
@@ -67,19 +68,64 @@ import {
 import { PostComposerModal } from "./appshell/PostComposerModal";
 import { StudioModal } from "./appshell/StudioModal";
 import { useAppwriteAuth } from "./appshell/appshell.auth";
-import { useAppwritePostsSync, publishAppwritePost } from "./appshell/appshell.posts";
+import {
+  useAppwritePostsSync,
+  publishAppwritePost,
+} from "./appshell/appshell.posts";
 import {
   useAppwriteVarProfile,
   makeTrackVarInteraction,
 } from "./appshell/appshell.profile";
-
+import { lockMatchPrediction } from "./appshell/appshell.predictions";
+import type { MatchPredictionLockInput } from "./lib/predictions/matchPrediction.utils";
 
 const POST_COMPOSER_DEFAULT_TITLE = "رسالة عامة";
 const INITIAL_NOTICE = hasAppwriteProjectConfig()
   ? "تم تجهيز الواجهة وربط Appwrite الأساسي."
   : "تم تجهيز الواجهة بالكامل داخل Expo.";
 
-export default function AppShell(){
+function readPendingAddDisplayVarIdFromUrl() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  try {
+    const currentUrl = new URL(window.location.href);
+    const addPathMatch = currentUrl.pathname.match(/^\/add\/([^/?#]+)/i);
+
+    if (!addPathMatch?.[1]) {
+      return "";
+    }
+
+    return normalizeAppwriteDisplayVarId(decodeURIComponent(addPathMatch[1]));
+  } catch {
+    return "";
+  }
+}
+
+function clearHandledAddRouteFromUrl() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const currentUrl = new URL(window.location.href);
+
+    if (!/^\/add\//i.test(currentUrl.pathname)) {
+      return;
+    }
+
+    window.history.replaceState(
+      {},
+      "",
+      `/${currentUrl.search}${currentUrl.hash}`,
+    );
+  } catch {
+    // Keep the current URL if history replacement is unavailable.
+  }
+}
+
+export default function AppShell() {
   const { height, width } = useWindowDimensions();
   const [currentTab, setCurrentTab] = useState<MainTab>("home");
   const [homeMode, setHomeMode] = useState<HomeMode>("tiktok");
@@ -110,8 +156,13 @@ export default function AppShell(){
   );
   const [isPublishingPost, setIsPublishingPost] = useState(false);
   const [postComposerNotice, setPostComposerNotice] = useState("");
+  const [isRefreshingVisibleAppData, setIsRefreshingVisibleAppData] =
+    useState(false);
   const [pendingAuthIntent, setPendingAuthIntent] =
     useState<PendingAuthIntent | null>(null);
+  const [pendingAddDisplayVarId, setPendingAddDisplayVarId] = useState(
+    readPendingAddDisplayVarIdFromUrl,
+  );
   const [pendingAuthReturnTab, setPendingAuthReturnTab] =
     useState<MainTab | null>(null);
   const [shouldResumePendingAuth, setShouldResumePendingAuth] = useState(false);
@@ -175,7 +226,10 @@ export default function AppShell(){
     setNotice,
   });
 
-  const trackVarInteraction = makeTrackVarInteraction(appwriteUser, refreshVarProfile);
+  const trackVarInteraction = makeTrackVarInteraction(
+    appwriteUser,
+    refreshVarProfile,
+  );
 
   useEffect(() => {
     if (!notice) {
@@ -284,7 +338,13 @@ export default function AppShell(){
     };
   }, [followedAuthorIds, isLoggedIn]);
 
-  const { refreshPosts, loadMorePosts, isRefreshingPosts, isLoadingMorePosts, hasMorePosts } = useAppwritePostsSync({
+  const {
+    refreshPosts,
+    loadMorePosts,
+    isRefreshingPosts,
+    isLoadingMorePosts,
+    hasMorePosts,
+  } = useAppwritePostsSync({
     isLoggedIn,
     appwriteUser,
     profile,
@@ -292,10 +352,43 @@ export default function AppShell(){
     setNotice,
   });
 
+  const isRefreshingAnyAppData =
+    isRefreshingPosts || isRefreshingVisibleAppData;
+
+  const refreshVisibleAppData = async () => {
+    if (isRefreshingAnyAppData) {
+      return;
+    }
+
+    setIsRefreshingVisibleAppData(true);
+
+    try {
+      await Promise.all([
+        refreshPosts(),
+        appwriteUser?.varId
+          ? refreshVarProfile(appwriteUser.varId, true)
+          : Promise.resolve(),
+      ]);
+    } finally {
+      setIsRefreshingVisibleAppData(false);
+    }
+  };
+
   const canAccessAdminPanel = useMemo(
     () => resolveCanAccessAdminPanel(appwriteUser, profile),
     [appwriteUser, profile, profile.role],
   );
+
+  const handleLockMatchPrediction = (input: MatchPredictionLockInput) => {
+    const varId = appwriteUser?.varId.trim() || profile.varId.trim();
+
+    void lockMatchPrediction({
+      varId,
+      input,
+      setProfile,
+      setNotice,
+    });
+  };
 
   useEffect(() => {
     if (currentTab !== "home" || homeMode !== "tiktok") {
@@ -460,7 +553,11 @@ export default function AppShell(){
     setNotice(message);
     setPostComposerNotice(message);
 
-    if (message.includes("فشل") || message.includes("تعذر") || message.includes("غير مكتمل")) {
+    if (
+      message.includes("فشل") ||
+      message.includes("تعذر") ||
+      message.includes("غير مكتمل")
+    ) {
       console.warn("[WEBPLUS] Post publish blocked:", message);
     }
   };
@@ -731,6 +828,12 @@ export default function AppShell(){
           targetId: normalizedAuthorVarId,
           active: nextFollowing,
         });
+
+        if (nextFollowing) {
+          void saveFollowNotification(normalizedAuthorVarId).catch(
+            () => undefined,
+          );
+        }
       } catch {
         setFollowedAuthorIds((currentIds) =>
           nextFollowing
@@ -747,6 +850,156 @@ export default function AppShell(){
       }
     })();
   };
+
+  const saveFollowNotification = async (recipientVarId: string) => {
+    const currentVarId = appwriteUser?.varId.trim() || profile.varId.trim();
+    const normalizedCurrentVarId = normalizeAuthorId(currentVarId);
+    const normalizedRecipientVarId = normalizeAuthorId(recipientVarId);
+
+    if (!normalizedCurrentVarId || !normalizedRecipientVarId) {
+      return;
+    }
+
+    const followerIdentity = buildCurrentUserPostIdentity({
+      varId: currentVarId || normalizedCurrentVarId,
+      profile,
+      appwriteUser,
+    });
+    const followerName =
+      followerIdentity.author?.trim() ||
+      profile.displayName.trim() ||
+      appwriteUser?.name.trim() ||
+      "مستخدم VAR";
+
+    await saveAppwriteNotification(normalizedRecipientVarId, {
+      id: `follow-${normalizedCurrentVarId}-${normalizedRecipientVarId}`,
+      title: "إضافة جديدة عبر بطاقة VAR",
+      body: `${followerName} أضافك إلى المتابعين عبر الباركود.`,
+      timeLabel: "الآن",
+      iconName: "person-add-outline",
+      accentColor: "#34D399",
+      avatarUri: followerIdentity.authorAvatarUri || profile.avatarUri,
+      verified: Boolean(followerIdentity.authorVerified),
+      sortOrder: Date.now(),
+    });
+  };
+
+  const handleAddUserByDisplayVarId = async (inputDisplayVarId: string) => {
+    const normalizedDisplayVarId =
+      normalizeAppwriteDisplayVarId(inputDisplayVarId);
+    const currentVarId = appwriteUser?.varId.trim() || profile.varId.trim();
+    const normalizedCurrentVarId = normalizeAuthorId(currentVarId);
+
+    if (!normalizedDisplayVarId) {
+      return {
+        ok: false,
+        message: "أدخل VAR ID صالحًا مثل VAR-1234567.",
+      };
+    }
+
+    if (
+      normalizedDisplayVarId ===
+      normalizeAppwriteDisplayVarId(
+        profile.displayVarId || appwriteUser?.displayVarId || "",
+      )
+    ) {
+      return {
+        ok: false,
+        message: "لا يمكنك إضافة بطاقتك الشخصية.",
+      };
+    }
+
+    const profileIndex = await findAppwriteProfileIndexByDisplayVarId(
+      normalizedDisplayVarId,
+    );
+
+    if (!profileIndex?.varId.trim()) {
+      return {
+        ok: false,
+        message: "لم يتم العثور على مستخدم بهذا المعرف.",
+      };
+    }
+
+    const normalizedAuthorVarId = normalizeAuthorId(profileIndex.varId);
+
+    if (
+      !normalizedAuthorVarId ||
+      normalizedAuthorVarId === normalizedCurrentVarId
+    ) {
+      return {
+        ok: false,
+        message: "لا يمكنك إضافة نفس الحساب.",
+      };
+    }
+
+    if (followedAuthorIds.includes(normalizedAuthorVarId)) {
+      return {
+        ok: true,
+        message: `أنت تتابع ${profileIndex.displayName || normalizedDisplayVarId} بالفعل.`,
+      };
+    }
+
+    setFollowedAuthorIds((currentIds) =>
+      Array.from(new Set([...currentIds, normalizedAuthorVarId])),
+    );
+
+    try {
+      await syncAppwriteSocialInteraction({
+        varId: currentVarId,
+        mode: "profile",
+        action: "follow",
+        targetId: normalizedAuthorVarId,
+        active: true,
+      });
+
+      void saveFollowNotification(normalizedAuthorVarId).catch(() => undefined);
+    } catch {
+      setFollowedAuthorIds((currentIds) =>
+        currentIds.filter((candidate) => candidate !== normalizedAuthorVarId),
+      );
+
+      return {
+        ok: false,
+        message: "تعذر إضافة المستخدم الآن.",
+      };
+    }
+
+    return {
+      ok: true,
+      message: `تمت إضافة ${profileIndex.displayName || normalizedDisplayVarId}.`,
+    };
+  };
+
+  useEffect(() => {
+    if (!pendingAddDisplayVarId) {
+      return;
+    }
+
+    if (!isLoggedIn) {
+      setCurrentTab("account");
+      setNotice("سجل الدخول أولًا لإضافة صاحب بطاقة VAR.");
+      return;
+    }
+
+    let isActive = true;
+
+    void (async () => {
+      const result = await handleAddUserByDisplayVarId(pendingAddDisplayVarId);
+
+      if (!isActive) {
+        return;
+      }
+
+      setNotice(result.message);
+      setPendingAddDisplayVarId("");
+      clearHandledAddRouteFromUrl();
+      setCurrentTab("account");
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [isLoggedIn, pendingAddDisplayVarId]);
 
   const applySupportToggle = (clubId: FanClubId) => {
     const alreadySupported = supportedTeams.includes(clubId);
@@ -841,7 +1094,9 @@ export default function AppShell(){
 
       const updatedPosts = currentPosts
         .map((post) => {
-          if (post.id !== postId) {
+          const postTargetId = post.sourceId?.trim() || String(post.id);
+
+          if (postTargetId !== interactionTargetId) {
             return post;
           }
 
@@ -869,10 +1124,17 @@ export default function AppShell(){
       }
 
       const localFeedKey = `repost-local-${interactionTargetId}-${Date.now()}`;
+      const basePost =
+        currentPosts.find((post) => {
+          const postTargetId = post.sourceId?.trim() || String(post.id);
+
+          return postTargetId === interactionTargetId && !post.repostMeta;
+        }) || targetPost;
+      const { repostMeta: _repostMeta, ...postForRepost } = basePost;
 
       return [
         {
-          ...targetPost,
+          ...postForRepost,
           id: hashFeedEntryId(localFeedKey),
           feedKey: localFeedKey,
           repostMeta: {
@@ -888,7 +1150,7 @@ export default function AppShell(){
             authorVerified: currentUserIdentity.authorVerified,
             handle:
               currentUserIdentity.handle?.trim() ||
-              createPostHandle(profile.username, currentUserVarId),
+              createPostHandle(profile.username.trim() || currentUserVarId),
             time: formatPostTime(new Date().toISOString()),
           },
         },
@@ -906,21 +1168,28 @@ export default function AppShell(){
     });
   };
 
-  const sharePost = async (postId: number) => {
+  const sharePost = async (postId: number): Promise<boolean> => {
     const post = posts.find((candidate) => candidate.id === postId);
 
     if (!post) {
-      return;
+      return false;
     }
 
     const interactionTargetId = post.sourceId?.trim() || String(postId);
+    const shareText = `${post.title ? `${post.title}\n` : ""}${post.content}\n${post.handle}`;
 
     const applyLocalShare = () => {
       let didUpdate = false;
 
       setPosts((currentPosts) =>
         currentPosts.map((candidate) => {
-          if (candidate.id !== postId || candidate.sharedByMe) {
+          const candidateTargetId =
+            candidate.sourceId?.trim() || String(candidate.id);
+
+          if (
+            candidateTargetId !== interactionTargetId ||
+            candidate.sharedByMe
+          ) {
             return candidate;
           }
 
@@ -937,9 +1206,97 @@ export default function AppShell(){
       return didUpdate;
     };
 
+    if (Platform.OS === "web") {
+      const webNavigator =
+        typeof navigator === "undefined"
+          ? null
+          : (navigator as Navigator & {
+              share?: (data: {
+                title?: string;
+                text?: string;
+              }) => Promise<void>;
+              clipboard?: { writeText?: (text: string) => Promise<void> };
+            });
+
+      try {
+        if (webNavigator?.share) {
+          await webNavigator.share({
+            title: post.title || "VAR X",
+            text: shareText,
+          });
+
+          const didUpdate = applyLocalShare();
+          if (didUpdate) {
+            trackVarInteraction({
+              mode: "x",
+              action: "share",
+              targetId: interactionTargetId,
+              active: true,
+            });
+          }
+          setNotice(
+            didUpdate
+              ? "تم فتح نافذة مشاركة المنشور."
+              : "هذا المنشور تمت مشاركته مسبقًا.",
+          );
+          return didUpdate;
+        }
+
+        if (webNavigator?.clipboard?.writeText) {
+          await webNavigator.clipboard.writeText(shareText);
+
+          const didUpdate = applyLocalShare();
+          if (didUpdate) {
+            trackVarInteraction({
+              mode: "x",
+              action: "share",
+              targetId: interactionTargetId,
+              active: true,
+            });
+          }
+          setNotice(
+            didUpdate
+              ? "تم نسخ المنشور للمشاركة."
+              : "تم نسخ المنشور، وهو مشارك مسبقًا.",
+          );
+          return didUpdate;
+        }
+      } catch (error) {
+        const errorName = error instanceof Error ? error.name : "";
+        if (errorName === "AbortError") {
+          setNotice("تم إغلاق نافذة المشاركة.");
+          return false;
+        }
+
+        if (webNavigator?.clipboard?.writeText) {
+          try {
+            await webNavigator.clipboard.writeText(shareText);
+
+            const didUpdate = applyLocalShare();
+            if (didUpdate) {
+              trackVarInteraction({
+                mode: "x",
+                action: "share",
+                targetId: interactionTargetId,
+                active: true,
+              });
+            }
+            setNotice(
+              didUpdate
+                ? "تعذر فتح نافذة المشاركة، فتم نسخ المنشور."
+                : "تم نسخ المنشور، وهو مشارك مسبقًا.",
+            );
+            return didUpdate;
+          } catch {
+            // Continue to React Native Share fallback below.
+          }
+        }
+      }
+    }
+
     try {
       const shareResult = await Share.share({
-        message: `${post.title ? `${post.title}\n` : ""}${post.content}\n${post.handle}`,
+        message: shareText,
       });
 
       if (shareResult.action === Share.sharedAction) {
@@ -957,10 +1314,11 @@ export default function AppShell(){
             ? "تم فتح نافذة مشاركة المنشور."
             : "هذا المنشور تمت مشاركته مسبقًا.",
         );
-        return;
+        return didUpdate;
       }
 
       setNotice("تم إغلاق نافذة المشاركة.");
+      return false;
     } catch {
       const didUpdate = applyLocalShare();
       if (didUpdate) {
@@ -976,6 +1334,7 @@ export default function AppShell(){
           ? "المشاركة غير مدعومة هنا، فتم حفظ التفاعل محليًا."
           : "تعذر فتح واجهة المشاركة على هذا الجهاز.",
       );
+      return didUpdate;
     }
   };
 
@@ -1004,9 +1363,7 @@ export default function AppShell(){
       );
       setNotice("تم حذف المنشور.");
     } catch (error) {
-      setNotice(
-        error instanceof Error ? error.message : "تعذر حذف المنشور.",
-      );
+      setNotice(error instanceof Error ? error.message : "تعذر حذف المنشور.");
     }
   };
 
@@ -1042,9 +1399,7 @@ export default function AppShell(){
       );
       setNotice("تم تحديث المنشور.");
     } catch (error) {
-      setNotice(
-        error instanceof Error ? error.message : "تعذر تحديث المنشور.",
-      );
+      setNotice(error instanceof Error ? error.message : "تعذر تحديث المنشور.");
     }
   };
 
@@ -1165,11 +1520,15 @@ export default function AppShell(){
           onTogglePostRepost={togglePostRepost}
           onSharePost={sharePost}
           currentUserVarId={profile.varId || appwriteUser?.varId || ""}
-          currentUserDisplayName={profile.displayName || appwriteUser?.name || ""}
+          currentUserDisplayName={
+            profile.displayName || appwriteUser?.name || ""
+          }
           currentUserDisplayVarId={
             profile.displayVarId || appwriteUser?.displayVarId || ""
           }
-          currentUserAvatarUri={profile.avatarUri || appwriteUser?.avatarUri || ""}
+          currentUserAvatarUri={
+            profile.avatarUri || appwriteUser?.avatarUri || ""
+          }
           currentUserJoinDate={profile.joinDate}
           currentUserNationality={profile.nationality}
           currentUserUsername={profile.username || appwriteUser?.username || ""}
@@ -1186,9 +1545,9 @@ export default function AppShell(){
           resumeReplyPostId={resumeReplyPostId}
           onReplyIntentConsumed={consumeReplyIntent}
           onShowNotice={setNotice}
-          onRefreshPosts={refreshPosts}
+          onRefreshPosts={refreshVisibleAppData}
           onLoadMorePosts={loadMorePosts}
-          isRefreshingPosts={isRefreshingPosts}
+          isRefreshingPosts={isRefreshingAnyAppData}
           isLoadingMorePosts={isLoadingMorePosts}
           hasMorePosts={hasMorePosts}
           onDeletePost={deletePost}
@@ -1212,11 +1571,20 @@ export default function AppShell(){
           supportedTeams={supportedTeams}
           onRequireAuth={requireAuth}
           onToggleSupport={toggleSupport}
+          onRefresh={refreshVisibleAppData}
+          isRefreshing={isRefreshingAnyAppData}
         />
       );
       break;
     case "leagues":
-      screen = <LeaguesScreen posts={posts} />;
+      screen = (
+        <LeaguesScreen
+          posts={posts}
+          onRefresh={refreshVisibleAppData}
+          isRefreshing={isRefreshingAnyAppData}
+          onLockMatchPrediction={handleLockMatchPrediction}
+        />
+      );
       break;
     case "account":
       screen = isLoggedIn ? (
@@ -1241,20 +1609,28 @@ export default function AppShell(){
           adminRoleLabel={profile.role === "admin" ? "ADMIN" : "MEMBER"}
           posts={posts}
           profile={profile}
+          followedProfiles={followedProfiles}
+          onRefresh={refreshVisibleAppData}
+          isRefreshing={isRefreshingAnyAppData}
           onSaveProfile={(nextProfile) => {
-            void persistAppwriteProfile(nextProfile, appwriteUser).then((savedUser) => {
-              if (savedUser) {
-                void refreshVarProfile(savedUser.varId, true);
-              }
-            });
+            void persistAppwriteProfile(nextProfile, appwriteUser).then(
+              (savedUser) => {
+                if (savedUser) {
+                  void refreshVarProfile(savedUser.varId, true);
+                }
+              },
+            );
           }}
           onSignOut={signOut}
+          onAddUserByDisplayVarId={handleAddUserByDisplayVarId}
         />
       ) : (
         <AuthScreen
           authMode={authMode}
           onChangeMode={setAuthMode}
           onStartGoogleLogin={writeStoredGoogleAuthSnapshot}
+          onRefresh={refreshVisibleAppData}
+          isRefreshing={isRefreshingAnyAppData}
           onSuccess={completeAuthFlow}
         />
       );
@@ -1375,6 +1751,7 @@ export default function AppShell(){
               adminUser={appwriteUser}
               localPostsCount={posts.length}
               profile={profile}
+              onRefreshAppData={refreshVisibleAppData}
               onClose={() => setIsAdminDashboardOpen(false)}
             />
           ) : null}
@@ -1383,7 +1760,3 @@ export default function AppShell(){
     </SafeAreaView>
   );
 }
-
-
-
-

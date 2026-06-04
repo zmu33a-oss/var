@@ -591,6 +591,16 @@ export function resolveCanAccessAdminPanel(
   return false;
 }
 
+const EXPO_WEB_DEV_PORTS = new Set(["8081", "5174", "19006", "8082"]);
+
+function resolveAdminDevServerOrigin(protocol: string, hostname: string, port: string) {
+  if (EXPO_WEB_DEV_PORTS.has(port)) {
+    return `${protocol}//${hostname}:3000`;
+  }
+
+  return `${protocol}//${hostname}${port ? `:${port}` : ""}`;
+}
+
 export function resolveAdminPanelUrl() {
   const configuredUrl =
     process.env.EXPO_PUBLIC_ADMIN_PANEL_URL?.trim().replace(/\/+$/, "") || "";
@@ -603,16 +613,9 @@ export function resolveAdminPanelUrl() {
 
   if (IS_WEB_RUNTIME && typeof window !== "undefined") {
     const { protocol, hostname, port } = window.location;
+    const adminOrigin = resolveAdminDevServerOrigin(protocol, hostname, port);
 
-    if (hostname === "localhost" && port === "8081") {
-      return `${protocol}//${hostname}:3000/admin/`;
-    }
-
-    if (hostname === "localhost" && port === "5174") {
-      return `${protocol}//${hostname}:3000/admin/`;
-    }
-
-    return `${protocol}//${hostname}${port ? `:${port}` : ""}/admin/`;
+    return `${adminOrigin}/admin/`;
   }
 
   return "";

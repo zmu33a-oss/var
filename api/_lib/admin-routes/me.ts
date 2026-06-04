@@ -3,7 +3,7 @@ import {
   readAdminConfig,
   requireAdminSession,
   sendJson,
-} from "../admin-shared";
+} from "../admin-shared.js";
 
 export async function handler(request: any, response: any) {
   if (handleOptions(request, response)) {
@@ -32,11 +32,7 @@ export async function handler(request: any, response: any) {
   } catch (error) {
     const code = error instanceof Error ? error.message : "UNKNOWN";
     const status =
-      code === "MISSING_SESSION"
-        ? 401
-        : code === "NOT_ADMIN"
-          ? 403
-          : 500;
+      code === "MISSING_SESSION" ? 401 : code === "NOT_ADMIN" ? 403 : 500;
 
     sendJson(response, status, {
       ok: false,

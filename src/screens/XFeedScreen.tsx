@@ -1,6 +1,8 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
+  Animated,
+  Easing,
   Image,
   Modal,
   Platform,
@@ -9,6 +11,7 @@ import {
   ScrollView,
   Text,
   TextInput,
+  type GestureResponderEvent,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -22,9 +25,7 @@ import {
   findAppwriteProfileIndexByDisplayVarId,
   getAppwriteVarProfile,
 } from "../lib/appwrite";
-import type {
-  AppwriteLockedPrediction,
-} from "../lib/appwrite";
+import type { AppwriteLockedPrediction } from "../lib/appwrite";
 import type {
   FollowingProfileCard,
   PendingAuthIntent,
@@ -58,7 +59,6 @@ import {
 import { XPostCard, XReplyCard } from "./x-feed/XPostCard";
 import { XNotificationsScreen } from "./x-feed/XMessagesScreen";
 import { XHashtagTrendCard } from "./x-feed/XHashtagDirectory";
-import { XFollowingDeck } from "./x-feed/XFollowingDeck";
 import { XProfileHub } from "./x-feed/XProfileHub";
 import { XAuthorProfileScreen } from "./x-feed/XAuthorProfileScreen";
 import { XPostActionsModal } from "./x-feed/XPostActionsModal";
@@ -83,7 +83,7 @@ type XFeedScreenProps = {
   onRequireAuth: (message?: string, pendingIntent?: PendingAuthIntent) => void;
   onTogglePostLike: (postId: number) => void;
   onTogglePostRepost: (postId: number) => void;
-  onSharePost: (postId: number) => void;
+  onSharePost: (postId: number) => Promise<boolean>;
   currentUserVarId: string;
   currentUserDisplayName: string;
   currentUserDisplayVarId: string;
@@ -115,6 +115,11 @@ type OpenedAuthorReplyItem = import("../app.types").PostReply & {
 };
 
 const CLICK_SOUND = require("../../assets/audio/click.mp3.mp3");
+const WEB_PULL_REFRESH_TRIGGER_DISTANCE = 76;
+const WEB_PULL_REFRESH_MAX_DISTANCE = 112;
+const seenPrivateMessageIdsByUser = new Map<string, Record<string, true>>();
+const seenNotificationIdsByUser = new Map<string, Record<string, true>>();
+const notifiedMessageIdsByUser = new Map<string, Set<string>>();
 
 export default function XFeedScreen(props: XFeedScreenProps) {
   const { width: windowWidth } = useWindowDimensions();
@@ -168,22 +173,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       (followedId) =>
         normalizeAuthorId(followedId) === normalizeAuthorId(authorVarId),
     );
-  const followingPosts = useMemo(() => {
-    if (!followedAuthorIds.length) {
-      return [];
-    }
-
-    const followedSet = new Set(
-      followedAuthorIds.map((authorId) => normalizeAuthorId(authorId)),
-    );
-
-    return posts.filter((post) => {
-      const authorId = normalizeAuthorId(post.authorId?.trim() || "");
-
-      return Boolean(authorId && followedSet.has(authorId));
-    });
-  }, [followedAuthorIds, posts]);
-  const [activeTab, setActiveTab] = useState<XFeedTab>("for-you");
+  const [activeTab, setActiveTab] = useState<XFeedTab>("timeline");
   const [replyDraft, setReplyDraft] = useState("");
   const [replyTargetPost, setReplyTargetPost] = useState<Post | null>(null);
   const [openedPost, setOpenedPost] = useState<Post | null>(null);
@@ -193,6 +183,8 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   const [openedMessageThreadProfile, setOpenedMessageThreadProfile] =
     useState<FollowingProfileCard | null>(null);
   const [isHashtagDirectoryOpen, setIsHashtagDirectoryOpen] = useState(false);
+  const [isHashtagListExpanded, setIsHashtagListExpanded] = useState(false);
+  const [hashtagSearchQuery, setHashtagSearchQuery] = useState("");
   const [openedAuthorProfile, setOpenedAuthorProfile] =
     useState<OpenedAuthorProfile | null>(null);
   const [authorLockedPredictions, setAuthorLockedPredictions] = useState<
@@ -232,7 +224,14 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   >([]);
   const notifiedMessageIdsRef = useRef<Set<string>>(new Set());
   const realtimeUnsubscribeRef = useRef<(() => void) | null>(null);
+  const feedScrollOffsetYRef = useRef(0);
+  const webPullStartYRef = useRef<number | null>(null);
+  const hasHydratedDirectMessagesRef = useRef(false);
+  const pendingSeenPrivateHydrationUserRef = useRef<string | null>(null);
+  const pendingSeenNotificationHydrationUserRef = useRef<string | null>(null);
+  const hashtagArrowTranslateY = useRef(new Animated.Value(0)).current;
   const swipeSoundRef = useRef<WebAudioInstance | null>(null);
+  const [webPullDistance, setWebPullDistance] = useState(0);
   const clickSoundUri = useMemo(() => {
     try {
       const resolvedSource = Image.resolveAssetSource(CLICK_SOUND);
@@ -304,7 +303,8 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       (profile) => normalizeAuthorId(profile.varId) === normalizedAuthorVarId,
     );
     const matchingPost = posts.find(
-      (post) => normalizeAuthorId(post.authorId || "") === normalizedAuthorVarId,
+      (post) =>
+        normalizeAuthorId(post.authorId || "") === normalizedAuthorVarId,
     );
 
     return {
@@ -323,6 +323,123 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   };
 
   const trendingHashtags = useMemo(() => buildTrendingHashtags(posts), [posts]);
+  const filteredHashtags = useMemo(() => {
+    const normalizedQuery = hashtagSearchQuery
+      .trim()
+      .replace(/^#/, "")
+      .toLocaleLowerCase();
+
+    if (!normalizedQuery) {
+      return trendingHashtags;
+    }
+
+    return trendingHashtags.filter((trend) =>
+      trend.label
+        .replace(/^#/, "")
+        .toLocaleLowerCase()
+        .includes(normalizedQuery),
+    );
+  }, [hashtagSearchQuery, trendingHashtags]);
+
+  useEffect(() => {
+    if (!isHashtagDirectoryOpen || !trendingHashtags.length) {
+      hashtagArrowTranslateY.setValue(0);
+      return;
+    }
+
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(hashtagArrowTranslateY, {
+          toValue: 5,
+          duration: 360,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(hashtagArrowTranslateY, {
+          toValue: -5,
+          duration: 360,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(hashtagArrowTranslateY, {
+          toValue: 0,
+          duration: 220,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [hashtagArrowTranslateY, isHashtagDirectoryOpen, trendingHashtags.length]);
+
+  useEffect(() => {
+    hasHydratedDirectMessagesRef.current = false;
+
+    if (!isLoggedIn || !normalizedCurrentUserVarId) {
+      pendingSeenPrivateHydrationUserRef.current = null;
+      pendingSeenNotificationHydrationUserRef.current = null;
+      notifiedMessageIdsRef.current = new Set();
+      setSeenPrivateMessageIds({});
+      setSeenNotificationIds({});
+      return;
+    }
+
+    const cachedNotifiedIds =
+      notifiedMessageIdsByUser.get(normalizedCurrentUserVarId) ?? new Set();
+    notifiedMessageIdsByUser.set(normalizedCurrentUserVarId, cachedNotifiedIds);
+    notifiedMessageIdsRef.current = cachedNotifiedIds;
+    pendingSeenPrivateHydrationUserRef.current = normalizedCurrentUserVarId;
+    pendingSeenNotificationHydrationUserRef.current =
+      normalizedCurrentUserVarId;
+    setSeenPrivateMessageIds(
+      seenPrivateMessageIdsByUser.get(normalizedCurrentUserVarId) ?? {},
+    );
+    setSeenNotificationIds(
+      seenNotificationIdsByUser.get(normalizedCurrentUserVarId) ?? {},
+    );
+  }, [isLoggedIn, normalizedCurrentUserVarId]);
+
+  useEffect(() => {
+    if (!isLoggedIn || !normalizedCurrentUserVarId) {
+      return;
+    }
+
+    if (
+      pendingSeenPrivateHydrationUserRef.current === normalizedCurrentUserVarId
+    ) {
+      pendingSeenPrivateHydrationUserRef.current = null;
+      return;
+    }
+
+    seenPrivateMessageIdsByUser.set(
+      normalizedCurrentUserVarId,
+      seenPrivateMessageIds,
+    );
+  }, [isLoggedIn, normalizedCurrentUserVarId, seenPrivateMessageIds]);
+
+  useEffect(() => {
+    if (!isLoggedIn || !normalizedCurrentUserVarId) {
+      return;
+    }
+
+    if (
+      pendingSeenNotificationHydrationUserRef.current ===
+      normalizedCurrentUserVarId
+    ) {
+      pendingSeenNotificationHydrationUserRef.current = null;
+      return;
+    }
+
+    seenNotificationIdsByUser.set(
+      normalizedCurrentUserVarId,
+      seenNotificationIds,
+    );
+  }, [isLoggedIn, normalizedCurrentUserVarId, seenNotificationIds]);
 
   useEffect(() => {
     let isActive = true;
@@ -330,7 +447,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     if (!isLoggedIn || !normalizedCurrentUserVarId) {
       setPrivateMessagesByVarId({});
       setMessagePeerProfilesByVarId({});
-      setSeenPrivateMessageIds({});
       return;
     }
 
@@ -426,16 +542,20 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           ([peerVarId, peerMessages]) => {
             const peerProfile = nextPeerProfiles[peerVarId];
             const senderLabel =
-              peerProfile?.displayName || peerProfile?.displayVarId || peerVarId;
+              peerProfile?.displayName ||
+              peerProfile?.displayVarId ||
+              peerVarId;
 
             peerMessages.forEach((msg) => {
               if (msg.sender !== "peer") return;
               if (notifiedIds.has(msg.id)) return;
               notifiedIds.add(msg.id);
+              if (!hasHydratedDirectMessagesRef.current) return;
               void showMessageNotification(senderLabel, msg.content);
             });
           },
         );
+        hasHydratedDirectMessagesRef.current = true;
 
         setPrivateMessagesByVarId(nextMessagesByVarId);
         setMessagePeerProfilesByVarId(nextPeerProfiles);
@@ -472,7 +592,10 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     }
 
     const { APPWRITE_CONFIG } = require("../lib/appwrite") as {
-      APPWRITE_CONFIG: { databaseId: string; socialInteractionsCollectionId: string };
+      APPWRITE_CONFIG: {
+        databaseId: string;
+        socialInteractionsCollectionId: string;
+      };
     };
 
     const unsubscribe = subscribeToAppwriteCollection(
@@ -499,46 +622,70 @@ export default function XFeedScreen(props: XFeedScreenProps) {
                 const {
                   listAppwriteDirectMessages: listDMs,
                   listAppwriteProfileIndexesByVarIds: listProfiles,
-                } = require("../lib/appwrite") as typeof import("../lib/appwrite");
+                } =
+                  require("../lib/appwrite") as typeof import("../lib/appwrite");
 
-                const directMessages = await listDMs(normalizedCurrentUserVarId);
-                const nextMsgsByVarId: Record<string, import("./x-feed/x-feed.types").PrivateMessageEntry[]> = {};
+                const directMessages = await listDMs(
+                  normalizedCurrentUserVarId,
+                );
+                const nextMsgsByVarId: Record<
+                  string,
+                  import("./x-feed/x-feed.types").PrivateMessageEntry[]
+                > = {};
                 const peerSet = new Set<string>();
 
                 directMessages.forEach((record) => {
                   const senderNorm = normalizeAuthorId(record.senderVarId);
                   const recipNorm = normalizeAuthorId(record.recipientVarId);
                   const peerVarId =
-                    senderNorm === normalizedCurrentUserVarId ? recipNorm : senderNorm;
-                  if (!peerVarId || peerVarId === normalizedCurrentUserVarId) return;
+                    senderNorm === normalizedCurrentUserVarId
+                      ? recipNorm
+                      : senderNorm;
+                  if (!peerVarId || peerVarId === normalizedCurrentUserVarId)
+                    return;
                   peerSet.add(peerVarId);
                   nextMsgsByVarId[peerVarId] = [
                     ...(nextMsgsByVarId[peerVarId] ?? []),
-                    buildPrivateMessageEntry(record, normalizedCurrentUserVarId),
+                    buildPrivateMessageEntry(
+                      record,
+                      normalizedCurrentUserVarId,
+                    ),
                   ];
                 });
 
                 const profileIndexes = peerSet.size
                   ? await listProfiles([...peerSet])
                   : [];
-                const nextPeerProfiles = profileIndexes.reduce<Record<string, import("../app.types").FollowingProfileCard>>(
-                  (acc, p) => {
-                    const pid = normalizeAuthorId(p.varId);
-                    if (pid && pid !== normalizedCurrentUserVarId) {
-                      acc[pid] = { varId: pid, displayVarId: p.displayVarId, displayName: p.displayName, username: p.username, avatarUri: p.avatarUri, role: p.role };
-                    }
-                    return acc;
-                  },
-                  {},
-                );
+                const nextPeerProfiles = profileIndexes.reduce<
+                  Record<string, import("../app.types").FollowingProfileCard>
+                >((acc, p) => {
+                  const pid = normalizeAuthorId(p.varId);
+                  if (pid && pid !== normalizedCurrentUserVarId) {
+                    acc[pid] = {
+                      varId: pid,
+                      displayVarId: p.displayVarId,
+                      displayName: p.displayName,
+                      username: p.username,
+                      avatarUri: p.avatarUri,
+                      role: p.role,
+                    };
+                  }
+                  return acc;
+                }, {});
 
                 const notifiedIds = notifiedMessageIdsRef.current;
                 Object.entries(nextMsgsByVarId).forEach(([peerVarId, msgs]) => {
                   const profile = nextPeerProfiles[peerVarId];
-                  const label = profile?.displayName || profile?.displayVarId || peerVarId;
+                  const label =
+                    profile?.displayName || profile?.displayVarId || peerVarId;
                   msgs.forEach((msg) => {
-                    if (msg.sender !== "peer" || notifiedIds.has(msg.id)) return;
+                    if (msg.sender !== "peer" || notifiedIds.has(msg.id))
+                      return;
                     notifiedIds.add(msg.id);
+                    notifiedMessageIdsByUser.set(
+                      normalizedCurrentUserVarId,
+                      notifiedIds,
+                    );
                     void showMessageNotification(label, msg.content);
                   });
                 });
@@ -560,7 +707,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       realtimeUnsubscribeRef.current?.();
       realtimeUnsubscribeRef.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn, normalizedCurrentUserVarId]);
 
   // ── Part D: load persisted notifications from Appwrite on login ───────────
@@ -572,7 +719,9 @@ export default function XFeedScreen(props: XFeedScreenProps) {
 
     void (async () => {
       try {
-        const loaded = await loadAppwriteNotifications(normalizedCurrentUserVarId);
+        const loaded = await loadAppwriteNotifications(
+          normalizedCurrentUserVarId,
+        );
         setPersistedNotifications(loaded);
         loaded.forEach((n) => markNotificationSaved(n.id));
       } catch {
@@ -883,13 +1032,21 @@ export default function XFeedScreen(props: XFeedScreenProps) {
 
   const notificationEntries = useMemo(() => {
     const notificationsById = new Map<string, XNotificationEntry>();
+    const isLiveDerivedNotification = (notification: XNotificationEntry) =>
+      notification.id.startsWith("dm-") ||
+      notification.id.startsWith("engagement-") ||
+      /^reply-\d/.test(notification.id);
 
-    // Persisted (Appwrite) < activity < derived — later entries win
-    [...persistedNotifications, ...activityNotifications, ...derivedNotifications].forEach(
-      (notification) => {
-        notificationsById.set(notification.id, notification);
-      },
-    );
+    // Persisted activity < current activity < live-derived notifications.
+    [
+      ...persistedNotifications.filter(
+        (notification) => !isLiveDerivedNotification(notification),
+      ),
+      ...activityNotifications,
+      ...derivedNotifications,
+    ].forEach((notification) => {
+      notificationsById.set(notification.id, notification);
+    });
 
     return [...notificationsById.values()].sort(
       (left, right) => right.sortOrder - left.sortOrder,
@@ -916,16 +1073,17 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     [notificationCards],
   );
 
-  // ── Part D: save new notifications to Appwrite (after notificationEntries) ─
+  // Persist only local activity notifications; DM/reply/engagement cards are
+  // rebuilt from source records to avoid stale duplicates after counts change.
   useEffect(() => {
     if (!isLoggedIn || !normalizedCurrentUserVarId) return;
 
-    notificationEntries.forEach((notification) => {
+    activityNotifications.forEach((notification) => {
       if (isNotificationAlreadySaved(notification.id)) return;
       markNotificationSaved(notification.id);
       void saveAppwriteNotification(normalizedCurrentUserVarId, notification);
     });
-  }, [isLoggedIn, normalizedCurrentUserVarId, notificationEntries]);
+  }, [activityNotifications, isLoggedIn, normalizedCurrentUserVarId]);
 
   useEffect(() => {
     if (!isNotificationsOpen || !notificationEntries.length) {
@@ -1039,7 +1197,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   }, [openedAuthorProfile?.authorId]);
 
   useEffect(() => {
-    if (activeTab === "for-you") {
+    if (activeTab === "timeline") {
       return;
     }
 
@@ -1106,7 +1264,9 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       role: viewingOwnProfile
         ? currentUserRole || (currentUserIsVerified ? "admin" : "member")
         : matchingFollowedProfile?.role ||
-          (latestAuthorPost?.authorVerified ? "admin" : openedAuthorProfile.role),
+          (latestAuthorPost?.authorVerified
+            ? "admin"
+            : openedAuthorProfile.role),
       username: viewingOwnProfile
         ? currentUserUsername?.trim() || openedAuthorProfile.username
         : matchingFollowedProfile?.username?.trim() ||
@@ -1373,7 +1533,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       return;
     }
 
-    setActiveTab("for-you");
+    setActiveTab("timeline");
     setOpenedAuthorProfile(null);
     setReplyTargetPost(null);
     setReplyDraft("");
@@ -1383,7 +1543,9 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     setOpenedPost(matchingPost);
   };
 
-  const submitPrivateMessage = async (messageText: string): Promise<boolean> => {
+  const submitPrivateMessage = async (
+    messageText: string,
+  ): Promise<boolean> => {
     const normalizedPeerVarId = normalizeAuthorId(
       openedMessageThreadVarId?.trim() || "",
     );
@@ -1398,13 +1560,17 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       return false;
     }
 
-    if (!normalizedPeerVarId || normalizedPeerVarId === normalizedCurrentUserVarId) {
+    if (
+      !normalizedPeerVarId ||
+      normalizedPeerVarId === normalizedCurrentUserVarId
+    ) {
       onShowNotice?.("تعذر تحديد المستخدم المستلم للرسالة.");
       return false;
     }
 
     if (!hasAppwriteSocialInteractionsConfig()) {
-      const missingFields = getMissingAppwriteSocialInteractionFields().join(", ");
+      const missingFields =
+        getMissingAppwriteSocialInteractionFields().join(", ");
       onShowNotice?.(
         `ربط Appwrite غير مكتمل للرسائل. أضف: ${missingFields}. انسخ .env.example إلى .env وعبّئ معرفات قاعدة البيانات والتفاعلات.`,
       );
@@ -1460,10 +1626,14 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     setOpenedAuthorProfile(null);
     setReplyTargetPost(null);
     setReplyDraft("");
+    setIsHashtagListExpanded(false);
+    setHashtagSearchQuery("");
     setIsHashtagDirectoryOpen(true);
   };
 
   const closeHashtagDirectory = () => {
+    setIsHashtagListExpanded(false);
+    setHashtagSearchQuery("");
     setIsHashtagDirectoryOpen(false);
   };
 
@@ -1480,8 +1650,14 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   };
 
   const openHashtagTrend = (trend: HashtagTrendEntry) => {
+    setIsHashtagListExpanded(false);
+    setHashtagSearchQuery("");
     setIsHashtagDirectoryOpen(false);
     setOpenedPost(trend.anchorPost);
+  };
+
+  const toggleHashtagList = () => {
+    setIsHashtagListExpanded((currentValue) => !currentValue);
   };
 
   const playSwipeSound = async () => {
@@ -1622,7 +1798,28 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       return;
     }
 
-    void onSharePost(post.id);
+    void (async () => {
+      const didShare = await onSharePost(post.id);
+
+      if (!didShare) {
+        return;
+      }
+
+      pushActivityNotification({
+        id: `share-${post.id}-${Date.now()}`,
+        title: "مشاركة داخل X",
+        body: `شاركت منشور ${post.author}.`,
+        timeLabel: "الآن",
+        iconName: "paper-plane-outline",
+        accentColor: "#68CBFF",
+        avatarUri: post.authorAvatarUri?.trim() || "",
+        verified: Boolean(post.authorVerified),
+        target: {
+          type: "post",
+          postId: post.id,
+        },
+      });
+    })();
   };
 
   const openPostActions = (post: Post) => {
@@ -1672,23 +1869,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       username: currentUserUsername?.trim() || "",
       joinDate: currentUserJoinDate,
       nationality: currentUserNationality,
-    });
-  };
-
-  const openFollowingProfile = (profile: FollowingProfileCard) => {
-    const normalizedId = normalizeAuthorId(profile.varId);
-
-    setOpenedPost(null);
-    setReplyTargetPost(null);
-    setAuthorProfileTab("posts");
-    setOpenedAuthorProfile({
-      authorId: normalizedId,
-      displayName: profile.displayName,
-      displayVarId: profile.displayVarId,
-      avatarUri: profile.avatarUri,
-      verified: profile.role === "admin",
-      role: profile.role,
-      username: profile.username,
     });
   };
 
@@ -1743,7 +1923,10 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         post.handle?.trim() ||
         "",
     );
-    const normalizedPostHandle = post.handle.trim().replace(/^@+/, "").toLowerCase();
+    const normalizedPostHandle = post.handle
+      .trim()
+      .replace(/^@+/, "")
+      .toLowerCase();
     const normalizedUsername = (currentUserUsername || "").trim().toLowerCase();
     const isCurrentUser =
       isCurrentUserAuthor(normalizedId) ||
@@ -1840,6 +2023,71 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   const resolvePostFeedKey = (post: Post) =>
     post.feedKey?.trim() || String(post.id);
 
+  const readTouchPageY = (event: GestureResponderEvent) => {
+    const nativeEvent = event.nativeEvent as unknown as {
+      touches?: Array<{ pageY?: number; locationY?: number }>;
+    };
+    const touch = nativeEvent.touches?.[0];
+
+    if (typeof touch?.pageY === "number") {
+      return touch.pageY;
+    }
+
+    return typeof touch?.locationY === "number" ? touch.locationY : null;
+  };
+
+  const handleWebPullStart = (event: GestureResponderEvent) => {
+    if (Platform.OS !== "web" || isRefreshingPosts) {
+      return;
+    }
+
+    if (feedScrollOffsetYRef.current > 1) {
+      webPullStartYRef.current = null;
+      return;
+    }
+
+    webPullStartYRef.current = readTouchPageY(event);
+  };
+
+  const handleWebPullMove = (event: GestureResponderEvent) => {
+    if (Platform.OS !== "web" || isRefreshingPosts) {
+      return;
+    }
+
+    const startY = webPullStartYRef.current;
+    const currentY = readTouchPageY(event);
+
+    if (startY === null || currentY === null) {
+      return;
+    }
+
+    if (feedScrollOffsetYRef.current > 1) {
+      setWebPullDistance(0);
+      webPullStartYRef.current = null;
+      return;
+    }
+
+    const nextDistance = Math.max(0, currentY - startY);
+    setWebPullDistance(Math.min(nextDistance, WEB_PULL_REFRESH_MAX_DISTANCE));
+  };
+
+  const handleWebPullEnd = () => {
+    if (Platform.OS !== "web") {
+      return;
+    }
+
+    const shouldRefresh =
+      webPullDistance >= WEB_PULL_REFRESH_TRIGGER_DISTANCE &&
+      !isRefreshingPosts;
+
+    webPullStartYRef.current = null;
+    setWebPullDistance(0);
+
+    if (shouldRefresh) {
+      onRefreshPosts();
+    }
+  };
+
   const handleFeedScroll = (event: {
     nativeEvent: {
       layoutMeasurement: { height: number };
@@ -1847,12 +2095,14 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       contentSize: { height: number };
     };
   }) => {
-    if (activeTab !== "for-you" || isLoadingMorePosts || !hasMorePosts) {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+
+    feedScrollOffsetYRef.current = contentOffset.y;
+
+    if (activeTab !== "timeline" || isLoadingMorePosts || !hasMorePosts) {
       return;
     }
 
-    const { layoutMeasurement, contentOffset, contentSize } =
-      event.nativeEvent;
     const distanceFromBottom =
       contentSize.height - layoutMeasurement.height - contentOffset.y;
 
@@ -1862,7 +2112,45 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   };
 
   return (
-    <View style={styles.xScreen}>
+    <View
+      style={styles.xScreen}
+      onTouchStart={handleWebPullStart}
+      onTouchMove={handleWebPullMove}
+      onTouchEnd={handleWebPullEnd}
+      onTouchCancel={handleWebPullEnd}
+    >
+      {Platform.OS === "web" && (webPullDistance > 0 || isRefreshingPosts) ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.xWebRefreshIndicator,
+            {
+              opacity: isRefreshingPosts
+                ? 1
+                : Math.min(
+                    1,
+                    webPullDistance / WEB_PULL_REFRESH_TRIGGER_DISTANCE,
+                  ),
+              transform: [
+                {
+                  translateY: isRefreshingPosts
+                    ? 8
+                    : Math.max(-42, webPullDistance - 62),
+                },
+              ],
+            },
+          ]}
+        >
+          <Ionicons
+            name={isRefreshingPosts ? "sync" : "arrow-down"}
+            size={16}
+            color="#FFFFFF"
+          />
+          <Text style={styles.xWebRefreshText}>
+            {isRefreshingPosts ? "جارٍ التحديث" : "اسحب للتحديث"}
+          </Text>
+        </View>
+      ) : null}
       <ScrollView
         showsVerticalScrollIndicator={false}
         style={styles.xScrollArea}
@@ -1898,6 +2186,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
             avatarUri={currentUserAvatarUri}
             isVerified={currentUserIsVerified}
             role={currentUserRole}
+            followedProfiles={followedProfiles}
             messageThreads={messageThreads}
             unreadMessageCount={unreadMessageCount}
             onRequireAuth={() =>
@@ -1908,42 +2197,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
             onComposeLookup={lookupMessageProfile}
             onOpenNewThread={openNewMessageThread}
           />
-        ) : activeTab === "following" ? (
-          <>
-            <XFollowingDeck
-              isLoggedIn={isLoggedIn}
-              profiles={followedProfiles}
-              onRequireAuth={() => onRequireAuth("سجل الدخول لعرض المتابَعين.")}
-              onUnfollow={onToggleAuthorFollow}
-              onOpenProfile={openFollowingProfile}
-            />
-            {followingPosts.length ? (
-              <View style={styles.xFollowingFeedSection}>
-                <Text style={styles.xFollowingFeedTitle}>منشورات المتابَعين</Text>
-                {followingPosts.map((post) => (
-                  <XPostCard
-                    key={`following-${resolvePostFeedKey(post)}`}
-                    post={post}
-                    onOpenAuthor={() => openAuthorProfile(post)}
-                    onOpen={() => openPostDetail(post)}
-                    onReply={() => openReplyComposer(post)}
-                    onRepost={() => handlePostRepost(post)}
-                    onShare={() => handlePostShare(post)}
-                    onLike={() => handlePostLike(post)}
-                    onOpenActions={() => openPostActions(post)}
-                  />
-                ))}
-              </View>
-            ) : isLoggedIn && followedProfiles.length ? (
-              <View style={styles.xEmptyStateCard}>
-                <Text style={styles.xEmptyStateTitle}>لا توجد منشورات بعد</Text>
-                <Text style={styles.xEmptyStateText}>
-                  الحسابات التي تتابعها لم تنشر منشورات ظاهرة حاليًا.
-                </Text>
-              </View>
-            ) : null}
-          </>
-        ) : activeTab === "for-you" ? (
+        ) : activeTab === "timeline" ? (
           <>
             {posts.length ? (
               posts.map((post) => (
@@ -1969,15 +2223,21 @@ export default function XFeedScreen(props: XFeedScreenProps) {
             )}
             {isLoadingMorePosts ? (
               <View style={styles.xLoadMoreState}>
-                <Text style={styles.xLoadMoreStateText}>جارٍ تحميل المزيد...</Text>
+                <Text style={styles.xLoadMoreStateText}>
+                  جارٍ تحميل المزيد...
+                </Text>
               </View>
             ) : null}
             {!hasMorePosts && posts.length ? (
               <View style={styles.xLoadMoreState}>
-                <Text style={styles.xLoadMoreStateText}>وصلت إلى نهاية المنشورات</Text>
+                <Text style={styles.xLoadMoreStateText}>
+                  وصلت إلى نهاية المنشورات
+                </Text>
               </View>
             ) : null}
           </>
+        ) : activeTab === "var-library" ? (
+          <View style={styles.xVarLibraryPage} />
         ) : null}
       </ScrollView>
 
@@ -2031,6 +2291,69 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           >
             {trendingHashtags.length ? (
               <>
+                <View style={styles.xHashtagSearchBox}>
+                  <Ionicons name="search" size={17} color="#77C8FF" />
+                  <TextInput
+                    value={hashtagSearchQuery}
+                    onChangeText={(nextQuery) => {
+                      setHashtagSearchQuery(nextQuery);
+                      if (nextQuery.trim()) {
+                        setIsHashtagListExpanded(true);
+                      }
+                    }}
+                    placeholder="ابحث عن هاشتاق"
+                    placeholderTextColor="rgba(255,255,255,0.42)"
+                    style={styles.xHashtagSearchInput}
+                    textAlign="right"
+                  />
+                  <Pressable
+                    style={styles.xHashtagSearchArrowButton}
+                    onPress={toggleHashtagList}
+                  >
+                    <Animated.View
+                      style={{
+                        transform: [{ translateY: hashtagArrowTranslateY }],
+                      }}
+                    >
+                      <Ionicons
+                        name={
+                          isHashtagListExpanded ? "chevron-up" : "chevron-down"
+                        }
+                        size={16}
+                        color="#86EFAC"
+                      />
+                    </Animated.View>
+                  </Pressable>
+                </View>
+
+                {isHashtagListExpanded || hashtagSearchQuery.trim() ? (
+                  <View style={styles.xHashtagCompactList}>
+                    {filteredHashtags.length ? (
+                      filteredHashtags.map((expandedTrend) => (
+                        <Pressable
+                          key={`hashtag-search-${expandedTrend.key}`}
+                          style={styles.xHashtagVerticalItem}
+                          onPress={() => openHashtagTrend(expandedTrend)}
+                        >
+                          <Text
+                            numberOfLines={1}
+                            style={styles.xHashtagVerticalLabel}
+                          >
+                            {expandedTrend.label}
+                          </Text>
+                          <Text style={styles.xHashtagVerticalCount}>
+                            {expandedTrend.itemCount}
+                          </Text>
+                        </Pressable>
+                      ))
+                    ) : (
+                      <Text style={styles.xHashtagSearchEmptyText}>
+                        لا يوجد هاشتاق مطابق
+                      </Text>
+                    )}
+                  </View>
+                ) : null}
+
                 <View style={styles.xHashtagHeroCard}>
                   <Text style={styles.xHashtagHeroEyebrow}>الأكثر تداولاً</Text>
                   <Text style={styles.xHashtagHeroTitle}>
@@ -2155,9 +2478,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
               resolvedOpenedAuthorProfile.authorId !==
               normalizedCurrentUserVarId
             }
-            isFollowing={isAuthorFollowed(
-              resolvedOpenedAuthorProfile.authorId,
-            )}
+            isFollowing={isAuthorFollowed(resolvedOpenedAuthorProfile.authorId)}
             likesTotal={openedAuthorLikesTotal}
             posts={openedAuthorPosts}
             replyItems={openedAuthorReplyItems}
@@ -2332,4 +2653,3 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     </View>
   );
 }
-

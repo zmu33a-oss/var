@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Text as RNText, View } from "react-native";
-import { Pressable } from "react-native";
 import type { LeaguePollTweet } from "../../leagues.types";
 import { styles } from "../../leagues.styles";
 

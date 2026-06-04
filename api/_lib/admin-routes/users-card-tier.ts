@@ -11,7 +11,7 @@ import {
   syncAccountCardTierPref,
   updateProfileCardTier,
   writeAdminAuditLog,
-} from "../admin-shared";
+} from "../admin-shared.js";
 
 export async function handler(request: any, response: any) {
   if (handleOptions(request, response)) {
@@ -107,12 +107,12 @@ export async function handler(request: any, response: any) {
           : normalizedMessage.includes("missing required attribute") &&
               normalizedMessage.includes("admin")
             ? "سجلات Profiles تفتقد حقل admin المطلوب. عطّه قيمة مثل VAR أو MEMBER، أو أزل Required من عمود admin."
-          : normalizedMessage.includes("cardtier") &&
-              normalizedMessage.includes("attribute")
-            ? "أضف حقل cardTier (string) في collection profiles داخل Appwrite."
-            : message.includes("attribute")
-              ? "تحقق من أعمدة Profiles في Appwrite: cardTier (string) و admin (text)."
-              : "تعذر تحديث نوع البطاقة.",
+            : normalizedMessage.includes("cardtier") &&
+                normalizedMessage.includes("attribute")
+              ? "أضف حقل cardTier (string) في collection profiles داخل Appwrite."
+              : message.includes("attribute")
+                ? "تحقق من أعمدة Profiles في Appwrite: cardTier (string) و admin (text)."
+                : "تعذر تحديث نوع البطاقة.",
       code: message,
     });
   }

@@ -16,6 +16,10 @@ import {
   storeProfileAvatar,
   writeStoredAuthUser,
 } from "./appshell.helpers";
+import {
+  mergeLockedPredictions,
+  readStoredLockedPredictions,
+} from "../lib/predictions/lockedPredictions.storage";
 
 // ─── refreshVarProfile ────────────────────────────────────────────────────────
 
@@ -41,6 +45,15 @@ export async function refreshVarProfile(
         currentProfile,
         nextVarProfile,
       );
+      const localPredictions = readStoredLockedPredictions(varId);
+
+      nextProfile = {
+        ...nextProfile,
+        lockedPredictions: mergeLockedPredictions(
+          nextProfile.lockedPredictions,
+          localPredictions,
+        ),
+      };
 
       if (profileIndex) {
         nextProfile = mergeProfileWithProfileIndex(nextProfile, profileIndex);

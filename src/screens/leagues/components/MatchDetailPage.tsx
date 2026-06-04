@@ -1,13 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
-import {
-  Animated,
-  Easing,
-  Platform,
-  ScrollView,
-  Text as RNText,
-  View,
-} from "react-native";
+import { Animated, Easing, Platform, Text as RNText, View } from "react-native";
+import { PullToRefreshScrollView } from "../../../components/PullToRefreshScrollView";
 import {
   getNativePointerEventsProps,
   getWebPointerEventsStyle,
@@ -39,15 +33,12 @@ export function MatchDetailPage(props: {
   kickoffCountdownLabel: string;
   onBack: () => void;
   headerFontFamily?: string;
+  onRefresh: () => void;
+  isRefreshing: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<MatchDetailTabKey>("lineup");
   const [lineupTeam, setLineupTeam] = useState<"home" | "away">("home");
-  const [isVarEditorActive, setIsVarEditorActive] = useState(false);
   const borderSpinValue = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    setIsVarEditorActive(false);
-  }, [activeTab, lineupTeam]);
 
   useEffect(() => {
     borderSpinValue.setValue(0);
@@ -138,10 +129,12 @@ export function MatchDetailPage(props: {
       </Animated.View>
 
       <View style={styles.matchDetailShell}>
-        <ScrollView
+        <PullToRefreshScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.matchDetailContent}
           stickyHeaderIndices={[1]}
+          refreshing={props.isRefreshing}
+          onRefresh={props.onRefresh}
         >
           <MatchDetailShowcaseHero
             config={props.config}
@@ -188,7 +181,6 @@ export function MatchDetailPage(props: {
                       ? props.config.homeTeam.gradient
                       : props.config.awayTeam.gradient
                   }
-                  onEditorModeChange={setIsVarEditorActive}
                 />
               </View>
             ) : null}
@@ -446,7 +438,7 @@ export function MatchDetailPage(props: {
               </View>
             ) : null}
           </View>
-        </ScrollView>
+        </PullToRefreshScrollView>
       </View>
     </LinearGradient>
   );

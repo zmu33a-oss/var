@@ -170,7 +170,10 @@ export function subscribeToAppwriteCollection(
       client as unknown as {
         subscribe: (
           channel: string,
-          cb: (response: { events: string[]; payload: RealtimePayload }) => void,
+          cb: (response: {
+            events: string[];
+            payload: RealtimePayload;
+          }) => void,
         ) => (() => void) | undefined;
       }
     ).subscribe(channel, (response) => {
@@ -185,6 +188,7 @@ export function subscribeToAppwriteCollection(
 
 type AppwriteDocumentsListResponse = {
   documents: unknown[];
+  total: number;
 };
 
 type AppwriteDatabasesBridge = {
@@ -204,6 +208,11 @@ type AppwriteDatabasesBridge = {
     collectionId: string,
     documentId: string,
     data: Record<string, unknown>,
+  ) => Promise<unknown>;
+  deleteDocument: (
+    databaseId: string,
+    collectionId: string,
+    documentId: string,
   ) => Promise<unknown>;
 };
 

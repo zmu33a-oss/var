@@ -18,6 +18,7 @@ import {
   View,
 } from "react-native";
 import type { AuthMode, IconName } from "../app.types";
+import { PullToRefreshScrollView } from "../components/PullToRefreshScrollView";
 import {
   APPWRITE_CONFIG,
   clearAppwriteRecoveryChallenge,
@@ -56,6 +57,8 @@ type AuthScreenProps = {
   authMode: AuthMode;
   onChangeMode: (mode: AuthMode) => void;
   onStartGoogleLogin?: () => void;
+  onRefresh: () => void;
+  isRefreshing: boolean;
   onSuccess: (user: AppwriteAuthUser) => void;
 };
 
@@ -299,7 +302,9 @@ function getAppwriteAuthErrorMessage(error: unknown, fallback: string) {
 
   if (
     candidate.type === "project_not_found" ||
-    rawMessage.toLowerCase().includes("project with the requested id could not be found")
+    rawMessage
+      .toLowerCase()
+      .includes("project with the requested id could not be found")
   ) {
     lines.push(
       "الحل: افتح Appwrite Console → Project Settings → General وانسخ Project ID الحقيقي إلى EXPO_PUBLIC_APPWRITE_PROJECT_ID داخل ملف .env ثم أعد تشغيل npm run web.",
@@ -997,12 +1002,14 @@ export default function AuthScreen(props: AuthScreenProps) {
   };
 
   return (
-    <ScrollView
+    <PullToRefreshScrollView
       showsVerticalScrollIndicator={false}
       contentContainerStyle={[
         styles.authScreenContent,
         isCompactAuthLayout ? styles.authScreenContentCompact : null,
       ]}
+      refreshing={props.isRefreshing}
+      onRefresh={props.onRefresh}
     >
       <ScanlineOverlay />
 
@@ -1594,7 +1601,7 @@ export default function AuthScreen(props: AuthScreenProps) {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </PullToRefreshScrollView>
   );
 }
 

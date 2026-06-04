@@ -81,10 +81,16 @@ export type ProfileScreenProps = {
   adminRoleLabel?: string;
   posts: import("../../app.types").Post[];
   profile: import("../../app.types").ProfileData;
+  followedProfiles: import("../../app.types").FollowingProfileCard[];
+  onRefresh: () => void;
+  isRefreshing: boolean;
   onSaveProfile: (
     profile: import("../../app.types").ProfileData,
   ) => void | Promise<void>;
   onSignOut: () => void;
+  onAddUserByDisplayVarId: (
+    displayVarId: string,
+  ) => Promise<{ ok: boolean; message: string }>;
 };
 
 export type SwipeActionControlProps = {

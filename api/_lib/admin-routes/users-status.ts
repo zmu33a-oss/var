@@ -9,7 +9,7 @@ import {
   sendJson,
   updateProfileAccountStatus,
   writeAdminAuditLog,
-} from "../admin-shared";
+} from "../admin-shared.js";
 
 export async function handler(request: any, response: any) {
   if (handleOptions(request, response)) {
@@ -70,10 +70,9 @@ export async function handler(request: any, response: any) {
     const message = error instanceof Error ? error.message : "UNKNOWN";
     sendJson(response, message === "MISSING_API_KEY" ? 503 : 500, {
       ok: false,
-      error:
-        message.includes("attribute")
-          ? "أضف حقل accountStatus (string) في collection profiles."
-          : "تعذر تحديث حالة الحساب.",
+      error: message.includes("attribute")
+        ? "أضف حقل accountStatus (string) في collection profiles."
+        : "تعذر تحديث حالة الحساب.",
       code: message,
     });
   }

@@ -5,6 +5,7 @@ import type { XFeedTab } from "../screens/x-feed/x-feed.types";
 
 const SHELL_WIDTH = 430;
 const VAR_WORDMARK_ICON = require("../../assets/icons/var.png");
+const VAR_CHAT_ICON = require("../../assets/icons/varchat.png");
 
 type XFeedHeaderProps = {
   windowWidth: number;
@@ -23,6 +24,7 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
   const xTopBarPaddingBottom = Math.max(10, Math.round(10 * chromeScale));
   const xTopBarItemSize = Math.round(36 * chromeScale);
   const xTopBarIconSize = Math.round(13 * chromeScale);
+  const xTopBarChatIconSize = Math.round(34 * chromeScale);
   const xHeaderLogoFrameWidth = Math.round(118 * chromeScale);
   const xHeaderLogoFrameHeight = Math.round(28 * chromeScale);
   const xHeaderLogoImageWidth = Math.round(132 * chromeScale);
@@ -43,34 +45,12 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
           },
         ]}
       >
-        <Pressable
+        <View
           style={[
-            styles.xTopBarChatButton,
-            isNotificationButtonActive ? styles.xTopBarChatButtonActive : null,
+            styles.xTopBarSpacer,
             { width: xTopBarItemSize, height: xTopBarItemSize },
           ]}
-          onPress={
-            props.onOpenNotifications
-              ? props.onOpenNotifications
-              : undefined
-          }
-          disabled={!props.onOpenNotifications}
-        >
-          <View style={styles.xTopBarChatBubble}>
-            <Text style={styles.xTopBarChatBubbleText}>VAR</Text>
-            <View style={styles.xTopBarChatBubbleTail} />
-          </View>
-
-          {normalizedNotificationCount ? (
-            <View style={styles.xTopBarBadge}>
-              <Text style={styles.xTopBarBadgeText}>
-                {normalizedNotificationCount > 9
-                  ? "+9"
-                  : normalizedNotificationCount}
-              </Text>
-            </View>
-          ) : null}
-        </Pressable>
+        />
 
         <View style={styles.xTopBarCenter}>
           <View
@@ -106,12 +86,36 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
           </View>
         </View>
 
-        <View
+        <Pressable
           style={[
-            styles.xTopBarSpacer,
+            styles.xTopBarChatButton,
+            isNotificationButtonActive ? styles.xTopBarChatButtonActive : null,
             { width: xTopBarItemSize, height: xTopBarItemSize },
           ]}
-        />
+          onPress={
+            props.onOpenNotifications ? props.onOpenNotifications : undefined
+          }
+          disabled={!props.onOpenNotifications}
+        >
+          <Image
+            source={VAR_CHAT_ICON}
+            resizeMode="contain"
+            style={{
+              width: xTopBarChatIconSize,
+              height: xTopBarChatIconSize,
+            }}
+          />
+
+          {normalizedNotificationCount ? (
+            <View style={styles.xTopBarBadge}>
+              <Text style={styles.xTopBarBadgeText}>
+                {normalizedNotificationCount > 9
+                  ? "+9"
+                  : normalizedNotificationCount}
+              </Text>
+            </View>
+          ) : null}
+        </Pressable>
       </View>
 
       <View style={styles.xTabsBar}>
@@ -122,14 +126,15 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
             onPress={() => props.onChangeTab("profile")}
           />
           <XHomeTab
-            label="المتابعون"
-            active={props.activeTab === "following"}
-            onPress={() => props.onChangeTab("following")}
+            label="تايم لاين"
+            active={props.activeTab === "timeline"}
+            onPress={() => props.onChangeTab("timeline")}
+            showLiveDot
           />
           <XHomeTab
-            active={props.activeTab === "for-you"}
-            label="لأجلك"
-            onPress={() => props.onChangeTab("for-you")}
+            label="مكتبة VAR"
+            active={props.activeTab === "var-library"}
+            onPress={() => props.onChangeTab("var-library")}
           />
         </View>
       </View>
@@ -141,17 +146,21 @@ function XHomeTab(props: {
   label: string;
   active?: boolean;
   onPress: () => void;
+  showLiveDot?: boolean;
 }) {
   return (
     <Pressable style={styles.xHomeTab} onPress={props.onPress}>
-      <Text
-        style={[
-          styles.xHomeTabText,
-          props.active ? styles.xHomeTabTextActive : null,
-        ]}
-      >
-        {props.label}
-      </Text>
+      <View style={styles.xHomeTabLabelRow}>
+        {props.showLiveDot ? <View style={styles.xHomeTabLiveDot} /> : null}
+        <Text
+          style={[
+            styles.xHomeTabText,
+            props.active ? styles.xHomeTabTextActive : null,
+          ]}
+        >
+          {props.label}
+        </Text>
+      </View>
       <View
         style={[
           styles.xHomeTabUnderline,
@@ -206,35 +215,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     textAlign: "center",
   },
-  xTopBarChatBubble: {
-    minWidth: 30,
-    height: 22,
-    borderRadius: 7,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.86)",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-    backgroundColor: "rgba(0,0,0,0.94)",
-  },
-  xTopBarChatBubbleText: {
-    color: "#FFFFFF",
-    fontSize: 8,
-    fontWeight: "900",
-    letterSpacing: 0.4,
-  },
-  xTopBarChatBubbleTail: {
-    position: "absolute",
-    left: 4,
-    bottom: -3,
-    width: 6,
-    height: 6,
-    borderLeftWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: "rgba(255,255,255,0.86)",
-    backgroundColor: "#000000",
-    transform: [{ rotate: "-45deg" }],
-  },
   xHeaderModePill: {
     flexDirection: "row",
     alignItems: "center",
@@ -284,6 +264,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-end",
     paddingTop: 12,
+  },
+  xHomeTabLabelRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  xHomeTabLiveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: "#22C55E",
+    marginLeft: 6,
   },
   xHomeTabText: {
     color: "rgba(255,255,255,0.52)",

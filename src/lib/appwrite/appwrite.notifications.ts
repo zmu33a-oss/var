@@ -2,7 +2,7 @@
  * Notification persistence via the social_interactions collection.
  *
  * We store notification records using:
- *   mode:     "x-notification"
+ *   mode:     "notification"
  *   action:   the notification type ("dm" | "reply" | "engagement" | "activity")
  *   varId:    the receiving user's VAR ID
  *   targetId: the source VAR ID (sender / post author)
@@ -20,9 +20,11 @@ import {
   normalizeAppwriteVarId,
   isPermissionDeniedAppwriteError,
 } from "./appwrite.helpers";
+import type { AppwriteSocialMode } from "./appwrite.types";
 import type { XNotificationEntry } from "../../screens/x-feed/x-feed.types";
 
-const NOTIFICATION_MODE = "x-notification";
+const NOTIFICATION_MODE: AppwriteSocialMode = "notification";
+const LEGACY_NOTIFICATION_MODE = "x-notification";
 const MAX_STORED = 60;
 
 // ─── Save ─────────────────────────────────────────────────────────────────────
@@ -55,7 +57,7 @@ export async function saveAppwriteNotification(
       varId: normalizedVarId,
       mode: NOTIFICATION_MODE,
       action: "notify",
-      targetId: notification.avatarUri || normalizedVarId,
+      targetId: normalizedVarId,
       value: payload,
     });
   } catch {
@@ -81,7 +83,10 @@ export async function loadAppwriteNotifications(
     const documents = await listCollectionDocumentsSafely(
       APPWRITE_CONFIG.socialInteractionsCollectionId,
       [
-        AppwriteQuery.equal("mode", [NOTIFICATION_MODE, "notification"]),
+        AppwriteQuery.equal("mode", [
+          LEGACY_NOTIFICATION_MODE,
+          NOTIFICATION_MODE,
+        ]),
         AppwriteQuery.equal("varId", normalizedVarId),
         AppwriteQuery.orderDesc("$createdAt"),
         AppwriteQuery.limit(MAX_STORED),
@@ -93,7 +98,9 @@ export async function loadAppwriteNotifications(
         const d = doc as Record<string, unknown>;
         const rawValue = typeof d.value === "string" ? d.value : "";
         const id =
-          typeof d.$id === "string" ? `persisted-${d.$id}` : `persisted-${Math.random()}`;
+          typeof d.$id === "string"
+            ? `persisted-${d.$id}`
+            : `persisted-${Math.random()}`;
 
         try {
           const parsed = JSON.parse(rawValue) as Partial<XNotificationEntry>;

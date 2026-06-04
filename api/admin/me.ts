@@ -1,1 +1,1 @@
-export { handler as default } from "../_lib/admin-routes/me";
+export { handler as default } from "../_lib/admin-routes/me.js";

@@ -18,15 +18,11 @@ import {
   Text,
   View,
 } from "react-native";
-import IOSWheelPicker, {
-  type WheelItem,
-} from "../../components/IOSWheelPicker";
 import SealCheckIcon from "../../components/SealCheckIcon";
 import type { Post } from "../../app.types";
 import type { AppwriteLockedPrediction } from "../../lib/appwrite";
 import { XPostCard } from "./XPostCard";
 import {
-  AUTHOR_PROFILE_TAB_DESCRIPTIONS,
   AUTHOR_PROFILE_TAB_ICONS,
   AUTHOR_PROFILE_TAB_LABELS,
   AUTHOR_SWIPE_HORIZONTAL_PADDING,
@@ -102,51 +98,47 @@ export function XAuthorProfileScreen(props: {
   const bioSummary = props.profile.username
     ? `${props.profile.displayName} يظهر داخل WEBPLUS باسم ${handleLabel} ويستخدم هوية ${roleLabel} داخل بطاقة VAR الحالية.`
     : `${props.profile.displayName} يستخدم هوية ${roleLabel} داخل WEBPLUS ويرتبط بالمعرف ${props.profile.displayVarId}.`;
-  const authorWheelItems: WheelItem[] = [
+  const authorProfileSections: Array<{
+    id: AuthorProfileTab;
+    label: string;
+    count: number;
+    iconName: (typeof AUTHOR_PROFILE_TAB_ICONS)[AuthorProfileTab];
+    isVisible: boolean;
+  }> = [
     {
       id: "likes",
-      label: "الإعجابات",
-      emoji: "🤍",
+      label: AUTHOR_PROFILE_TAB_LABELS.likes,
       count: likedPostsCount,
       iconName: AUTHOR_PROFILE_TAB_ICONS.likes,
       isVisible: props.sectionVisibility.likes,
-      canToggleVisibility: isOwnProfile,
     },
     {
       id: "posts",
-      label: "المشاركات",
-      emoji: "📝",
+      label: AUTHOR_PROFILE_TAB_LABELS.posts,
       count: props.posts.length,
       iconName: AUTHOR_PROFILE_TAB_ICONS.posts,
       isVisible: props.sectionVisibility.posts,
-      canToggleVisibility: isOwnProfile,
     },
     {
       id: "replies",
-      label: "الردود",
-      emoji: "💬",
+      label: AUTHOR_PROFILE_TAB_LABELS.replies,
       count: props.replyItems.length,
       iconName: AUTHOR_PROFILE_TAB_ICONS.replies,
       isVisible: props.sectionVisibility.replies,
-      canToggleVisibility: isOwnProfile,
     },
     {
       id: "predictions",
-      label: "التوقعات",
-      emoji: "🎯",
+      label: AUTHOR_PROFILE_TAB_LABELS.predictions,
       count: props.lockedPredictions.length,
       iconName: AUTHOR_PROFILE_TAB_ICONS.predictions,
       isVisible: props.sectionVisibility.predictions,
-      canToggleVisibility: isOwnProfile,
     },
     {
       id: "bio",
-      label: "نبذة",
-      emoji: "🪪",
+      label: AUTHOR_PROFILE_TAB_LABELS.bio,
       count: bioSummary.trim() ? 1 : 0,
       iconName: AUTHOR_PROFILE_TAB_ICONS.bio,
       isVisible: props.sectionVisibility.bio,
-      canToggleVisibility: isOwnProfile,
     },
   ];
   const shouldShowSectionNotice =
@@ -180,117 +172,191 @@ export function XAuthorProfileScreen(props: {
         contentContainerStyle={styles.xAuthorContent}
       >
         <LinearGradient
-          colors={
-            props.profile.role === "admin"
-              ? ["#1D4ED8", "#081223", "#05080F"]
-              : ["#0F766E", "#0B1823", "#05080F"]
-          }
+          colors={["#000000", "#000000", "#000000"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.xAuthorHeroCard}
         >
-          <View style={styles.xFollowingCardGlow} />
+          <View style={styles.xAuthorHeroAccentGlow} />
 
-          <View style={styles.xAuthorHeroTopRow}>
-            <View style={styles.xFollowingBadge}>
-              <Ionicons
-                name="card-outline"
-                size={14}
-                color="rgba(255,255,255,0.88)"
-              />
-              <Text style={styles.xFollowingBadgeText}>WEBPLUS PASS</Text>
+          <View style={styles.xAuthorPreviewHeaderLine}>
+            <View style={styles.xAuthorPreviewAvatarRing}>
+              {props.profile.avatarUri.trim() ? (
+                <Image
+                  source={{ uri: props.profile.avatarUri }}
+                  style={styles.xAuthorPreviewAvatarImage}
+                />
+              ) : (
+                <View style={styles.xAuthorPreviewAvatarFallback}>
+                  <Text style={styles.xAuthorPreviewAvatarText}>
+                    {props.profile.displayName.slice(0, 1) || "V"}
+                  </Text>
+                </View>
+              )}
             </View>
 
-            <View style={styles.xAuthorPrivatePill}>
-              <View style={styles.xAuthorPrivateDot} />
-              <Text style={styles.xAuthorPrivateText}>PRIVATE</Text>
-            </View>
-          </View>
-
-          <View style={styles.xAuthorHeroBody}>
-            <View style={styles.xAuthorHeroIdentityBlock}>
+            <View style={styles.xAuthorPreviewCopy}>
               <View style={styles.xAuthorHeroNameRow}>
-                <Text style={styles.xAuthorHeroName}>
-                  {props.profile.displayName}
-                </Text>
                 {props.profile.verified ? (
                   <SealCheckIcon
-                    size={16}
+                    size={17}
                     style={styles.xAuthorHeroVerifiedIcon}
                   />
                 ) : null}
+                <Text numberOfLines={1} style={styles.xAuthorHeroName}>
+                  {props.profile.displayName}
+                </Text>
               </View>
 
-              <Text style={styles.xAuthorHeroHandle}>{handleLabel}</Text>
-
-              <View style={styles.xAuthorInfoBlock}>
-                <View style={styles.xAuthorInfoRow}>
-                  <Text style={styles.xAuthorInfoValue}>
-                    {props.profile.displayVarId.replace(/^@+/, "")}
-                  </Text>
-                  <Text style={styles.xAuthorInfoLabel}>VAR ID</Text>
-                </View>
-                <View style={styles.xAuthorInfoRow}>
-                  <Text style={styles.xAuthorInfoValue}>
-                    {memberSinceLabel}
-                  </Text>
-                  <Text style={styles.xAuthorInfoLabel}>JOIN</Text>
-                </View>
-                <View style={styles.xAuthorInfoRow}>
-                  <Text style={styles.xAuthorInfoValue}>{nationalityLabel}</Text>
-                  <Text style={styles.xAuthorInfoLabel}>NATIONALITY</Text>
-                </View>
-                <View style={styles.xAuthorInfoRow}>
-                  <Text style={styles.xAuthorInfoValue}>{roleLabel}</Text>
-                  <Text style={styles.xAuthorInfoLabel}>ROLE</Text>
-                </View>
+              <View style={styles.xAuthorPreviewInfoRow}>
+                <Text numberOfLines={1} style={styles.xAuthorPreviewHandle}>
+                  {handleLabel}
+                </Text>
+                <Text numberOfLines={1} style={styles.xAuthorPreviewVarId}>
+                  {props.profile.displayVarId.replace(/^@+/, "")}
+                </Text>
               </View>
-            </View>
-
-            <View style={styles.xAuthorHeroAvatarColumn}>
-              <View style={styles.xAuthorHeroAvatarWrap}>
-                {props.profile.avatarUri.trim() ? (
-                  <Image
-                    source={{ uri: props.profile.avatarUri }}
-                    style={styles.xAuthorHeroAvatarImage}
-                  />
-                ) : (
-                  <Text style={styles.xAuthorHeroAvatarText}>
-                    {props.profile.displayName.slice(0, 1) || "V"}
-                  </Text>
-                )}
-              </View>
-
-              {props.canToggleFollow ? (
-                <Pressable
-                  style={styles.xAuthorMessageButton}
-                  onPress={() => props.onOpenMessageThread(props.profile)}
-                >
-                  <Ionicons
-                    name="chatbubble-ellipses-outline"
-                    size={14}
-                    color="#0C1722"
-                  />
-                  <Text style={styles.xAuthorMessageButtonText}>محادثة</Text>
-                </Pressable>
-              ) : null}
             </View>
           </View>
+
+          <View style={styles.xAuthorPreviewMetricGrid}>
+            <View style={styles.xAuthorPreviewMetricCard}>
+              <Text style={styles.xAuthorPreviewMetricValue}>
+                {props.posts.length}
+              </Text>
+              <Text style={styles.xAuthorPreviewMetricLabel}>منشورات</Text>
+            </View>
+            <View style={styles.xAuthorPreviewMetricCard}>
+              <Text style={styles.xAuthorPreviewMetricValue}>
+                {props.likesTotal}
+              </Text>
+              <Text style={styles.xAuthorPreviewMetricLabel}>إعجابات</Text>
+            </View>
+            <View style={styles.xAuthorPreviewMetricCard}>
+              <Text style={styles.xAuthorPreviewMetricValue}>
+                {props.replyItems.length}
+              </Text>
+              <Text style={styles.xAuthorPreviewMetricLabel}>ردود</Text>
+            </View>
+          </View>
+
+          <View style={styles.xAuthorPreviewMetaGrid}>
+            <View style={styles.xAuthorPreviewMetaItem}>
+              <Text style={styles.xAuthorPreviewMetaValue}>{roleLabel}</Text>
+              <Text style={styles.xAuthorPreviewMetaLabel}>ROLE</Text>
+            </View>
+            <View style={styles.xAuthorPreviewMetaItem}>
+              <Text style={styles.xAuthorPreviewMetaValue}>
+                {memberSinceLabel}
+              </Text>
+              <Text style={styles.xAuthorPreviewMetaLabel}>JOIN</Text>
+            </View>
+            <View style={styles.xAuthorPreviewMetaItem}>
+              <Text style={styles.xAuthorPreviewMetaValue}>
+                {nationalityLabel}
+              </Text>
+              <Text style={styles.xAuthorPreviewMetaLabel}>NATIONALITY</Text>
+            </View>
+          </View>
+
+          {props.canToggleFollow ? (
+            <Pressable
+              style={styles.xAuthorMessageButton}
+              onPress={() => props.onOpenMessageThread(props.profile)}
+            >
+              <Ionicons
+                name="chatbubble-ellipses-outline"
+                size={15}
+                color="#0C1722"
+              />
+              <Text style={styles.xAuthorMessageButtonText}>محادثة</Text>
+            </Pressable>
+          ) : null}
         </LinearGradient>
 
-        <View style={styles.xAuthorWheelSection}>
-          <IOSWheelPicker
-            items={authorWheelItems}
-            selectedId={props.activeTab}
-            onToggleVisibility={(item) =>
-              props.onToggleSectionVisibility(item.id as AuthorProfileTab)
-            }
-            onValueChange={(item) => {
-              startTransition(() => {
-                props.onChangeTab(item.id as AuthorProfileTab);
-              });
-            }}
-          />
+        <View style={styles.xAuthorHorizontalControlsSection}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.xAuthorHorizontalControlsStrip}
+          >
+            {authorProfileSections.map((section) => {
+              const isSelected = props.activeTab === section.id;
+
+              return (
+                <Pressable
+                  key={section.id}
+                  style={[
+                    styles.xAuthorHorizontalControlCard,
+                    isSelected ? styles.xAuthorHorizontalControlCardActive : null,
+                  ]}
+                  onPress={() => {
+                    startTransition(() => {
+                      props.onChangeTab(section.id);
+                    });
+                  }}
+                >
+                  <View style={styles.xAuthorHorizontalControlTopRow}>
+                    <View
+                      style={[
+                        styles.xAuthorHorizontalControlIcon,
+                        isSelected
+                          ? styles.xAuthorHorizontalControlIconActive
+                          : null,
+                      ]}
+                    >
+                      <Ionicons
+                        name={section.iconName}
+                        size={16}
+                        color={isSelected ? "#0B1220" : "#F4C565"}
+                      />
+                    </View>
+                    <Text style={styles.xAuthorHorizontalControlCount}>
+                      {section.count}
+                    </Text>
+                  </View>
+
+                  <Text numberOfLines={1} style={styles.xAuthorHorizontalControlLabel}>
+                    {section.label}
+                  </Text>
+
+                  {isOwnProfile ? (
+                    <Pressable
+                      style={[
+                        styles.xAuthorVisibilitySwitch,
+                        section.isVisible
+                          ? styles.xAuthorVisibilitySwitchActive
+                          : null,
+                      ]}
+                      onPress={(event) => {
+                        event.stopPropagation?.();
+                        props.onToggleSectionVisibility(section.id);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.xAuthorVisibilitySwitchText,
+                          section.isVisible
+                            ? styles.xAuthorVisibilitySwitchTextActive
+                            : null,
+                        ]}
+                      >
+                        {section.isVisible ? "ON" : "OFF"}
+                      </Text>
+                      <View
+                        style={[
+                          styles.xAuthorVisibilitySwitchKnob,
+                          section.isVisible
+                            ? styles.xAuthorVisibilitySwitchKnobActive
+                            : null,
+                        ]}
+                      />
+                    </Pressable>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
 
         {shouldShowSectionNotice ? (
@@ -397,12 +463,18 @@ export function XAuthorProfileScreen(props: {
           ) : props.lockedPredictions.length ? (
             <View style={styles.xAuthorFeedSection}>
               {props.lockedPredictions.map((prediction) => {
-                const predictionMeta = [prediction.choice, prediction.competition]
+                const predictionMeta = [
+                  prediction.choice,
+                  prediction.competition,
+                ]
                   .filter(Boolean)
                   .join(" • ");
 
                 return (
-                  <View key={prediction.id} style={styles.xAuthorPredictionItem}>
+                  <View
+                    key={prediction.id}
+                    style={styles.xAuthorPredictionItem}
+                  >
                     <Text style={styles.xAuthorPredictionItemTitle}>
                       {prediction.title || "توقع بدون عنوان"}
                     </Text>
@@ -811,13 +883,146 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
   },
   xAuthorHeroCard: {
-    minHeight: 208,
-    borderRadius: 28,
+    borderRadius: 26,
     overflow: "hidden",
-    paddingHorizontal: 18,
-    paddingVertical: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "#000000",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.28,
+    shadowRadius: 22,
+    elevation: 12,
+  },
+  xAuthorHeroAccentGlow: {
+    position: "absolute",
+    top: -56,
+    left: -30,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: "transparent",
+  },
+  xAuthorPreviewHeaderLine: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 13,
+  },
+  xAuthorPreviewAvatarRing: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    padding: 4,
+    backgroundColor: "rgba(244,197,101,0.95)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  xAuthorPreviewAvatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 34,
+  },
+  xAuthorPreviewAvatarFallback: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1D9BF0",
+  },
+  xAuthorPreviewAvatarText: {
+    color: "#FFFFFF",
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  xAuthorPreviewCopy: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: "flex-end",
+  },
+  xAuthorPreviewInfoRow: {
+    alignItems: "flex-end",
+    marginTop: 8,
+    gap: 5,
+  },
+  xAuthorPreviewHandle: {
+    color: "rgba(255,255,255,0.88)",
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "right",
+    maxWidth: "100%",
+  },
+  xAuthorPreviewVarId: {
+    color: "#F4C565",
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "right",
+    letterSpacing: 0.3,
+    maxWidth: "100%",
+  },
+  xAuthorPreviewMetricGrid: {
+    flexDirection: "row-reverse",
+    gap: 8,
+    marginTop: 16,
+  },
+  xAuthorPreviewMetricCard: {
+    flex: 1,
+    minHeight: 62,
+    borderRadius: 18,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  xAuthorPreviewMetricValue: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  xAuthorPreviewMetricLabel: {
+    color: "rgba(255,255,255,0.66)",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 4,
+    textAlign: "center",
+  },
+  xAuthorPreviewMetaGrid: {
+    gap: 8,
+    marginTop: 10,
+  },
+  xAuthorPreviewMetaItem: {
+    minHeight: 38,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(0,0,0,0.26)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  xAuthorPreviewMetaLabel: {
+    color: "rgba(255,255,255,0.46)",
+    fontSize: 10,
+    fontWeight: "900",
+    textAlign: "right",
+    letterSpacing: 0.6,
+  },
+  xAuthorPreviewMetaValue: {
+    flex: 1,
+    minWidth: 0,
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "left",
+    marginRight: 12,
   },
   xFollowingCardGlow: {
     position: "absolute",
@@ -899,6 +1104,7 @@ const styles = StyleSheet.create({
     minWidth: 88,
     height: 34,
     borderRadius: 12,
+    alignSelf: "flex-end",
     backgroundColor: "rgba(255,255,255,0.96)",
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -965,9 +1171,96 @@ const styles = StyleSheet.create({
     textAlign: "right",
     marginLeft: 12,
   },
-  xAuthorWheelSection: {
+  xAuthorHorizontalControlsSection: {
     marginTop: 14,
     alignSelf: "stretch",
+  },
+  xAuthorHorizontalControlsStrip: {
+    flexDirection: "row-reverse",
+    gap: 10,
+    paddingVertical: 2,
+    paddingLeft: 2,
+  },
+  xAuthorHorizontalControlCard: {
+    width: 132,
+    minHeight: 118,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    alignItems: "stretch",
+  },
+  xAuthorHorizontalControlCardActive: {
+    backgroundColor: "rgba(244,197,101,0.12)",
+    borderColor: "rgba(244,197,101,0.38)",
+  },
+  xAuthorHorizontalControlTopRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  xAuthorHorizontalControlIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(244,197,101,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(244,197,101,0.20)",
+  },
+  xAuthorHorizontalControlIconActive: {
+    backgroundColor: "#F4C565",
+    borderColor: "#F4C565",
+  },
+  xAuthorHorizontalControlCount: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "900",
+    textAlign: "left",
+  },
+  xAuthorHorizontalControlLabel: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "right",
+    marginTop: 10,
+  },
+  xAuthorVisibilitySwitch: {
+    height: 28,
+    borderRadius: 999,
+    marginTop: 10,
+    paddingHorizontal: 8,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  xAuthorVisibilitySwitchActive: {
+    backgroundColor: "rgba(52,211,153,0.16)",
+    borderColor: "rgba(52,211,153,0.34)",
+  },
+  xAuthorVisibilitySwitchText: {
+    color: "rgba(255,255,255,0.56)",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
+  xAuthorVisibilitySwitchTextActive: {
+    color: "#86EFAC",
+  },
+  xAuthorVisibilitySwitchKnob: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "rgba(255,255,255,0.46)",
+  },
+  xAuthorVisibilitySwitchKnobActive: {
+    backgroundColor: "#34D399",
   },
   xAuthorFeedSection: {
     alignSelf: "stretch",

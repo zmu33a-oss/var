@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Image,
   Platform,
@@ -25,6 +25,12 @@ import {
   getArabicFontStyle,
   resolveProfileAvatarUri,
 } from "../../profile.helpers";
+import {
+  buildVarQrPayload,
+  generateTightVarQrDataUrl,
+  scaleVarQrDisplaySize,
+  VAR_QR_DARK_COLOR,
+} from "../../profileCardConnect.utils";
 
 const CARD_ASPECT_RATIO = 0.57;
 
@@ -41,29 +47,69 @@ type VarIdentityCardProps = {
   cardTier?: MembershipCardTier;
 };
 
-function buildVarQrPayload(displayVarId: string) {
-  const id = displayVarId.trim();
-  if (!id) return "VAR";
-  const appUrl = process.env.EXPO_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
-  return appUrl ? `${appUrl}/add/${encodeURIComponent(id)}` : id;
+function TightVarQr(props: { value: string; size: number }) {
+  const [qrUri, setQrUri] = useState<string | null>(null);
+  const useSvgFallback = Platform.OS !== "web" || !qrUri;
+
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    generateTightVarQrDataUrl(props.value, props.size)
+      .then((uri) => {
+        if (!cancelled) {
+          setQrUri(uri);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQrUri(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [props.value, props.size]);
+
+  return (
+    <View
+      style={{
+        width: props.size,
+        height: props.size,
+        overflow: "hidden",
+        borderRadius: 2,
+      }}
+    >
+      {useSvgFallback ? (
+        <QRCode
+          value={props.value}
+          size={props.size}
+          color={VAR_QR_DARK_COLOR}
+          backgroundColor="transparent"
+          quietZone={0}
+          ecl="M"
+        />
+      ) : (
+        <Image
+          source={{ uri: qrUri! }}
+          style={{ width: props.size, height: props.size }}
+          resizeMode="stretch"
+        />
+      )}
+    </View>
+  );
 }
 
-function CardFrontQr(props: {
-  value: string;
-  compact: boolean;
-  qrColor: string;
-}) {
-  const size = props.compact ? 42 : 48;
+function CardFrontQr(props: { value: string; compact: boolean }) {
+  const size = scaleVarQrDisplaySize(props.compact ? 58 : 66);
 
   return (
     <View style={styles.frontQrPlate}>
-      <QRCode
-        value={props.value}
-        size={size}
-        color={props.qrColor}
-        backgroundColor="transparent"
-        quietZone={2}
-      />
+      <TightVarQr value={props.value} size={size} />
     </View>
   );
 }
@@ -122,11 +168,7 @@ function CardFront(props: {
           </Text>
         </View>
 
-        <CardFrontQr
-          value={qrPayload}
-          compact={compact}
-          qrColor={theme.qrColor}
-        />
+        <CardFrontQr value={qrPayload} compact={compact} />
       </View>
 
       <View style={styles.footerRow}>
@@ -172,7 +214,7 @@ function CardBack(props: {
 }) {
   const theme = getMembershipCardTheme(props.cardTier);
   const cardHeight = props.width * CARD_ASPECT_RATIO;
-  const qrSize = props.width < 340 ? 54 : 62;
+  const qrSize = scaleVarQrDisplaySize(props.width < 340 ? 64 : 72);
   const qrPayload = buildVarQrPayload(props.displayVarId);
 
   return (
@@ -207,10 +249,7 @@ function CardBack(props: {
 
       <View style={styles.backBody}>
         <View
-          style={[
-            styles.backAvatarWrap,
-            { borderColor: theme.borderColor },
-          ]}
+          style={[styles.backAvatarWrap, { borderColor: theme.borderColor }]}
         >
           <Image
             source={{ uri: resolveProfileAvatarUri(props.avatarUri) }}
@@ -279,7 +318,10 @@ function CardBack(props: {
             </Text>
             {props.nationalityEnglish ? (
               <Text
-                style={[styles.backInfoSubValue, { color: theme.secondaryText }]}
+                style={[
+                  styles.backInfoSubValue,
+                  { color: theme.secondaryText },
+                ]}
               >
                 {props.nationalityEnglish}
               </Text>
@@ -287,25 +329,8 @@ function CardBack(props: {
           </View>
         </View>
 
-        <View
-          style={[
-            styles.backQrPlate,
-            {
-              backgroundColor:
-                props.cardTier === "classic" ? "#F5F0E6" : theme.qrBackground,
-              borderColor: theme.borderColor,
-            },
-          ]}
-        >
-          <QRCode
-            value={qrPayload}
-            size={qrSize}
-            color={theme.qrColor}
-            backgroundColor={
-              props.cardTier === "classic" ? "#F5F0E6" : "transparent"
-            }
-            quietZone={4}
-          />
+        <View style={styles.backQrPlate}>
+          <TightVarQr value={qrPayload} size={qrSize} />
         </View>
       </View>
 
@@ -492,10 +517,6 @@ const styles = StyleSheet.create({
   },
   frontQrPlate: {
     marginTop: 28,
-    borderRadius: 8,
-    padding: 2,
-    backgroundColor: "transparent",
-    overflow: "hidden",
   },
   footerRow: {
     flexDirection: "row",
@@ -589,9 +610,8 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   backQrPlate: {
-    borderRadius: 10,
-    padding: 5,
-    borderWidth: 1,
+    borderRadius: 2,
+    overflow: "hidden",
   },
   backFooter: {
     alignItems: "flex-end",

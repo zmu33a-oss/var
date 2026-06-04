@@ -1,8 +1,6 @@
-import {
-  ScrollView,
-  View,
-} from "react-native";
+import { View } from "react-native";
 import type { FanClubId } from "../app.types";
+import { PullToRefreshScrollView } from "../components/PullToRefreshScrollView";
 import { createCompatStyleSheet } from "../lib/crossPlatformStyles";
 import FansAssociationCard from "./fans/FansAssociationCard";
 import FansSupportTongue, {
@@ -15,20 +13,24 @@ type FansScreenProps = {
   supportedTeams: FanClubId[];
   onRequireAuth: (message?: string) => void;
   onToggleSupport: (clubId: FanClubId) => void;
+  onRefresh: () => void;
+  isRefreshing: boolean;
 };
 
 export default function FansScreen(props: FansScreenProps) {
   return (
     <View style={styles.root}>
-      <ScrollView
+      <PullToRefreshScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.screenContent,
           styles.screenContentWithTongue,
         ]}
+        refreshing={props.isRefreshing}
+        onRefresh={props.onRefresh}
       >
         <FansAssociationCard supporters={props.supporters} />
-      </ScrollView>
+      </PullToRefreshScrollView>
 
       <View style={styles.tongueOverlayHost} pointerEvents="box-none">
         <FansSupportTongue
@@ -63,6 +65,6 @@ const styles = createCompatStyleSheet({
     paddingBottom: 32,
   },
   screenContentWithTongue: {
-    paddingTop: 18 + FANS_TONGUE_RESERVED_HEIGHT + 8,
+    paddingTop: 18 + FANS_TONGUE_RESERVED_HEIGHT + 28,
   },
 });

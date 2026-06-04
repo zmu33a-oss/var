@@ -58,12 +58,9 @@ export function resolveAdminApiBase() {
 
   if (IS_WEB_RUNTIME && typeof window !== "undefined") {
     const { protocol, hostname, port } = window.location;
+    const expoDevPorts = new Set(["8081", "5174", "19006", "8082"]);
 
-    if (hostname === "localhost" && port === "8081") {
-      return `${protocol}//${hostname}:3000`;
-    }
-
-    if (hostname === "localhost" && port === "5174") {
+    if (expoDevPorts.has(port)) {
       return `${protocol}//${hostname}:3000`;
     }
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ScrollView, View, useWindowDimensions } from "react-native";
+import { View, useWindowDimensions } from "react-native";
 import {
   AWAY_BENCH,
   AWAY_LINEUP,
@@ -11,6 +11,8 @@ import {
   PRESSURE_BARS,
 } from "../../app.data";
 import type { Post } from "../../app.types";
+import type { MatchPredictionLockInput } from "../../lib/predictions/matchPrediction.utils";
+import { PullToRefreshScrollView } from "../../components/PullToRefreshScrollView";
 import {
   AHLI_ITTIHAD_REPLACEMENTS,
   COMPACT_POLL_TWEET_CARD_HEIGHT,
@@ -23,7 +25,6 @@ import {
   REGULAR_POLL_TWEET_CARD_HEIGHT,
 } from "./leagues.constants";
 import {
-  getLeagueCardCompetitionTitle,
   getLeaguePageHeaderTitle,
   getSelectedLeagueOverview,
   mapPostToLeaguePollTweet,
@@ -38,12 +39,16 @@ import { useLeagueFont } from "./hooks/useLeagueFont";
 import { useCountdown } from "./hooks/useCountdown";
 import { useDrawerAnimation } from "./hooks/useDrawerAnimation";
 import { LeaguesListHeader } from "./components/LeaguesListHeader";
+import { LeaguesSideDrawer } from "./components/LeaguesSideDrawer";
 import { MatchShowcaseCard } from "./components/MatchShowcaseCard";
 import { MatchDetailPage } from "./components/MatchDetailPage";
 import { styles } from "./leagues.styles";
 
 type LeaguesScreenProps = {
   posts: Post[];
+  onRefresh: () => void;
+  isRefreshing: boolean;
+  onLockMatchPrediction?: (input: MatchPredictionLockInput) => void;
 };
 
 export default function LeaguesScreen(props: LeaguesScreenProps) {
@@ -148,8 +153,7 @@ export default function LeaguesScreen(props: LeaguesScreenProps) {
     selectedLeagueOverviewId,
     LEAGUE_OVERVIEW_CARDS,
   );
-  const leaguePageHeaderTitle = getLeaguePageHeaderTitle(selectedLeagueOverview);
-  const leagueCardCompetitionTitle = getLeagueCardCompetitionTitle(
+  const leaguePageHeaderTitle = getLeaguePageHeaderTitle(
     selectedLeagueOverview,
   );
 
@@ -157,40 +161,47 @@ export default function LeaguesScreen(props: LeaguesScreenProps) {
     <LeagueArabicFontContext.Provider value={leaguesArabicFontFamily}>
       <View style={styles.root}>
         {!selectedMatch ? (
-          <LeaguesListHeader
-            drawerProgress={drawerProgress}
-            headerFontFamily={leagueHeaderArabicFontFamily}
-            isLeagueDrawerOpen={isLeagueDrawerOpen}
-            leagueDrawerItems={LEAGUE_OVERVIEW_CARDS}
-            onSelectLeague={(leagueId) => {
-              setSelectedLeagueOverviewId(leagueId);
-              setIsLeagueDrawerOpen(false);
-            }}
-            onToggleLeagueDrawer={() =>
-              setIsLeagueDrawerOpen((currentState) => !currentState)
-            }
-            selectedLeagueId={selectedLeagueOverviewId}
-          />
+          <>
+            <LeaguesListHeader
+              headerFontFamily={leagueHeaderArabicFontFamily}
+              headerTitle={leaguePageHeaderTitle}
+              onToggleLeagueDrawer={() =>
+                setIsLeagueDrawerOpen((currentState) => !currentState)
+              }
+            />
+            <LeaguesSideDrawer
+              drawerProgress={drawerProgress}
+              isOpen={isLeagueDrawerOpen}
+              leagueDrawerItems={LEAGUE_OVERVIEW_CARDS}
+              onSelectLeague={(leagueId) => {
+                setSelectedLeagueOverviewId(leagueId);
+                setIsLeagueDrawerOpen(false);
+              }}
+              selectedLeagueId={selectedLeagueOverviewId}
+            />
+          </>
         ) : null}
 
-        <ScrollView
+        <PullToRefreshScrollView
+          style={styles.leaguesListScroll}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.screenContent}
+          refreshing={props.isRefreshing}
+          onRefresh={props.onRefresh}
         >
           {matchShowcaseCards.map((matchCard) => (
             <MatchShowcaseCard
               key={matchCard.id}
-              competitionTitle={leagueCardCompetitionTitle}
               config={matchCard}
-              headerFontFamily={leagueHeaderArabicFontFamily}
               kickoffCountdownLabel={kickoffCountdownLabel}
               onOpenDetails={() => setSelectedMatchId(matchCard.id)}
+              onLockMatchPrediction={props.onLockMatchPrediction}
               pollTweetCardHeight={pollTweetCardHeight}
               pollTweetViewportHeight={pollTweetViewportHeight}
               pollTweetMachineStepDistance={pollTweetMachineStepDistance}
             />
           ))}
-        </ScrollView>
+        </PullToRefreshScrollView>
 
         {selectedMatch ? (
           <View style={styles.matchDetailOverlay}>
@@ -200,6 +211,8 @@ export default function LeaguesScreen(props: LeaguesScreenProps) {
               kickoffCountdownLabel={kickoffCountdownLabel}
               onBack={() => setSelectedMatchId(null)}
               headerFontFamily={leagueHeaderArabicFontFamily}
+              onRefresh={props.onRefresh}
+              isRefreshing={props.isRefreshing}
             />
           </View>
         ) : null}

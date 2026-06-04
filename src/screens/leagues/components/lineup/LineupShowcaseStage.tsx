@@ -25,7 +25,6 @@ import type {
 } from "../../leagues.types";
 import {
   buildBenchShowcasePlayers,
-  buildFormationLabel,
   buildFormationLabelFromDisplayPlayers,
   formatLineupKickoffDate,
   normalizeShowcaseLineupPlayers,
@@ -51,7 +50,6 @@ export function LineupShowcaseStage(props: {
   const { width } = useWindowDimensions();
   const stageHeight = width < 390 ? 560 : 620;
   const normalizedPlayers = normalizeShowcaseLineupPlayers(props.players);
-  const formationLabel = buildFormationLabel(props.players);
   const kickoffDateLabel = formatLineupKickoffDate(props.kickoffAt);
   const featurePulse = useRef(new Animated.Value(0)).current;
   const fieldLayerRef = useRef<View | null>(null);

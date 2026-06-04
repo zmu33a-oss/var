@@ -7,7 +7,6 @@ import {
   Image,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -100,10 +99,7 @@ function AnimatedOrangeBorder(props: {
       </Animated.View>
 
       <View
-        style={[
-          styles.borderShell,
-          { borderRadius: props.borderRadius - 1 },
-        ]}
+        style={[styles.borderShell, { borderRadius: props.borderRadius - 1 }]}
       >
         {props.children}
       </View>
@@ -124,8 +120,7 @@ export function FansVerifiedBadge(props: {
   label?: string;
 }) {
   const verified = props.verified !== false;
-  const label =
-    props.label ?? (verified ? "موثق" : "غير موثق");
+  const label = props.label ?? (verified ? "موثق" : "غير موثق");
 
   return (
     <View style={styles.verifiedBlock}>
@@ -184,22 +179,23 @@ export default function FansMetricBar(props: FansMetricBarProps) {
       <View style={styles.bar}>
         <View style={styles.barRow}>
           <View style={styles.logoBlock}>
-            <Image source={emblem} resizeMode="contain" style={styles.clubLogo} />
+            <Image
+              source={emblem}
+              resizeMode="contain"
+              style={styles.clubLogo}
+            />
             <Text style={cardText(styles.clubSlug)}>{clubSlug}</Text>
             <Text style={cardText(styles.clubVarId)}>{clubVarId}</Text>
           </View>
-
           <Text style={cardText(styles.barTitle)} numberOfLines={2}>
             {props.title}
           </Text>
-
           <View style={styles.metricsSlot}>{props.metrics}</View>
-
           <StartChip />
-
           {props.trailing ?? (
             <FansVerifiedBadge verified label="الحساب موثق" />
-          )}        </View>
+          )}{" "}
+        </View>
       </View>
     </AnimatedOrangeBorder>
   );
@@ -327,7 +323,8 @@ const styles = createCompatStyleSheet({
     lineHeight: 10,
     marginTop: 1,
   },
-  startChip: {    width: 38,
+  startChip: {
+    width: 38,
     height: 18,
     borderRadius: 3,
     backgroundColor: "#646464",

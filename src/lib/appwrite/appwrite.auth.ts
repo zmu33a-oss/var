@@ -350,6 +350,41 @@ export async function loginAppwriteUser(email: string, password: string) {
   return createEmailPasswordSessionSafely(email, password);
 }
 
+async function buildUniqueAppwriteDisplayVarId(accountId: string) {
+  const fallbackDisplayVarId = buildAppwriteDisplayVarId(accountId);
+
+  if (!fallbackDisplayVarId) {
+    return "";
+  }
+
+  try {
+    const { findAppwriteProfileIndexByDisplayVarId } =
+      await import("./appwrite.profile");
+
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const candidateDisplayVarId = buildAppwriteDisplayVarId(
+        attempt === 0 ? accountId : `${accountId}-${attempt}`,
+      );
+
+      if (!candidateDisplayVarId) {
+        continue;
+      }
+
+      const existingProfile = await findAppwriteProfileIndexByDisplayVarId(
+        candidateDisplayVarId,
+      );
+
+      if (!existingProfile || existingProfile.userId === accountId) {
+        return candidateDisplayVarId;
+      }
+    }
+  } catch {
+    return fallbackDisplayVarId;
+  }
+
+  return fallbackDisplayVarId;
+}
+
 async function createEmailPasswordSessionSafely(
   email: string,
   password: string,
@@ -411,7 +446,9 @@ export async function signupAppwriteUser(input: {
     input.password,
   );
   const nextVarId = buildAppwriteVarId(currentUser!.id);
-  const nextDisplayVarId = buildAppwriteDisplayVarId(currentUser!.id);
+  const nextDisplayVarId = await buildUniqueAppwriteDisplayVarId(
+    currentUser!.id,
+  );
 
   await accountService.updateName(input.name.trim());
   await accountService.updatePrefs<AppwriteProfilePrefs>({

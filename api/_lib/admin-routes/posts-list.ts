@@ -7,7 +7,7 @@ import {
   readPostHidden,
   requireServerKey,
   sendJson,
-} from "../admin-shared";
+} from "../admin-shared.js";
 
 export async function handler(request: any, response: any) {
   if (handleOptions(request, response)) {
@@ -37,8 +37,7 @@ export async function handler(request: any, response: any) {
       title: typeof document.title === "string" ? document.title : "",
       content: typeof document.content === "string" ? document.content : "",
       varId: typeof document.varId === "string" ? document.varId : "",
-      authorId:
-        typeof document.authorId === "string" ? document.authorId : "",
+      authorId: typeof document.authorId === "string" ? document.authorId : "",
       createdAt:
         typeof document.$createdAt === "string" ? document.$createdAt : "",
       hidden: readPostHidden(document as Record<string, unknown>),
@@ -47,12 +46,25 @@ export async function handler(request: any, response: any) {
     sendJson(response, 200, { ok: true, posts });
   } catch (error) {
     const code = error instanceof Error ? error.message : "UNKNOWN";
-    sendJson(response, code === "MISSING_API_KEY" ? 503 : 500, {
+    const status =
+      code === "MISSING_SESSION"
+        ? 401
+        : code === "NOT_ADMIN"
+          ? 403
+          : code === "MISSING_API_KEY"
+            ? 503
+            : 500;
+
+    sendJson(response, status, {
       ok: false,
       error:
         code === "MISSING_API_KEY"
           ? "أضف APPWRITE_API_KEY لعرض المنشورات."
-          : "تعذر تحميل المنشورات.",
+          : code === "MISSING_SESSION"
+            ? "الجلسة منتهية، أعد تسجيل الدخول."
+            : code === "NOT_ADMIN"
+              ? "هذا الحساب ليس لديه صلاحية أدمن."
+              : "تعذر تحميل المنشورات.",
       code,
     });
   }

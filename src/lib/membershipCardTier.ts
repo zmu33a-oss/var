@@ -1,3 +1,5 @@
+type GradientColors = readonly [string, string, ...string[]];
+
 export type MembershipCardTier = "classic" | "gold" | "platinum";
 
 export const MEMBERSHIP_CARD_TIERS: MembershipCardTier[] = [
@@ -32,9 +34,9 @@ export function getMembershipCardTierArabicLabel(tier: MembershipCardTier) {
 }
 
 export type MembershipCardTheme = {
-  frontGradient: string[];
-  backGradient: string[];
-  sheenGradient: string[];
+  frontGradient: GradientColors;
+  backGradient: GradientColors;
+  sheenGradient: GradientColors;
   primaryText: string;
   secondaryText: string;
   mutedText: string;
