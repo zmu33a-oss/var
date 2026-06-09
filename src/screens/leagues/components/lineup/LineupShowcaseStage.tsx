@@ -33,7 +33,6 @@ import {
 import { LeagueText as Text } from "../common/LeagueText";
 import { LineupBenchPlayerToken } from "./LineupBenchPlayerToken";
 import { LineupShowcasePlayer } from "./LineupShowcasePlayer";
-import { LineupTeamBadge } from "./LineupTeamBadge";
 import { styles } from "../../leagues.styles";
 
 export function LineupShowcaseStage(props: {
@@ -233,21 +232,6 @@ export function LineupShowcaseStage(props: {
     <View>
       <View style={styles.lineupStageShell}>
         <View style={styles.lineupStageHeader}>
-          <View
-            style={[
-              styles.lineupStageHeaderGlow,
-              styles.lineupStageHeaderGlowLeft,
-              { backgroundColor: props.awayTeam.gradient[0] },
-            ]}
-          />
-          <View
-            style={[
-              styles.lineupStageHeaderGlow,
-              styles.lineupStageHeaderGlowRight,
-              { backgroundColor: props.homeTeam.gradient[0] },
-            ]}
-          />
-
           <View style={styles.lineupStageBrandWrap}>
             <Image
               source={VAR_WORDMARK_ICON}
@@ -256,27 +240,13 @@ export function LineupShowcaseStage(props: {
             />
           </View>
 
-          <View style={styles.lineupStageHeaderRow}>
-            <LineupTeamBadge
-              gradient={props.awayTeam.gradient}
-              iconSource={props.awayTeam.iconSource}
-              shortName={props.awayTeam.shortName}
-            />
-
-            <View style={styles.lineupStageHeaderCenter}>
-              <RNText style={styles.lineupStageKickoffText}>
-                {kickoffDateLabel}
-              </RNText>
-              <Text style={styles.lineupStageHeadline}>
-                {`تشكيلة ${props.selectedTeamLabel} المتوقعة`}
-              </Text>
-            </View>
-
-            <LineupTeamBadge
-              gradient={props.homeTeam.gradient}
-              iconSource={props.homeTeam.iconSource}
-              shortName={props.homeTeam.shortName}
-            />
+          <View style={styles.lineupStageHeaderCenter}>
+            <RNText style={styles.lineupStageKickoffText}>
+              {kickoffDateLabel}
+            </RNText>
+            <Text style={styles.lineupStageHeadline}>
+              {`تشكيلة ${props.selectedTeamLabel} المتوقعة`}
+            </Text>
           </View>
         </View>
 

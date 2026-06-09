@@ -95,7 +95,7 @@ export function useAppwriteAuth(callbacks: AppwriteAuthCallbacks) {
     );
   };
 
-  const signOut = async () => {
+  const signOut = async (options?: { suppressNotice?: boolean }) => {
     const { setNotice, onSignedOut } = callbacksRef.current;
     let signOutNotice = "تم تسجيل الخروج من Appwrite.";
 
@@ -114,7 +114,10 @@ export function useAppwriteAuth(callbacks: AppwriteAuthCallbacks) {
     setIsLoggedIn(false);
     setCanOpenAdmin(false);
     onSignedOut();
-    setNotice(signOutNotice);
+
+    if (!options?.suppressNotice) {
+      setNotice(signOutNotice);
+    }
   };
 
   const handleSaveProfile = async (

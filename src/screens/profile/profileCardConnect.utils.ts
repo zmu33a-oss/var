@@ -178,10 +178,19 @@ async function cropQrDataUrlToInkBounds(
   });
 }
 
-/** PNG where the white plate matches the QR square (no extra quiet-zone padding). */
+export type VarQrRenderColors = {
+  dark: string;
+  light: string;
+};
+
+/** PNG where the plate behind the QR is stripped (no extra quiet-zone padding). */
 export async function generateTightVarQrDataUrl(
   payload: string,
   displaySize: number,
+  colors: VarQrRenderColors = {
+    dark: VAR_QR_DARK_COLOR,
+    light: VAR_QR_LIGHT_COLOR,
+  },
 ): Promise<string> {
   const renderSize = Math.max(Math.round(displaySize * 10), 420);
   const dataUrl = await QRCodeCreator.toDataURL(payload, {
@@ -189,16 +198,16 @@ export async function generateTightVarQrDataUrl(
     margin: 0,
     width: renderSize,
     color: {
-      dark: VAR_QR_DARK_COLOR,
-      light: VAR_QR_LIGHT_COLOR,
+      dark: colors.dark,
+      light: colors.light,
     },
   });
 
   const tightCrop = await cropQrDataUrlToInkBounds(
     dataUrl,
     displaySize,
-    VAR_QR_LIGHT_COLOR,
-    VAR_QR_DARK_COLOR,
+    colors.light,
+    colors.dark,
   );
 
   if (tightCrop) {
@@ -210,8 +219,8 @@ export async function generateTightVarQrDataUrl(
     margin: 0,
     width: displaySize,
     color: {
-      dark: VAR_QR_DARK_COLOR,
-      light: VAR_QR_LIGHT_COLOR,
+      dark: colors.dark,
+      light: colors.light,
     },
   });
 }

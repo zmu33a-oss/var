@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import type { TextStyle, ViewStyle } from "react-native";
 import {
   Animated,
@@ -12,17 +13,19 @@ import {
 import Svg, {
   Circle,
   Defs,
-  Ellipse,
   LinearGradient,
   Path,
-  Polygon,
-  RadialGradient,
-  Rect,
   Stop,
 } from "react-native-svg";
 
 const MAX_POINTS = 300;
 const POINTER_WIDTH = 58;
+const COMPACT_TRACK_TOP = 54;
+const COMPACT_TRACK_HEIGHT = 14;
+const COMPACT_BADGE_SIZE = 32;
+const COMPACT_CHECK_SIZE = 17;
+const COMPACT_CHECK_TOP =
+  COMPACT_TRACK_TOP + COMPACT_TRACK_HEIGHT / 2 - COMPACT_CHECK_SIZE / 2;
 
 type RewardTone = "bronze" | "silver" | "gold";
 
@@ -48,7 +51,7 @@ export type MilestoneProgressBarProps = {
 const REWARD_MILESTONES: RewardMilestone[] = [
   { id: "bronze", label: "برونزي", points: 100, tone: "bronze" },
   { id: "silver", label: "فضي", points: 200, tone: "silver" },
-  { id: "gold", label: "أسطوري", points: 300, tone: "gold" },
+  { id: "gold", label: "ذهبي", points: 300, tone: "gold" },
 ];
 
 function clamp(value: number, min: number, max: number) {
@@ -73,16 +76,59 @@ function resolveSlotLeft(
   );
 }
 
+const MEDAL_PALETTES: Record<
+  RewardTone,
+  {
+    ribbon: string;
+    ribbonDark: string;
+    rim: string;
+    fillTop: string;
+    fillMid: string;
+    fillBottom: string;
+    star: string;
+    highlight: string;
+  }
+> = {
+  bronze: {
+    ribbon: "#B8652D",
+    ribbonDark: "#7A3F18",
+    rim: "#FFD7A8",
+    fillTop: "#F2B06A",
+    fillMid: "#C9783D",
+    fillBottom: "#8B4513",
+    star: "#5C2E0A",
+    highlight: "#FFE6C4",
+  },
+  silver: {
+    ribbon: "#7D8FA6",
+    ribbonDark: "#536173",
+    rim: "#FFFFFF",
+    fillTop: "#FFFFFF",
+    fillMid: "#C7D2DE",
+    fillBottom: "#8FA0B3",
+    star: "#334155",
+    highlight: "#F8FAFC",
+  },
+  gold: {
+    ribbon: "#B8860B",
+    ribbonDark: "#7A5200",
+    rim: "#FFF3B0",
+    fillTop: "#FFE566",
+    fillMid: "#FFC107",
+    fillBottom: "#C69200",
+    star: "#7A5200",
+    highlight: "#FFF9D6",
+  },
+};
+
 function RewardBadge(props: {
   animatedScale: Animated.Value;
   compact?: boolean;
   milestone: RewardMilestone;
-  unlocked: boolean;
 }) {
+  const compactBadgeSize = 32;
   const size = props.compact
-    ? props.milestone.tone === "gold"
-      ? 56
-      : 44
+    ? compactBadgeSize
     : props.milestone.tone === "gold"
       ? 86
       : 68;
@@ -91,190 +137,113 @@ function RewardBadge(props: {
     <Animated.View
       style={[
         styles.badgeWrap,
-        props.unlocked ? styles.badgeWrapUnlocked : styles.badgeWrapLocked,
         { transform: [{ scale: props.animatedScale }] },
       ]}
     >
-      {props.milestone.tone === "gold" ? (
-        <GoldCrownBadge size={size} unlocked={props.unlocked} />
-      ) : props.milestone.tone === "silver" ? (
-        <SilverMedalBadge size={size} unlocked={props.unlocked} />
-      ) : (
-        <BronzeShieldBadge size={size} unlocked={props.unlocked} />
-      )}
+      <MedalBadge
+        idSuffix={props.milestone.id}
+        size={size}
+        tone={props.milestone.tone}
+      />
     </Animated.View>
   );
 }
 
-function BronzeShieldBadge(props: { size: number; unlocked: boolean }) {
+function MedalBadge(props: {
+  idSuffix: string;
+  size: number;
+  tone: RewardTone;
+}) {
+  const palette = MEDAL_PALETTES[props.tone];
+  const fillId = `medalFill-${props.idSuffix}`;
+  const ribbonId = `medalRibbon-${props.idSuffix}`;
+
   return (
     <Svg width={props.size} height={props.size} viewBox="0 0 96 96">
       <Defs>
-        <LinearGradient id="bronzeFill" x1="22" y1="8" x2="72" y2="84">
-          <Stop offset="0" stopColor={props.unlocked ? "#FFD3A0" : "#9CA3AF"} />
-          <Stop
-            offset="0.55"
-            stopColor={props.unlocked ? "#C47A35" : "#6B7280"}
-          />
-          <Stop offset="1" stopColor={props.unlocked ? "#7C3F16" : "#374151"} />
+        <LinearGradient id={fillId} x1="24" y1="24" x2="72" y2="82">
+          <Stop offset="0" stopColor={palette.fillTop} />
+          <Stop offset="0.55" stopColor={palette.fillMid} />
+          <Stop offset="1" stopColor={palette.fillBottom} />
         </LinearGradient>
-        <RadialGradient id="bronzeGlow" cx="48" cy="48" r="46">
-          <Stop
-            offset="0"
-            stopColor="#F6B56D"
-            stopOpacity={props.unlocked ? "0.72" : "0"}
-          />
-          <Stop offset="1" stopColor="#F6B56D" stopOpacity="0" />
-        </RadialGradient>
+        <LinearGradient id={ribbonId} x1="30" y1="8" x2="66" y2="28">
+          <Stop offset="0" stopColor={palette.ribbon} />
+          <Stop offset="1" stopColor={palette.ribbonDark} />
+        </LinearGradient>
       </Defs>
-      <Circle cx="48" cy="48" r="45" fill="url(#bronzeGlow)" />
+
       <Path
-        d="M48 7 76 19v23c0 21-12 37-28 46C32 79 20 63 20 42V19L48 7Z"
-        fill="url(#bronzeFill)"
-        stroke={props.unlocked ? "#FFE2BD" : "#AEB5C2"}
+        d="M30 8 38 28 48 22 58 28 66 8 58 8 48 14 38 8Z"
+        fill={`url(#${ribbonId})`}
+      />
+      <Path
+        d="M34 10 40 24"
+        stroke={palette.highlight}
+        strokeWidth="2"
+        strokeLinecap="round"
+        opacity="0.45"
+      />
+      <Path
+        d="M62 10 56 24"
+        stroke={palette.highlight}
+        strokeWidth="2"
+        strokeLinecap="round"
+        opacity="0.28"
+      />
+
+      <Circle
+        cx="48"
+        cy="54"
+        r="28"
+        fill={`url(#${fillId})`}
+        stroke={palette.rim}
         strokeWidth="3"
       />
       <Circle
         cx="48"
-        cy="40"
-        r="18"
-        fill={props.unlocked ? "#FFE4BF" : "#CBD5E1"}
-        opacity="0.92"
+        cy="54"
+        r="21"
+        fill="none"
+        stroke={palette.highlight}
+        strokeWidth="2"
+        opacity="0.55"
       />
       <Path
-        d="M48 27 52.5 36.3 62.7 37.8 55.4 45l1.7 10.1L48 50.3l-9.1 4.8L40.6 45l-7.3-7.2 10.2-1.5L48 27Z"
-        fill={props.unlocked ? "#7C3F16" : "#4B5563"}
+        d="M48 38 51.8 47.2 61.6 48.4 54.2 55.2 56.2 65 48 60.2 39.8 65 41.8 55.2 34.4 48.4 44.2 47.2 48 38Z"
+        fill={palette.star}
       />
       <Path
-        d="M34 65h28"
-        stroke={props.unlocked ? "#FFE7C8" : "#D1D5DB"}
-        strokeWidth="5"
+        d="M34 46c8-8 22-8 28 0"
+        stroke={palette.highlight}
+        strokeWidth="4"
         strokeLinecap="round"
-        opacity="0.76"
+        opacity="0.42"
       />
     </Svg>
   );
 }
 
-function SilverMedalBadge(props: { size: number; unlocked: boolean }) {
-  return (
-    <Svg width={props.size} height={props.size} viewBox="0 0 96 96">
-      <Defs>
-        <LinearGradient id="silverFill" x1="18" y1="12" x2="78" y2="84">
-          <Stop offset="0" stopColor={props.unlocked ? "#FFFFFF" : "#9CA3AF"} />
-          <Stop
-            offset="0.52"
-            stopColor={props.unlocked ? "#AEB8C7" : "#6B7280"}
-          />
-          <Stop offset="1" stopColor={props.unlocked ? "#EEF4FF" : "#374151"} />
-        </LinearGradient>
-        <RadialGradient id="silverGlow" cx="48" cy="48" r="45">
-          <Stop
-            offset="0"
-            stopColor="#E7F0FF"
-            stopOpacity={props.unlocked ? "0.74" : "0"}
-          />
-          <Stop offset="1" stopColor="#E7F0FF" stopOpacity="0" />
-        </RadialGradient>
-      </Defs>
-      <Circle cx="48" cy="48" r="44" fill="url(#silverGlow)" />
-      <Circle
-        cx="48"
-        cy="48"
-        r="32"
-        fill="url(#silverFill)"
-        stroke={props.unlocked ? "#FFFFFF" : "#AEB5C2"}
-        strokeWidth="3"
-      />
-      <Path
-        d="M48 24 54.6 39l16.2 1.4-12.3 10.7 3.7 15.9L48 58.5 33.8 67l3.7-15.9-12.3-10.7L41.4 39 48 24Z"
-        fill={props.unlocked ? "#334155" : "#4B5563"}
-      />
-      <Path
-        d="M30 35c9-10 26-11 36-1"
-        stroke="#FFFFFF"
-        strokeWidth="5"
-        strokeLinecap="round"
-        opacity={props.unlocked ? "0.42" : "0.16"}
-      />
-    </Svg>
-  );
-}
+function MilestoneTrackCheck(props: { compact?: boolean; unlocked: boolean }) {
+  const size = props.compact ? COMPACT_CHECK_SIZE : 20;
+  const iconSize = props.compact ? 11 : 13;
 
-function GoldCrownBadge(props: { size: number; unlocked: boolean }) {
   return (
-    <Svg width={props.size} height={props.size} viewBox="0 0 112 112">
-      <Defs>
-        <LinearGradient id="goldFill" x1="20" y1="12" x2="90" y2="96">
-          <Stop offset="0" stopColor={props.unlocked ? "#FFF7B0" : "#9CA3AF"} />
-          <Stop
-            offset="0.45"
-            stopColor={props.unlocked ? "#FFC83D" : "#6B7280"}
-          />
-          <Stop offset="1" stopColor={props.unlocked ? "#B87400" : "#374151"} />
-        </LinearGradient>
-        <RadialGradient id="goldGlow" cx="56" cy="56" r="53">
-          <Stop
-            offset="0"
-            stopColor="#FFE66B"
-            stopOpacity={props.unlocked ? "0.98" : "0"}
-          />
-          <Stop offset="1" stopColor="#FFE66B" stopOpacity="0" />
-        </RadialGradient>
-      </Defs>
-      <Circle cx="56" cy="56" r="52" fill="url(#goldGlow)" />
-      <Ellipse
-        cx="56"
-        cy="61"
-        rx="38"
-        ry="34"
-        fill={
-          props.unlocked ? "rgba(255,218,71,0.16)" : "rgba(255,255,255,0.07)"
-        }
-      />
-      <Polygon
-        points="19,44 38,61 56,24 74,61 93,44 84,85 28,85"
-        fill="url(#goldFill)"
-        stroke={props.unlocked ? "#FFF4B8" : "#AEB5C2"}
-        strokeWidth="3.3"
-        strokeLinejoin="round"
-      />
-      <Circle
-        cx="19"
-        cy="42"
-        r="7"
-        fill={props.unlocked ? "#FFEB79" : "#8E96A5"}
-      />
-      <Circle
-        cx="56"
-        cy="22"
-        r="8"
-        fill={props.unlocked ? "#FFF8B8" : "#AEB5C2"}
-      />
-      <Circle
-        cx="93"
-        cy="42"
-        r="7"
-        fill={props.unlocked ? "#FFEB79" : "#8E96A5"}
-      />
-      <Rect
-        x="33"
-        y="76"
-        width="46"
-        height="12"
-        rx="6"
-        fill={props.unlocked ? "#724900" : "#4B5563"}
-        opacity="0.72"
-      />
-      <Path
-        d="M39 53 56 37l17 16"
-        stroke="#FFFFFF"
-        strokeWidth="5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity={props.unlocked ? "0.4" : "0.14"}
-      />
-    </Svg>
+    <View
+      style={[
+        styles.trackCheck,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+        },
+        props.compact ? styles.trackCheckCompact : null,
+        props.unlocked ? styles.trackCheckUnlocked : null,
+      ]}
+    >
+      {props.unlocked ? (
+        <Ionicons name="checkmark" size={iconSize} color="#FFFFFF" />
+      ) : null}
+    </View>
   );
 }
 
@@ -462,13 +431,7 @@ export function MilestoneProgressBar(props: MilestoneProgressBarProps) {
           {trackWidth > 0
             ? REWARD_MILESTONES.map((milestone, index) => {
                 const isUnlocked = currentPoints >= milestone.points;
-                const slotWidth = isCompactProfile
-                  ? milestone.tone === "gold"
-                    ? 68
-                    : 54
-                  : milestone.tone === "gold"
-                    ? 112
-                    : 94;
+                const slotWidth = isCompactProfile ? 50 : milestone.tone === "gold" ? 112 : 94;
                 const slotLeft = resolveSlotLeft(
                   trackWidth,
                   milestone.points,
@@ -486,66 +449,61 @@ export function MilestoneProgressBar(props: MilestoneProgressBarProps) {
                       { left: slotLeft, width: slotWidth },
                     ]}
                   >
-                    <RewardBadge
-                      animatedScale={badgeScales[index]}
-                      compact={isCompactProfile}
-                      milestone={milestone}
-                      unlocked={isUnlocked}
-                    />
+                    <View
+                      style={
+                        isCompactProfile ? styles.medalAnchorCompactProfile : null
+                      }
+                    >
+                      <RewardBadge
+                        animatedScale={badgeScales[index]}
+                        compact={isCompactProfile}
+                        milestone={milestone}
+                      />
+                    </View>
+
                     <View
                       style={[
-                        styles.checkBadge,
                         isCompactProfile
-                          ? styles.checkBadgeCompactProfile
-                          : null,
-                        isUnlocked ? styles.checkBadgeUnlocked : null,
+                          ? styles.trackCheckAnchorCompactProfile
+                          : styles.trackCheckAnchorDefault,
                       ]}
                     >
-                      {isUnlocked ? (
-                        <Text
-                          style={[
-                            styles.checkText,
-                            isCompactProfile
-                              ? styles.checkTextCompactProfile
-                              : null,
-                            styles.checkTextUnlocked,
-                          ]}
-                        >
-                          ✓
-                        </Text>
-                      ) : (
-                        <View
-                          style={[
-                            styles.lockedCheckDot,
-                            isCompactProfile
-                              ? styles.lockedCheckDotCompactProfile
-                              : null,
-                          ]}
-                        />
-                      )}
+                      <MilestoneTrackCheck
+                        compact={isCompactProfile}
+                        unlocked={isUnlocked}
+                      />
                     </View>
-                    <Text
-                      numberOfLines={1}
-                      style={[
-                        styles.milestoneLabel,
+
+                    <View
+                      style={
                         isCompactProfile
-                          ? styles.milestoneLabelCompactProfile
-                          : null,
-                        isUnlocked ? styles.milestoneLabelUnlocked : null,
-                      ]}
+                          ? styles.milestoneMetaCompactProfile
+                          : styles.milestoneMetaDefault
+                      }
                     >
-                      {milestone.label}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.milestonePoints,
-                        isCompactProfile
-                          ? styles.milestonePointsCompactProfile
-                          : null,
-                      ]}
-                    >
-                      {milestone.points}
-                    </Text>
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.milestoneLabel,
+                          isCompactProfile
+                            ? styles.milestoneLabelCompactProfile
+                            : null,
+                          isUnlocked ? styles.milestoneLabelUnlocked : null,
+                        ]}
+                      >
+                        {milestone.label}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.milestonePoints,
+                          isCompactProfile
+                            ? styles.milestonePointsCompactProfile
+                            : null,
+                        ]}
+                      >
+                        {milestone.points}
+                      </Text>
+                    </View>
                   </View>
                 );
               })
@@ -661,16 +619,16 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   compactProfileEyebrow: {
-    color: "rgba(244,197,101,0.72)",
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 1.1,
+    color: "rgba(244,197,101,0.78)",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.2,
   },
   compactProfileTitle: {
     color: "#FFFFFF",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "900",
-    marginTop: 2,
+    marginTop: 3,
     textAlign: "right",
     writingDirection: "rtl",
   },
@@ -760,7 +718,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   timelineCompactProfile: {
-    height: 132,
+    height: 108,
   },
   trackOuter: {
     position: "absolute",
@@ -857,84 +815,76 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   milestoneSlotCompactProfile: {
-    minHeight: 118,
+    minHeight: 108,
+  },
+  medalAnchorCompactProfile: {
+    position: "absolute",
+    top: 6,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 2,
+  },
+  trackCheckAnchorCompactProfile: {
+    position: "absolute",
+    top: COMPACT_CHECK_TOP,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 4,
+  },
+  trackCheckAnchorDefault: {
+    alignItems: "center",
+    marginTop: 2,
+  },
+  milestoneMetaCompactProfile: {
+    position: "absolute",
+    top: COMPACT_TRACK_TOP + COMPACT_TRACK_HEIGHT + 8,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  milestoneMetaDefault: {
+    alignItems: "center",
   },
   badgeWrap: {
     alignItems: "center",
     justifyContent: "center",
   },
-  badgeWrapUnlocked: {
-    opacity: 1,
-    shadowColor: "#FDE68A",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 18,
-    elevation: 10,
-  },
-  badgeWrapLocked: {
-    opacity: 0.4,
-  },
-  checkBadge: {
-    width: 21,
-    height: 21,
-    borderRadius: 11,
+  trackCheck: {
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 1,
-    backgroundColor: "rgba(255,255,255,0.045)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.22)",
   },
-  checkBadgeCompactProfile: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    marginTop: 0,
+  trackCheckCompact: {
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderColor: "rgba(255,255,255,0.28)",
   },
-  checkBadgeUnlocked: {
+  trackCheckUnlocked: {
     backgroundColor: "#22C55E",
-    borderColor: "rgba(187,247,208,0.9)",
+    borderColor: "#BBF7D0",
+    borderWidth: 2,
     shadowColor: "#22C55E",
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.42,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  checkText: {
-    fontSize: 12,
-    fontWeight: "900",
-    lineHeight: 14,
-  },
-  checkTextCompactProfile: {
-    fontSize: 9,
-    lineHeight: 11,
-  },
-  checkTextUnlocked: {
-    color: "#FFFFFF",
-  },
-  lockedCheckDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "rgba(255,255,255,0.22)",
-  },
-  lockedCheckDotCompactProfile: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
+    shadowOpacity: 0.85,
+    shadowRadius: 8,
+    elevation: 10,
   },
   milestoneLabel: {
     width: "100%",
-    color: "rgba(255,255,255,0.62)",
+    color: "rgba(255,255,255,0.58)",
     fontSize: 11,
-    fontWeight: "900",
-    marginTop: 6,
+    fontWeight: "800",
+    marginTop: 5,
     textAlign: "center",
     writingDirection: "rtl",
   },
   milestoneLabelCompactProfile: {
-    fontSize: 9,
-    marginTop: 4,
+    fontSize: 8,
+    fontWeight: "800",
+    marginTop: 0,
   },
   milestoneLabelUnlocked: {
     color: "#FFFFFF",
@@ -949,7 +899,7 @@ const styles = StyleSheet.create({
   },
   milestonePointsCompactProfile: {
     color: "rgba(244,197,101,0.72)",
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: "900",
     marginTop: 1,
   },

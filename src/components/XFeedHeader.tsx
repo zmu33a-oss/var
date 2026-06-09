@@ -6,6 +6,7 @@ import type { XFeedTab } from "../screens/x-feed/x-feed.types";
 const SHELL_WIDTH = 430;
 const VAR_WORDMARK_ICON = require("../../assets/icons/var.png");
 const VAR_CHAT_ICON = require("../../assets/icons/varchat.png");
+const VAR_CHAT_UNREAD_INDICATOR = require("../../assets/icons/images-blac.png");
 
 type XFeedHeaderProps = {
   windowWidth: number;
@@ -23,13 +24,12 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
   const xTopBarPaddingHorizontal = Math.round(12 * chromeScale);
   const xTopBarPaddingBottom = Math.max(10, Math.round(10 * chromeScale));
   const xTopBarItemSize = Math.round(36 * chromeScale);
-  const xTopBarIconSize = Math.round(13 * chromeScale);
   const xTopBarChatIconSize = Math.round(34 * chromeScale);
+  const xTopBarUnreadIndicatorSize = Math.round(14 * chromeScale);
   const xHeaderLogoFrameWidth = Math.round(118 * chromeScale);
   const xHeaderLogoFrameHeight = Math.round(28 * chromeScale);
   const xHeaderLogoImageWidth = Math.round(132 * chromeScale);
   const xHeaderLogoImageHeight = Math.round(82 * chromeScale);
-  const xHeaderModePillHeight = Math.round(24 * chromeScale);
   const normalizedNotificationCount = Math.max(0, props.notificationCount ?? 0);
   const isNotificationButtonActive = props.notificationsActive ?? false;
 
@@ -53,16 +53,6 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
         />
 
         <View style={styles.xTopBarCenter}>
-          <View
-            style={[
-              styles.xHeaderModePill,
-              { minHeight: xHeaderModePillHeight },
-            ]}
-          >
-            <Ionicons name="close" size={xTopBarIconSize} color="#FFFFFF" />
-            <Text style={styles.xHeaderModePillText}>VAR X</Text>
-          </View>
-
           <View
             style={[
               styles.xHeaderLogoFrame,
@@ -107,13 +97,17 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
           />
 
           {normalizedNotificationCount ? (
-            <View style={styles.xTopBarBadge}>
-              <Text style={styles.xTopBarBadgeText}>
-                {normalizedNotificationCount > 9
-                  ? "+9"
-                  : normalizedNotificationCount}
-              </Text>
-            </View>
+            <Image
+              source={VAR_CHAT_UNREAD_INDICATOR}
+              resizeMode="contain"
+              style={[
+                styles.xTopBarUnreadIndicator,
+                {
+                  width: xTopBarUnreadIndicatorSize,
+                  height: xTopBarUnreadIndicatorSize,
+                },
+              ]}
+            />
           ) : null}
         </Pressable>
       </View>
@@ -132,7 +126,7 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
             showLiveDot
           />
           <XHomeTab
-            label="مكتبة VAR"
+            label="مكتبة فار"
             active={props.activeTab === "var-library"}
             onPress={() => props.onChangeTab("var-library")}
           />
@@ -195,43 +189,10 @@ const styles = StyleSheet.create({
   xTopBarChatButtonActive: {
     opacity: 1,
   },
-  xTopBarBadge: {
+  xTopBarUnreadIndicator: {
     position: "absolute",
     top: -2,
-    right: -2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 999,
-    paddingHorizontal: 4,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#EF4444",
-    borderWidth: 1,
-    borderColor: "#000000",
-  },
-  xTopBarBadgeText: {
-    color: "#FFFFFF",
-    fontSize: 10,
-    fontWeight: "900",
-    textAlign: "center",
-  },
-  xHeaderModePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.22)",
-    backgroundColor: "rgba(18,18,18,0.92)",
-    marginBottom: 2,
-  },
-  xHeaderModePillText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "900",
-    marginRight: 4,
-    letterSpacing: 0.3,
+    right: 0,
   },
   xHeaderLogoFrame: {
     width: 146,

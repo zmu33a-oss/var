@@ -29,7 +29,6 @@ import {
   buildVarQrPayload,
   generateTightVarQrDataUrl,
   scaleVarQrDisplaySize,
-  VAR_QR_DARK_COLOR,
 } from "../../profileCardConnect.utils";
 
 const CARD_ASPECT_RATIO = 0.57;
@@ -47,9 +46,30 @@ type VarIdentityCardProps = {
   cardTier?: MembershipCardTier;
 };
 
-function TightVarQr(props: { value: string; size: number }) {
+function resolveQrRenderLightColor(
+  qrBackground: string,
+  cardTier: MembershipCardTier,
+) {
+  if (qrBackground !== "transparent") {
+    return qrBackground;
+  }
+
+  return getMembershipCardTheme(cardTier).frontGradient[0];
+}
+
+function TightVarQr(props: {
+  value: string;
+  size: number;
+  cardTier: MembershipCardTier;
+  qrColor: string;
+  qrBackground: string;
+}) {
   const [qrUri, setQrUri] = useState<string | null>(null);
   const useSvgFallback = Platform.OS !== "web" || !qrUri;
+  const renderLightColor = resolveQrRenderLightColor(
+    props.qrBackground,
+    props.cardTier,
+  );
 
   useEffect(() => {
     if (Platform.OS !== "web") {
@@ -58,7 +78,10 @@ function TightVarQr(props: { value: string; size: number }) {
 
     let cancelled = false;
 
-    generateTightVarQrDataUrl(props.value, props.size)
+    generateTightVarQrDataUrl(props.value, props.size, {
+      dark: props.qrColor,
+      light: renderLightColor,
+    })
       .then((uri) => {
         if (!cancelled) {
           setQrUri(uri);
@@ -73,7 +96,7 @@ function TightVarQr(props: { value: string; size: number }) {
     return () => {
       cancelled = true;
     };
-  }, [props.value, props.size]);
+  }, [props.value, props.size, props.qrColor, renderLightColor]);
 
   return (
     <View
@@ -82,14 +105,15 @@ function TightVarQr(props: { value: string; size: number }) {
         height: props.size,
         overflow: "hidden",
         borderRadius: 2,
+        backgroundColor: "transparent",
       }}
     >
       {useSvgFallback ? (
         <QRCode
           value={props.value}
           size={props.size}
-          color={VAR_QR_DARK_COLOR}
-          backgroundColor="transparent"
+          color={props.qrColor}
+          backgroundColor={props.qrBackground}
           quietZone={0}
           ecl="M"
         />
@@ -104,12 +128,24 @@ function TightVarQr(props: { value: string; size: number }) {
   );
 }
 
-function CardFrontQr(props: { value: string; compact: boolean }) {
+function CardFrontQr(props: {
+  value: string;
+  compact: boolean;
+  cardTier: MembershipCardTier;
+  qrColor: string;
+  qrBackground: string;
+}) {
   const size = scaleVarQrDisplaySize(props.compact ? 58 : 66);
 
   return (
     <View style={styles.frontQrPlate}>
-      <TightVarQr value={props.value} size={size} />
+      <TightVarQr
+        value={props.value}
+        size={size}
+        cardTier={props.cardTier}
+        qrColor={props.qrColor}
+        qrBackground={props.qrBackground}
+      />
     </View>
   );
 }
@@ -168,7 +204,13 @@ function CardFront(props: {
           </Text>
         </View>
 
-        <CardFrontQr value={qrPayload} compact={compact} />
+        <CardFrontQr
+          value={qrPayload}
+          compact={compact}
+          cardTier={props.cardTier}
+          qrColor={theme.qrColor}
+          qrBackground={theme.qrBackground}
+        />
       </View>
 
       <View style={styles.footerRow}>
@@ -330,7 +372,13 @@ function CardBack(props: {
         </View>
 
         <View style={styles.backQrPlate}>
-          <TightVarQr value={qrPayload} size={qrSize} />
+          <TightVarQr
+            value={qrPayload}
+            size={qrSize}
+            cardTier={props.cardTier}
+            qrColor={theme.qrColor}
+            qrBackground={theme.qrBackground}
+          />
         </View>
       </View>
 

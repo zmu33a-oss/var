@@ -86,6 +86,8 @@ export default function LeaguesScreen(props: LeaguesScreenProps) {
       {
         id: "hilal-nassr",
         leagueName: "الهلال VS النصر",
+        stadium: "المملكة أرينا",
+        attendance: 52_847,
         homeTeam: {
           title: "الهلال",
           shortName: "هـ",
@@ -112,6 +114,8 @@ export default function LeaguesScreen(props: LeaguesScreenProps) {
       {
         id: "ahli-ittihad",
         leagueName: "الأهلي VS الاتحاد",
+        stadium: "ملعب الملك عبدالله",
+        attendance: 58_120,
         homeTeam: {
           title: "الأهلي",
           shortName: "أ",

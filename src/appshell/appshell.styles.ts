@@ -83,7 +83,7 @@ export const styles = StyleSheet.create({
   themeSwitchLayer: {
     position: "absolute",
     top: 12,
-    alignSelf: "center",
+    left: 16,
     zIndex: 24,
   },
   screenContent: {

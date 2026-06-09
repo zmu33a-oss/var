@@ -15,11 +15,26 @@ const VAR_ICON = require("../../assets/icons/var.png");
 type BottomNavProps = {
   current: MainTab;
   homeMode: HomeMode;
+  richIconsEnabled?: boolean;
   onHomeAction: () => void;
   onSelect: (tab: MainTab) => void;
 };
 
+function resolveNavIcon(
+  filled: IconName,
+  outline: IconName,
+  active: boolean,
+  richIconsEnabled: boolean,
+): IconName {
+  if (!richIconsEnabled) {
+    return outline;
+  }
+
+  return active ? filled : outline;
+}
+
 export default function BottomNav(props: BottomNavProps) {
+  const richIconsEnabled = props.richIconsEnabled !== false;
   const { width } = useWindowDimensions();
   const layoutWidth = Math.min(width, SHELL_WIDTH);
   const chromeScale = Math.max(0.84, Math.min(1, layoutWidth / SHELL_WIDTH));
@@ -48,7 +63,12 @@ export default function BottomNav(props: BottomNavProps) {
     >
       <BottomItem
         label="الحساب"
-        icon={props.current === "account" ? "person" : "person-outline"}
+        icon={resolveNavIcon(
+          "person",
+          "person-outline",
+          props.current === "account",
+          richIconsEnabled,
+        )}
         active={props.current === "account"}
         onPress={() => props.onSelect("account")}
         iconSize={bottomIconSize}
@@ -58,7 +78,12 @@ export default function BottomNav(props: BottomNavProps) {
       />
       <BottomItem
         label="الدوريات"
-        icon={props.current === "leagues" ? "trophy" : "trophy-outline"}
+        icon={resolveNavIcon(
+          "trophy",
+          "trophy-outline",
+          props.current === "leagues",
+          richIconsEnabled,
+        )}
         active={props.current === "leagues"}
         onPress={() => props.onSelect("leagues")}
         iconSize={bottomIconSize}
@@ -93,7 +118,12 @@ export default function BottomNav(props: BottomNavProps) {
 
       <BottomItem
         label="الرابطة"
-        icon={props.current === "fans" ? "people" : "people-outline"}
+        icon={resolveNavIcon(
+          "people",
+          "people-outline",
+          props.current === "fans",
+          richIconsEnabled,
+        )}
         active={props.current === "fans"}
         onPress={() => props.onSelect("fans")}
         iconSize={bottomIconSize}
@@ -103,7 +133,12 @@ export default function BottomNav(props: BottomNavProps) {
       />
       <BottomItem
         label="الرئيسية"
-        icon={props.current === "home" ? "home" : "home-outline"}
+        icon={resolveNavIcon(
+          "home",
+          "home-outline",
+          props.current === "home",
+          richIconsEnabled,
+        )}
         active={props.current === "home"}
         onPress={() => props.onSelect("home")}
         iconSize={bottomIconSize}

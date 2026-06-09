@@ -534,7 +534,7 @@ export const styles = createCompatStyleSheet({
     marginBottom: 4,
   },
   matchDetailTabButtonText: {
-    color: "rgba(148,163,184,0.92)",
+    color: "rgba(255,255,255,0.72)",
     fontSize: 10,
     fontWeight: "900",
     fontFamily: LEAGUE_HEADER_ARABIC_FONT_FAMILY,
@@ -1089,6 +1089,36 @@ export const styles = createCompatStyleSheet({
     fontWeight: "700",
     marginLeft: 4,
   },
+  matchShowcaseMetaStrip: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 8,
+  },
+  matchShowcaseMetaItem: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 4,
+    maxWidth: "46%",
+  },
+  matchShowcaseMetaItemText: {
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 10,
+    fontWeight: "700",
+    textAlign: "right",
+    flexShrink: 1,
+    letterSpacing: 0.1,
+  },
+  matchShowcaseMetaDivider: {
+    color: "rgba(255,255,255,0.28)",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 14,
+    marginHorizontal: 2,
+  },
   matchShowcaseTeamsRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -1536,21 +1566,7 @@ export const styles = createCompatStyleSheet({
     paddingTop: 18,
     paddingHorizontal: 16,
     paddingBottom: 20,
-    overflow: "hidden",
-  },
-  lineupStageHeaderGlow: {
-    position: "absolute",
-    top: -18,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    opacity: 0.18,
-  },
-  lineupStageHeaderGlowLeft: {
-    left: -68,
-  },
-  lineupStageHeaderGlowRight: {
-    right: -68,
+    alignItems: "center",
   },
   lineupStageBrandWrap: {
     alignItems: "center",
@@ -1561,17 +1577,11 @@ export const styles = createCompatStyleSheet({
     height: 30,
     opacity: 0.92,
   },
-  lineupStageHeaderRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 16,
-  },
   lineupStageHeaderCenter: {
-    flex: 1,
+    width: "100%",
     alignItems: "center",
     justifyContent: "center",
-    marginHorizontal: 10,
+    marginTop: 14,
   },
   lineupStageKickoffText: {
     color: "#FFFFFF",

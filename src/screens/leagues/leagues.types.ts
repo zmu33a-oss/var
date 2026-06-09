@@ -70,6 +70,8 @@ export type LeagueTopScorerRow = {
 export type MatchShowcaseCardConfig = {
   id: string;
   leagueName: string;
+  stadium: string;
+  attendance: number;
   homeTeam: MatchShowcaseTeam;
   awayTeam: MatchShowcaseTeam;
   events: MatchEvent[];

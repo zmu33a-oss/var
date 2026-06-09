@@ -50,7 +50,6 @@ export function resolveWalletPassUrl(options: WalletPassUrlOptions) {
     username: options.profile.username,
     bio: options.profile.bio,
     location: options.profile.location,
-    email: options.profile.email,
     phoneNumber: options.profile.phoneNumber,
     profession: options.profile.profession,
     nationalId: options.profile.displayVarId || options.profile.nationalId,

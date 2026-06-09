@@ -144,6 +144,7 @@ export async function createAppwritePost(
       authorId: normalizedVarId,
       varId: normalizedVarId,
       ...(input.mediaUri?.trim() ? { mediaUri: input.mediaUri.trim() } : {}),
+      ...(input.fromVarLibrary ? { fromVarLibrary: true } : {}),
     },
   );
 

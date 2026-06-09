@@ -81,15 +81,11 @@ export function getEnglishProfileName(
 }
 
 export function getEnglishProfileLine(profile: ProfileData) {
-  const emailAlias = profile.email
-    .split("@")[0]
-    ?.replace(/[._-]+/g, " ")
-    .trim();
   const usernameAlias = profile.username.replace(/^@/, "").trim();
 
   return getEnglishProfileName(
     profile.displayName,
-    emailAlias || usernameAlias || "member profile",
+    usernameAlias || profile.displayVarId || "VAR Member",
   );
 }
 

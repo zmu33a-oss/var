@@ -1036,6 +1036,8 @@ export async function publishAppwritePost(options: {
 
   postMediaUri?: string;
 
+  fromVarLibrary?: boolean;
+
   appwriteUser: AppwriteAuthUser | null;
 
   profile: ProfileData;
@@ -1071,6 +1073,8 @@ export async function publishAppwritePost(options: {
     postAuthorId,
 
     postMediaUri,
+
+    fromVarLibrary,
 
     appwriteUser,
 
@@ -1220,6 +1224,8 @@ export async function publishAppwritePost(options: {
 
       mediaUri: resolvedMediaUri || undefined,
 
+      fromVarLibrary: fromVarLibrary || undefined,
+
     });
 
     const createdPostIdentity = buildCurrentUserPostIdentity({
@@ -1258,11 +1264,34 @@ export async function publishAppwritePost(options: {
 
   } catch (error) {
 
+    const rawMessage = error instanceof Error ? error.message : "";
+
+    if (
+      rawMessage.includes("fromVarLibrary")
+    ) {
+      setNotice(
+        "مجموعة المنشورات تحتاج حقل fromVarLibrary (Boolean). شغّل: node scripts/ensure-posts-media-uri.cjs",
+      );
+
+      return;
+    }
+
+    if (
+      rawMessage.includes("mediaUri") ||
+      rawMessage.includes("Unknown attribute")
+    ) {
+      setNotice(
+        "مجموعة المنشورات في Appwrite تحتاج حقل mediaUri (نوع URL أو String بطول كافٍ). أضفه من Console ثم أعد المحاولة.",
+      );
+
+      return;
+    }
+
     setNotice(
 
-      error instanceof Error
+      rawMessage
 
-        ? `فشل نشر المنشور: ${error.message}`
+        ? `فشل نشر المنشور: ${rawMessage}`
 
         : "فشل نشر المنشور في Appwrite.",
 

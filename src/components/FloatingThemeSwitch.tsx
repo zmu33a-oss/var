@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useMemo, useRef } from "react";
 import {
+  Animated,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -14,95 +15,165 @@ type FloatingThemeSwitchProps = {
   onChange: (mode: HomeMode) => void;
 };
 
+const TRACK_WIDTH = 68;
+const TRACK_HEIGHT = 26;
+const TRACK_PADDING = 2;
+const BORDER_WIDTH = 1;
+const LABEL_KNOB_GAP = 3;
+
 export default function FloatingThemeSwitch(props: FloatingThemeSwitchProps) {
-  const [open, setOpen] = useState(false);
+  const isXMode = props.selection === "x";
+  const knobAnim = useRef(new Animated.Value(isXMode ? 1 : 0)).current;
   const { width } = useWindowDimensions();
   const layoutWidth = Math.min(width, 430);
   const chromeScale = Math.max(0.84, Math.min(1, layoutWidth / 430));
-  const chevronSize = Math.round(11 * chromeScale);
-  const buttonPaddingHorizontal = Math.round(10 * chromeScale);
-  const buttonPaddingVertical = Math.round(7 * chromeScale);
-  const altPaddingHorizontal = Math.round(12 * chromeScale);
-  const altPaddingVertical = Math.round(8 * chromeScale);
-  const textSize = Math.round(13 * chromeScale);
-  const textMargin = Math.round(5 * chromeScale);
-  const alternateMode: HomeMode = props.selection === "x" ? "tiktok" : "x";
+
+  const metrics = useMemo(() => {
+    const trackWidth = Math.round(TRACK_WIDTH * chromeScale);
+    const trackHeight = Math.round(TRACK_HEIGHT * chromeScale);
+    const trackPadding = Math.max(2, Math.round(TRACK_PADDING * chromeScale));
+    const borderWidth = BORDER_WIDTH;
+    const innerWidth = trackWidth - trackPadding * 2 - borderWidth * 2;
+    const innerHeight = trackHeight - trackPadding * 2 - borderWidth * 2;
+    const knobSize = Math.min(innerWidth, innerHeight);
+    const knobTravel = Math.max(0, innerWidth - knobSize);
+    const knobTop = Math.max(0, (innerHeight - knobSize) / 2);
+    const labelSize = Math.round(8 * chromeScale);
+    const labelKnobGap = Math.max(2, Math.round(LABEL_KNOB_GAP * chromeScale));
+
+    return {
+      trackWidth,
+      trackHeight,
+      trackPadding,
+      knobSize,
+      knobTravel,
+      knobTop,
+      labelSize,
+      labelKnobGap,
+    };
+  }, [chromeScale]);
+
+  useEffect(() => {
+    Animated.timing(knobAnim, {
+      toValue: isXMode ? 1 : 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [isXMode, knobAnim]);
+
+  const knobTranslateX = knobAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, metrics.knobTravel],
+  });
+
+  const handleToggle = () => {
+    props.onChange(isXMode ? "tiktok" : "x");
+  };
 
   return (
-    <View style={styles.themeSwitchWrap}>
-      <Pressable
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityState={{ checked: isXMode }}
+      onPress={handleToggle}
+      style={({ pressed }) => [pressed ? styles.pressed : null]}
+    >
+      <View
         style={[
-          styles.themeSwitchButton,
+          styles.track,
           {
-            paddingHorizontal: buttonPaddingHorizontal,
-            paddingVertical: buttonPaddingVertical,
+            width: metrics.trackWidth,
+            height: metrics.trackHeight,
+            padding: metrics.trackPadding,
+            backgroundColor: isXMode ? "#1D9BF0" : "#000000",
           },
         ]}
-        onPress={() => setOpen((value) => !value)}
       >
-        <Ionicons
-          name={open ? "chevron-up" : "chevron-down"}
-          size={chevronSize}
-          color="#FFFFFF"
-        />
-        <Text
-          style={[
-            styles.themeSwitchText,
-            { fontSize: textSize, marginRight: textMargin },
-          ]}
-        >
-          {props.selection === "x" ? "VAR X" : "VAR TIK"}
-        </Text>
-      </Pressable>
-
-      {open ? (
-        <Pressable
-          style={[
-            styles.themeSwitchAltButton,
-            {
-              paddingHorizontal: altPaddingHorizontal,
-              paddingVertical: altPaddingVertical,
-            },
-          ]}
-          onPress={() => {
-            props.onChange(alternateMode);
-            setOpen(false);
-          }}
-        >
-          <Text
+        <View style={styles.trackInner}>
+          <Animated.View
             style={[
-              styles.themeSwitchText,
-              { fontSize: textSize, marginRight: textMargin },
+              styles.knob,
+              {
+                top: metrics.knobTop,
+                width: metrics.knobSize,
+                height: metrics.knobSize,
+                borderRadius: metrics.knobSize / 2,
+                transform: [{ translateX: knobTranslateX }],
+              },
+            ]}
+          />
+
+          <View
+            pointerEvents="none"
+            style={[
+              styles.labelRow,
+              isXMode
+                ? {
+                    justifyContent: "flex-start",
+                    paddingLeft: metrics.labelKnobGap,
+                    paddingRight: metrics.knobSize + metrics.labelKnobGap,
+                  }
+                : {
+                    justifyContent: "flex-start",
+                    paddingLeft: metrics.knobSize + metrics.labelKnobGap,
+                    paddingRight: metrics.labelKnobGap,
+                  },
             ]}
           >
-            {alternateMode === "x" ? "VAR X" : "VAR TIK"}
-          </Text>
-        </Pressable>
-      ) : null}
-    </View>
+            <Text
+              numberOfLines={1}
+              style={[styles.label, { fontSize: metrics.labelSize }]}
+            >
+              {isXMode ? "VAR X" : "VARtik"}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  themeSwitchWrap: {
-    alignItems: "center",
+  pressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
-  themeSwitchButton: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.76)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.86)",
+  track: {
     borderRadius: 999,
+    borderWidth: BORDER_WIDTH,
+    borderColor: "rgba(255,255,255,0.92)",
+    direction: "ltr",
   },
-  themeSwitchAltButton: {
-    marginTop: 8,
-    backgroundColor: "rgba(0,0,0,0.64)",
-    borderRadius: 14,
+  trackInner: {
+    flex: 1,
+    position: "relative",
+    justifyContent: "center",
   },
-  themeSwitchText: {
+  knob: {
+    position: "absolute",
+    left: 0,
+    backgroundColor: "#FFFFFF",
+  },
+  labelRow: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  label: {
     color: "#FFFFFF",
     fontWeight: "900",
-    letterSpacing: 0.8,
+    letterSpacing: 0,
+    includeFontPadding: false,
+    flexShrink: 0,
+    ...Platform.select({
+      android: {
+        fontFamily: "sans-serif-black",
+      },
+      ios: {
+        fontWeight: "900",
+      },
+      default: {
+        fontWeight: "900",
+      },
+    }),
   },
 });

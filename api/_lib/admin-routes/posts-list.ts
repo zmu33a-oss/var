@@ -25,11 +25,27 @@ export async function handler(request: any, response: any) {
     await requireAdminSession(request, config);
     requireServerKey(config);
 
+    const url = new URL(request.url ?? "http://localhost", "http://localhost");
+    const varId = url.searchParams.get("varId")?.trim() ?? "";
+    const limitParam = Number.parseInt(
+      url.searchParams.get("limit") ?? "25",
+      10,
+    );
+    const limit = Math.min(
+      Math.max(Number.isFinite(limitParam) ? limitParam : 25, 1),
+      100,
+    );
+
+    const queries = [Query.orderDesc("$createdAt"), Query.limit(limit)];
+    if (varId) {
+      queries.unshift(Query.equal("varId", varId));
+    }
+
     const databases = new Databases(createServerClient(config));
     const responseDocuments = await databases.listDocuments(
       config.databaseId,
       config.postsCollectionId,
-      [Query.orderDesc("$createdAt"), Query.limit(25)],
+      queries,
     );
 
     const posts = responseDocuments.documents.map((document) => ({
@@ -43,7 +59,12 @@ export async function handler(request: any, response: any) {
       hidden: readPostHidden(document as Record<string, unknown>),
     }));
 
-    sendJson(response, 200, { ok: true, posts });
+    sendJson(response, 200, {
+      ok: true,
+      posts,
+      total: responseDocuments.total,
+      limit,
+    });
   } catch (error) {
     const code = error instanceof Error ? error.message : "UNKNOWN";
     const status =

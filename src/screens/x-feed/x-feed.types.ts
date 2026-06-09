@@ -4,6 +4,7 @@ import type {
   Post,
   PostReply,
 } from "../../app.types";
+import type { MembershipCardTier } from "../../lib/membershipCardTier";
 
 export type XFeedTab = "profile" | "timeline" | "var-library";
 
@@ -31,6 +32,8 @@ export type OpenedAuthorProfile = {
   username: string;
   joinDate?: string;
   nationality?: string;
+  association?: string;
+  cardTier?: MembershipCardTier;
 };
 
 export type WebAudioInstance = {
@@ -136,7 +139,9 @@ export const AUTHOR_SWIPE_THUMB_SIZE = 38;
 export const AUTHOR_SWIPE_HORIZONTAL_PADDING = 5;
 export const AUTHOR_SWIPE_THRESHOLD = 0.74;
 export const AUTHOR_SWIPE_THUMB_TOP_OFFSET =
-  (AUTHOR_SWIPE_TRACK_HEIGHT - AUTHOR_SWIPE_THUMB_SIZE) / 2 - 2;
+  (AUTHOR_SWIPE_TRACK_HEIGHT - AUTHOR_SWIPE_THUMB_SIZE) / 2;
+export const AUTHOR_SWIPE_LABEL_INSET =
+  AUTHOR_SWIPE_THUMB_SIZE + AUTHOR_SWIPE_HORIZONTAL_PADDING + 10;
 
 export function createDefaultAuthorProfileSectionVisibility(): AuthorProfileSectionVisibility {
   return {

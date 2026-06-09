@@ -401,7 +401,6 @@ export function ProfileUserPreviewScreen(props: {
             points={earnedPoints}
             showControls={false}
             style={styles.identityRewardsTracker}
-            titleTextStyle={titleArabicTextStyle}
           />
         </LinearGradient>
 

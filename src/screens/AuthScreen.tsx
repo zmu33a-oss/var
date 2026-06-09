@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as LocalAuthentication from "expo-local-authentication";
 import {
   Animated,
   Easing,
+  Image,
   type GestureResponderEvent,
   type TextInputProps,
   Modal,
@@ -38,6 +39,8 @@ import {
 } from "../lib/crossPlatformStyles";
 
 const MONO_FONT = Platform.OS === "ios" ? "Courier" : "monospace";
+const LOGIN_SOUND = require("../../assets/audio/login.mp3");
+const LOGIN_SOUND_VOLUME = 0.04;
 const FULL_NAME_PATTERN = /^[A-Za-z\u0600-\u06FF\s'-]+$/;
 const USERNAME_PATTERN = /^[a-z0-9._]{3,20}$/;
 const LOGIN_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+$/;
@@ -45,6 +48,139 @@ const VAR_ADMIN_USERNAME = "var";
 
 type ApplePayConfirmState = "idle" | "armed" | "processing";
 type PasswordRecoveryView = "request" | "reset";
+type WebAudioInstance = {
+  preload?: string;
+  currentTime?: number;
+  volume?: number;
+  play?: () => Promise<void>;
+  pause?: () => void;
+};
+type WebAudioConstructor = new (src?: string) => WebAudioInstance;
+type LoginSoundEngine = {
+  play: () => Promise<void>;
+  stop: () => void;
+  setVolume: (volume: number) => void;
+};
+
+function createLoginSoundEngine(uri: string): LoginSoundEngine | null {
+  if (Platform.OS !== "web") {
+    return null;
+  }
+
+  const audioConstructor = (
+    globalThis as typeof globalThis & { Audio?: WebAudioConstructor }
+  ).Audio;
+
+  if (!audioConstructor) {
+    return null;
+  }
+
+  const audio = new audioConstructor(uri);
+  audio.preload = "auto";
+
+  const audioContextConstructor = (
+    globalThis as typeof globalThis & {
+      AudioContext?: new () => {
+        createMediaElementSource: (element: HTMLMediaElement) => {
+          connect: (destination: unknown) => void;
+        };
+        createGain: () => {
+          gain: { value: number };
+          connect: (destination: unknown) => void;
+        };
+        destination: unknown;
+        state: string;
+        resume: () => Promise<void>;
+      };
+      webkitAudioContext?: new () => {
+        createMediaElementSource: (element: HTMLMediaElement) => {
+          connect: (destination: unknown) => void;
+        };
+        createGain: () => {
+          gain: { value: number };
+          connect: (destination: unknown) => void;
+        };
+        destination: unknown;
+        state: string;
+        resume: () => Promise<void>;
+      };
+    }
+  ).AudioContext;
+
+  const webkitAudioContextConstructor = (
+    globalThis as typeof globalThis & {
+      webkitAudioContext?: new () => {
+        createMediaElementSource: (element: HTMLMediaElement) => {
+          connect: (destination: unknown) => void;
+        };
+        createGain: () => {
+          gain: { value: number };
+          connect: (destination: unknown) => void;
+        };
+        destination: unknown;
+        state: string;
+        resume: () => Promise<void>;
+      };
+    }
+  ).webkitAudioContext;
+
+  const contextConstructor =
+    audioContextConstructor ?? webkitAudioContextConstructor;
+
+  if (!contextConstructor) {
+    return {
+      play: async () => {
+        audio.volume = LOGIN_SOUND_VOLUME;
+        if (typeof audio.currentTime === "number") {
+          audio.currentTime = 0;
+        }
+        await audio.play?.();
+      },
+      stop: () => {
+        audio.pause?.();
+        if (typeof audio.currentTime === "number") {
+          audio.currentTime = 0;
+        }
+      },
+      setVolume: (volume) => {
+        audio.volume = volume;
+      },
+    };
+  }
+
+  const context = new contextConstructor();
+  const mediaElement = audio as unknown as HTMLMediaElement;
+  const source = context.createMediaElementSource(mediaElement);
+  const gainNode = context.createGain();
+  gainNode.gain.value = LOGIN_SOUND_VOLUME;
+  source.connect(gainNode);
+  gainNode.connect(context.destination);
+  audio.volume = 1;
+
+  return {
+    play: async () => {
+      gainNode.gain.value = LOGIN_SOUND_VOLUME;
+      if (typeof audio.currentTime === "number") {
+        audio.currentTime = 0;
+      }
+
+      if (context.state === "suspended") {
+        await context.resume();
+      }
+
+      await audio.play?.();
+    },
+    stop: () => {
+      audio.pause?.();
+      if (typeof audio.currentTime === "number") {
+        audio.currentTime = 0;
+      }
+    },
+    setVolume: (volume) => {
+      gainNode.gain.value = volume;
+    },
+  };
+}
 type AuthErrorCandidate = {
   code?: unknown;
   type?: unknown;
@@ -401,6 +537,8 @@ export default function AuthScreen(props: AuthScreenProps) {
     useState<ApplePayConfirmState>("idle");
   const [showLoginIntro, setShowLoginIntro] = useState(authMode === "login");
   const loginIntroPlayed = useRef(false);
+  const loginSoundEngineRef = useRef<LoginSoundEngine | null>(null);
+  const loginSoundStartedRef = useRef(false);
   const varPassStepArmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -452,6 +590,43 @@ export default function AuthScreen(props: AuthScreenProps) {
         ? "اضغط مرة ثانية الآن ليبدأ طلب Face ID أو المعاينة على الويب."
         : "الضغطة الأولى تجهز العملية، والثانية تحاكي تأكيد Apple Pay الحقيقي.";
   const normalizedAdminCandidate = normalizeSignupUsername(username);
+  const loginSoundUri = useMemo(() => {
+    try {
+      const resolvedSource = Image.resolveAssetSource(LOGIN_SOUND);
+
+      if (resolvedSource?.uri) {
+        return resolvedSource.uri;
+      }
+    } catch {
+      // Ignore asset resolution failures on unsupported platforms.
+    }
+
+    return typeof LOGIN_SOUND === "string" ? LOGIN_SOUND : null;
+  }, []);
+
+  const stopLoginSound = () => {
+    loginSoundEngineRef.current?.stop();
+  };
+
+  const playLoginSound = async () => {
+    if (!audioOn || authMode !== "login") {
+      return;
+    }
+
+    const engine = loginSoundEngineRef.current;
+
+    if (!engine) {
+      return;
+    }
+
+    try {
+      engine.setVolume(LOGIN_SOUND_VOLUME);
+      await engine.play();
+      loginSoundStartedRef.current = true;
+    } catch {
+      // Browsers may block autoplay until the user interacts with the page.
+    }
+  };
 
   const loginWithEnteredCredentials = async () => {
     const trimmedEmail = email.trim().toLowerCase();
@@ -501,8 +676,42 @@ export default function AuthScreen(props: AuthScreenProps) {
       if (applePayConfirmTimeoutRef.current) {
         clearTimeout(applePayConfirmTimeoutRef.current);
       }
+
+      stopLoginSound();
     };
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || !loginSoundUri) {
+      loginSoundEngineRef.current = null;
+      return;
+    }
+
+    const engine = createLoginSoundEngine(loginSoundUri);
+    loginSoundEngineRef.current = engine;
+
+    return () => {
+      engine?.stop();
+      loginSoundEngineRef.current = null;
+      loginSoundStartedRef.current = false;
+    };
+  }, [loginSoundUri]);
+
+  useEffect(() => {
+    if (authMode !== "login") {
+      stopLoginSound();
+      loginSoundStartedRef.current = false;
+      return;
+    }
+
+    if (audioOn) {
+      void playLoginSound();
+      return;
+    }
+
+    stopLoginSound();
+    loginSoundStartedRef.current = false;
+  }, [authMode, audioOn, loginSoundUri]);
 
   useEffect(() => {
     const recoveryChallenge = readAppwriteRecoveryChallenge();
@@ -1067,38 +1276,44 @@ export default function AuthScreen(props: AuthScreenProps) {
           <View style={styles.loginAudioRow}>
             <Pressable
               style={styles.audioButton}
-              onPress={() => setAudioOn((value) => !value)}
+              accessibilityRole="button"
+              accessibilityLabel={audioOn ? "كتم صوت الدخول" : "تشغيل صوت الدخول"}
+              onPress={() => {
+                setAudioOn((value) => {
+                  const nextValue = !value;
+
+                  if (!nextValue) {
+                    stopLoginSound();
+                    loginSoundStartedRef.current = false;
+                  } else if (authMode === "login") {
+                    void playLoginSound();
+                  }
+
+                  return nextValue;
+                });
+              }}
             >
               <Ionicons
                 name={audioOn ? "headset" : "headset-outline"}
-                size={18}
+                size={22}
                 color={audioOn ? "#00FF6B" : "#5F7E69"}
               />
             </Pressable>
           </View>
 
-          <View style={styles.terminalLinesBlock}>
-            {!showLoginIntro ? (
-              <>
-                <TerminalLine
-                  text="Route /auth/login initialized"
-                  startDelay={0}
-                />
-                <TerminalLine text="Neon gateway ready" startDelay={260} />
-                <TerminalLine
-                  text="VAR PASS Apple Pay armed"
-                  startDelay={520}
-                />
-              </>
-            ) : null}
+          <View
+            pointerEvents="none"
+            style={styles.terminalLinesBlock}
+          >
+            <TerminalLine
+              text="Route /auth/login initialized"
+              startDelay={0}
+            />
+            <TerminalLine text="Neon gateway ready" startDelay={260} />
+            <TerminalLine text="VAR PASS Apple Pay armed" startDelay={520} />
           </View>
 
-          <View style={styles.authDivider}>
-            <View style={styles.authDividerLine} />
-            <Text style={styles.authDividerText}>أو أكمل يدويًا</Text>
-            <View style={styles.authDividerLine} />
-          </View>
-
+          <View style={styles.loginFormBody}>
           <NeonField
             placeholder="Appwrite Email"
             value={email}
@@ -1114,11 +1329,6 @@ export default function AuthScreen(props: AuthScreenProps) {
             onIconPress={() => setShowPassword((value) => !value)}
           />
 
-          <Text style={styles.loginHintText}>
-            الدخول هنا ببريد Appwrite فقط. اسم المستخدم مثل var أو VAR ID لا
-            يعملان في هذه الخانة.
-          </Text>
-
           <Pressable
             style={[
               styles.neonPrimaryButton,
@@ -1133,14 +1343,13 @@ export default function AuthScreen(props: AuthScreenProps) {
           </Pressable>
 
           <Pressable style={styles.neonGhostButton} onPress={handleGoogleLogin}>
-            <View style={styles.neonGhostButtonRow}>
+            <View style={styles.googleAuthButtonRow}>
               <Ionicons
                 name="logo-google"
-                size={18}
+                size={22}
                 color="#00FF6B"
-                style={styles.neonGhostButtonIcon}
               />
-              <Text style={styles.neonGhostButtonText}>G with Google</Text>
+              <Text style={styles.neonGhostButtonText}>with Google</Text>
             </View>
           </Pressable>
 
@@ -1178,6 +1387,7 @@ export default function AuthScreen(props: AuthScreenProps) {
             <Pressable onPress={() => onChangeMode("signup")}>
               <Text style={styles.authLinkText}>حساب جديد</Text>
             </Pressable>
+          </View>
           </View>
 
           <Modal
@@ -1478,7 +1688,14 @@ export default function AuthScreen(props: AuthScreenProps) {
           </Pressable>
 
           <Pressable style={styles.neonGhostButton} onPress={handleGoogleLogin}>
-            <Text style={styles.neonGhostButtonText}>G with Google</Text>
+            <View style={styles.googleAuthButtonRow}>
+              <Ionicons
+                name="logo-google"
+                size={22}
+                color="#00FF6B"
+              />
+              <Text style={styles.neonGhostButtonText}>with Google</Text>
+            </View>
           </Pressable>
 
           {message ? <Text style={styles.authMessage}>{message}</Text> : null}
@@ -1737,7 +1954,8 @@ const styles = createCompatStyleSheet({
     justifyContent: "flex-start",
   },
   authSurface: {
-    minHeight: 640,
+    position: "relative",
+    minHeight: 580,
     backgroundColor: "rgba(0,0,0,0.88)",
     borderRadius: 28,
     borderWidth: 1,
@@ -2194,16 +2412,15 @@ const styles = createCompatStyleSheet({
     backgroundColor: "rgba(0,255,107,0.06)",
   },
   loginAudioRow: {
-    alignItems: "flex-start",
+    position: "absolute",
+    top: 14,
+    right: 14,
+    zIndex: 4,
   },
   audioButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    padding: 4,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: "rgba(0,255,107,0.54)",
   },
   loginSplashTitle: {
     color: "#00FF6B",
@@ -2235,9 +2452,15 @@ const styles = createCompatStyleSheet({
     backgroundColor: "#00FF6B",
   },
   terminalLinesBlock: {
-    marginTop: 28,
-    marginBottom: 26,
+    position: "absolute",
+    top: 54,
+    left: 20,
+    right: 20,
     minHeight: 96,
+    zIndex: 1,
+  },
+  loginFormBody: {
+    paddingTop: 204,
   },
   terminalLine: {
     flexDirection: "row-reverse",
@@ -2258,23 +2481,6 @@ const styles = createCompatStyleSheet({
     color: "#00FF6B",
     fontSize: 18,
     fontFamily: MONO_FONT,
-  },
-  authDivider: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  authDividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  authDividerText: {
-    color: "rgba(255,255,255,0.46)",
-    fontSize: 11,
-    fontWeight: "700",
-    marginHorizontal: 12,
-    letterSpacing: 0.6,
   },
   neonFieldWrap: {
     flexDirection: "row-reverse",
@@ -2306,7 +2512,7 @@ const styles = createCompatStyleSheet({
     borderWidth: 1,
     borderColor: "rgba(0,255,107,0.92)",
     backgroundColor: "rgba(0,255,107,0.12)",
-    marginTop: 10,
+    marginTop: 14,
   },
   neonButtonDisabled: {
     opacity: 0.6,
@@ -2323,7 +2529,7 @@ const styles = createCompatStyleSheet({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "rgba(0,255,107,0.84)",
-    marginTop: 10,
+    marginTop: 16,
   },
   neonGhostButtonDisabled: {
     opacity: 0.7,
@@ -2333,6 +2539,13 @@ const styles = createCompatStyleSheet({
     alignItems: "center",
     justifyContent: "center",
   },
+  googleAuthButtonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    direction: "ltr",
+  },
   neonGhostButtonIcon: {
     marginLeft: 8,
   },
@@ -2340,14 +2553,6 @@ const styles = createCompatStyleSheet({
     color: "#00FF6B",
     fontSize: 18,
     fontFamily: MONO_FONT,
-  },
-  loginHintText: {
-    color: "rgba(0,255,107,0.62)",
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: "center",
-    fontFamily: MONO_FONT,
-    marginTop: 8,
   },
   signupHintText: {
     color: "rgba(0,255,107,0.72)",

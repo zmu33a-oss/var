@@ -7,6 +7,8 @@ import { handler as usersVerificationHandler } from "../_lib/admin-routes/users-
 import { handler as usersCardTierHandler } from "../_lib/admin-routes/users-card-tier.js";
 import { handler as usersMigrateCardTiersHandler } from "../_lib/admin-routes/users-migrate-card-tiers.js";
 import { handler as usersStatusHandler } from "../_lib/admin-routes/users-status.js";
+import { handler as usersDetailsHandler } from "../_lib/admin-routes/users-details.js";
+import { handler as usersUpdateHandler } from "../_lib/admin-routes/users-update.js";
 
 type AdminHandler = (request: any, response: any) => Promise<void> | void;
 
@@ -19,6 +21,8 @@ const ROUTES: Record<string, AdminHandler> = {
   "card-tier": usersCardTierHandler,
   "migrate-card-tiers": usersMigrateCardTiersHandler,
   status: usersStatusHandler,
+  details: usersDetailsHandler,
+  update: usersUpdateHandler,
 };
 
 function readAction(request: any) {

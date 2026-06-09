@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { ROSHN_ICON } from "../leagues.constants";
 import type { MatchShowcaseCardConfig } from "../leagues.types";
+import { MatchShowcaseMetaStrip } from "./common/MatchShowcaseMetaStrip";
 import { TeamHeroPanel as MatchShowcaseHeroTeamPanel } from "./common/TeamHeroPanel";
 import { styles } from "../leagues.styles";
 
@@ -121,6 +122,11 @@ export function MatchDetailShowcaseHero(props: {
               caption="الضيف"
             />
           </View>
+
+          <MatchShowcaseMetaStrip
+            attendance={props.config.attendance}
+            stadium={props.config.stadium}
+          />
         </View>
 
         <View style={styles.matchDetailShowcaseDivider} />

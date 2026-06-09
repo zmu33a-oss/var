@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import type { MembershipCardTier } from "../lib/membershipCardTier";
 import XFeedScreen from "./XFeedScreen";
 import {
   Animated,
@@ -27,6 +28,8 @@ import type {
   Post,
   Video,
 } from "../app.types";
+import type { VarLibraryPublishInput } from "./x-feed/varPlayerLibrary.constants";
+import type { XFeedTab } from "./x-feed/x-feed.types";
 
 const TIKTOK_HANDLE_WIDTH = 30;
 const TIKTOK_HANDLE_HEIGHT = 136;
@@ -42,6 +45,7 @@ const FULLSCREEN_DOUBLE_TAP_DELAY = 260;
 
 type HomeScreenProps = {
   homeMode: HomeMode;
+  gpuAccelerationEnabled?: boolean;
   isLoggedIn: boolean;
   palette: Palette;
   posts: Post[];
@@ -60,6 +64,8 @@ type HomeScreenProps = {
   currentUserAvatarUri: string;
   currentUserJoinDate: string;
   currentUserNationality: string;
+  currentUserAssociation: string;
+  currentUserCardTier: MembershipCardTier;
   currentUserUsername: string;
   currentUserRole: "admin" | "member";
   currentUserIsVerified: boolean;
@@ -78,6 +84,10 @@ type HomeScreenProps = {
   onDeletePost: (postId: number) => void;
   onUpdatePostContent: (postId: number, content: string) => void;
   onReportPost: (postId: number) => void;
+  onPublishLibraryPost: (input: VarLibraryPublishInput) => Promise<boolean>;
+  isPublishingLibraryPost: boolean;
+  canManageVarLibrary?: boolean;
+  onXFeedTabChange?: (tab: XFeedTab) => void;
   onToggleVideoLike: (videoId: number) => void;
   onToggleVideoSave: (videoId: number) => void;
   onToggleVideoShare: (videoId: number) => void;
@@ -90,6 +100,7 @@ type HomeScreenProps = {
 export default function HomeScreen(props: HomeScreenProps) {
   const {
     homeMode,
+    gpuAccelerationEnabled = true,
     isLoggedIn,
     posts,
     videos,
@@ -106,6 +117,8 @@ export default function HomeScreen(props: HomeScreenProps) {
     currentUserAvatarUri,
     currentUserJoinDate,
     currentUserNationality,
+    currentUserAssociation,
+    currentUserCardTier,
     currentUserUsername,
     currentUserRole,
     currentUserIsVerified,
@@ -124,6 +137,10 @@ export default function HomeScreen(props: HomeScreenProps) {
     onDeletePost,
     onUpdatePostContent,
     onReportPost,
+    onPublishLibraryPost,
+    isPublishingLibraryPost,
+    canManageVarLibrary,
+    onXFeedTabChange,
     onToggleVideoLike,
     onToggleVideoSave,
     onToggleVideoShare,
@@ -143,11 +160,11 @@ export default function HomeScreen(props: HomeScreenProps) {
           <HomePingButton onPress={onPingAppwrite} mode="tiktok" />
         ) : null}
         <ScrollView
-          decelerationRate="fast"
-          disableIntervalMomentum
-          pagingEnabled
+          decelerationRate={gpuAccelerationEnabled ? "fast" : "normal"}
+          disableIntervalMomentum={gpuAccelerationEnabled}
+          pagingEnabled={gpuAccelerationEnabled}
           snapToAlignment="start"
-          snapToInterval={tiktokCardHeight}
+          snapToInterval={gpuAccelerationEnabled ? tiktokCardHeight : undefined}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.tiktokScreenContent}
           refreshControl={
@@ -199,6 +216,8 @@ export default function HomeScreen(props: HomeScreenProps) {
         currentUserAvatarUri={currentUserAvatarUri}
         currentUserJoinDate={currentUserJoinDate}
         currentUserNationality={currentUserNationality}
+        currentUserAssociation={currentUserAssociation}
+        currentUserCardTier={currentUserCardTier}
         currentUserUsername={currentUserUsername}
         currentUserRole={currentUserRole}
         currentUserIsVerified={currentUserIsVerified}
@@ -217,6 +236,10 @@ export default function HomeScreen(props: HomeScreenProps) {
         onDeletePost={onDeletePost}
         onUpdatePostContent={onUpdatePostContent}
         onReportPost={onReportPost}
+        onPublishLibraryPost={onPublishLibraryPost}
+        isPublishingLibraryPost={isPublishingLibraryPost}
+        canManageVarLibrary={canManageVarLibrary}
+        onActiveTabChange={onXFeedTabChange}
       />
     </View>
   );

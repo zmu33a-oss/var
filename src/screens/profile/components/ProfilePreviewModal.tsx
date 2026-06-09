@@ -197,11 +197,6 @@ export function ProfilePreviewModal(props: {
           />
           <PreviewDetailRow
             arabicFontFamily={props.arabicFontFamily}
-            label="البريد"
-            value={props.profile.email}
-          />
-          <PreviewDetailRow
-            arabicFontFamily={props.arabicFontFamily}
             label="الهاتف"
             value={props.profile.phoneNumber}
           />

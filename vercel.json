@@ -24,6 +24,18 @@
       "destination": "/api/admin/audit?action=:action"
     },
     {
+      "source": "/api/admin/moderation/:action",
+      "destination": "/api/admin/moderation?action=:action"
+    },
+    {
+      "source": "/api/admin/keys/:action",
+      "destination": "/api/admin/keys?action=:action"
+    },
+    {
+      "source": "/api/admin/settings/:action",
+      "destination": "/api/admin/settings?action=:action"
+    },
+    {
       "source": "/add/:path*",
       "destination": "/"
     }

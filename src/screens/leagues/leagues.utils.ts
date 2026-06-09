@@ -21,6 +21,10 @@ import {
   NASSR_ICON,
 } from "./leagues.constants";
 
+export function formatMatchAttendance(attendance: number) {
+  return attendance.toLocaleString("ar-SA");
+}
+
 export function formatCountdown(totalSeconds: number) {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);

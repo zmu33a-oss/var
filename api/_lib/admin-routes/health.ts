@@ -1,4 +1,9 @@
-import { handleOptions, readAdminConfig, sendJson } from "../admin-shared.js";
+import {
+  handleOptions,
+  readAdminConfig,
+  readAdminHealthSnapshot,
+  sendJson,
+} from "../admin-shared.js";
 
 export async function handler(request: any, response: any) {
   if (handleOptions(request, response)) {
@@ -11,27 +16,23 @@ export async function handler(request: any, response: any) {
   }
 
   const config = readAdminConfig();
-  const missing: string[] = [];
 
-  if (!config.projectId) {
-    missing.push("projectId");
+  try {
+    const snapshot = await readAdminHealthSnapshot(config);
+
+    sendJson(response, 200, {
+      ok: snapshot.ok,
+      writesEnabled: snapshot.writesEnabled,
+      missing: snapshot.missing,
+      collections: snapshot.collections,
+    });
+  } catch (error) {
+    sendJson(response, 500, {
+      ok: false,
+      writesEnabled: false,
+      missing: ["health_probe_failed"],
+      collections: [],
+      error: error instanceof Error ? error.message : "UNKNOWN",
+    });
   }
-
-  if (!config.databaseId) {
-    missing.push("databaseId");
-  }
-
-  if (!config.profilesCollectionId) {
-    missing.push("profilesCollectionId");
-  }
-
-  if (!config.apiKey) {
-    missing.push("apiKey");
-  }
-
-  sendJson(response, 200, {
-    ok: true,
-    writesEnabled: missing.length === 0,
-    missing,
-  });
 }

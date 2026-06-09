@@ -19,7 +19,6 @@ type WalletPassPayload = {
   username: string;
   bio: string;
   location: string;
-  email: string;
   phoneNumber: string;
   profession: string;
   nationalId: string;
@@ -147,7 +146,6 @@ function getWalletPassPayload(requestUrl: URL): WalletPassPayload {
     username: getSearchParamValue(searchParams, "username", "@varpass"),
     bio: getSearchParamValue(searchParams, "bio", "Digital Identity"),
     location: getSearchParamValue(searchParams, "location", "الرياض، السعودية"),
-    email: getSearchParamValue(searchParams, "email", "support@xtik.app"),
     phoneNumber: getSearchParamValue(searchParams, "phoneNumber", ""),
     profession: getSearchParamValue(searchParams, "profession", ""),
     nationalId: getSearchParamValue(searchParams, "nationalId", "VAR-PASS"),
@@ -259,11 +257,6 @@ function buildPassJson(
           key: "location",
           label: "الموقع",
           value: payload.location,
-        },
-        {
-          key: "email",
-          label: "البريد",
-          value: payload.email,
         },
         {
           key: "phoneNumber",

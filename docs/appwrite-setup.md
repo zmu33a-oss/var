@@ -16,6 +16,7 @@ Add the following values to `.env.local`:
 - `EXPO_PUBLIC_APPWRITE_PREDICTIONS_COLLECTION_ID`
 - `EXPO_PUBLIC_APPWRITE_POINTS_COLLECTION_ID`
 - `EXPO_PUBLIC_APPWRITE_SOCIAL_INTERACTIONS_COLLECTION_ID`
+- `EXPO_PUBLIC_APPWRITE_PROFILE_IMAGES_BUCKET_ID` (required for post images and مكتبة فار)
 
 You can copy `.env.example` to `.env.local` and replace the placeholder values.
 
@@ -66,6 +67,15 @@ Then put each collection ID into its matching env variable.
 - `title`
 - `content`
 - `authorId`
+- `mediaUri` (URL or String, recommended for image posts and مكتبة فار)
+
+### Storage bucket (profile images / post images)
+
+Create a Storage bucket in Appwrite (for example `profile-images`) and set:
+
+- `EXPO_PUBLIC_APPWRITE_PROFILE_IMAGES_BUCKET_ID` to that bucket ID
+- `create` permission for authenticated users
+- `read` permission for users (or public read if you want images visible without login)
 
 ### profiles
 

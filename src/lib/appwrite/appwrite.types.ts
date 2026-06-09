@@ -21,6 +21,7 @@ export type AppwritePostRecord = {
   authorId: string;
   varId: string;
   mediaUri?: string;
+  fromVarLibrary?: boolean;
   createdAt: string;
 };
 
@@ -180,6 +181,37 @@ export type AppwriteCollectionIds = {
   likesCollectionId: string;
   sharesCollectionId: string;
   profileImagesBucketId: string;
+  varLibraryCollectionId: string;
+};
+
+export type AppwriteVarLibraryRecord = {
+  id: string;
+  name: string;
+  club: string;
+  position: string;
+  imageUri: string;
+  active: boolean;
+  createdByVarId?: string;
+  createdAt: string;
+};
+
+export type AppwriteVarLibraryInput = {
+  name: string;
+  club: string;
+  position: string;
+  imageUri: string;
+  createdByVarId?: string;
+};
+
+export type AppwriteVarLibraryDocument = {
+  $id: string;
+  $createdAt: string;
+  name?: unknown;
+  club?: unknown;
+  position?: unknown;
+  imageUri?: unknown;
+  active?: unknown;
+  createdByVarId?: unknown;
 };
 
 export type AppwriteProjectConfig = {
@@ -217,6 +249,7 @@ export type AppwritePostInput = {
   content: string;
   varId: string;
   mediaUri?: string;
+  fromVarLibrary?: boolean;
 };
 
 export type AppwritePostDocument = {
@@ -227,6 +260,7 @@ export type AppwritePostDocument = {
   authorId?: unknown;
   varId?: unknown;
   mediaUri?: unknown;
+  fromVarLibrary?: unknown;
   isHidden?: unknown;
   status?: unknown;
 };

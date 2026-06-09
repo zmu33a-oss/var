@@ -42,6 +42,18 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #3f3f46;
         }
+
+        .admin-view.hidden {
+            display: none !important;
+        }
+
+        #nav-drawer.open {
+            transform: translateX(0);
+        }
+
+        #nav-drawer {
+            transform: translateX(100%);
+        }
     </style>
 </head>
 <body class="text-zinc-100 min-h-screen flex flex-col overflow-x-hidden">
@@ -74,68 +86,186 @@
         </form>
     </div>
 
+    <!-- User Account Editor -->
+    <div id="user-edit-overlay" class="fixed inset-0 z-[110] bg-zinc-950/90 backdrop-blur-sm hidden items-center justify-center p-4 sm:p-6">
+        <form id="user-edit-form" class="w-full max-w-3xl max-h-[92vh] overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl">
+            <div class="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur border-b border-zinc-800 px-6 py-5 flex items-start justify-between gap-4">
+                <div>
+                    <p class="text-[11px] font-bold text-indigo-400 uppercase tracking-wider">إدارة الحساب</p>
+                    <h2 class="text-lg font-bold text-white mt-1">تعديل بيانات المستخدم</h2>
+                    <p id="user-edit-var-label" class="text-xs text-zinc-500 font-mono mt-1" dir="ltr">—</p>
+                </div>
+                <button id="user-edit-close-btn" type="button" class="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors" title="إغلاق">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-6">
+                <section class="space-y-3">
+                    <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider">بيانات الدخول</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-zinc-400 mb-2">البريد الإلكتروني</label>
+                            <input id="user-edit-email" type="email" dir="ltr" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-zinc-400 mb-2">كلمة مرور جديدة</label>
+                            <input id="user-edit-password" type="password" dir="ltr" placeholder="اتركه فارغاً لعدم التغيير" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                </section>
+
+                <section class="space-y-3">
+                    <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider">الهوية العامة</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-zinc-400 mb-2">الاسم الظاهر</label>
+                            <input id="user-edit-display-name" type="text" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-zinc-400 mb-2">اسم المستخدم</label>
+                            <input id="user-edit-username" type="text" dir="ltr" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-zinc-400 mb-2">VAR ID</label>
+                            <input id="user-edit-display-var-id" type="text" dir="ltr" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-zinc-400 mb-2">رابط الصورة</label>
+                            <input id="user-edit-avatar-url" type="url" dir="ltr" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                </section>
+
+                <section class="space-y-3">
+                    <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider">صلاحيات الحساب</h3>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-4">
+                        <div>
+                            <p class="text-sm font-bold text-white">توثيق الحساب</p>
+                            <p id="user-edit-verified-label" class="text-[11px] text-zinc-500 mt-1">—</p>
+                        </div>
+                        <button id="user-edit-verification-btn" type="button" class="shrink-0 px-4 py-2 rounded-xl text-xs font-bold bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 transition-all">
+                            منح توثيق
+                        </button>
+                    </div>
+                </section>
+
+                <section class="space-y-3">
+                    <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider">البيانات الشخصية</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-zinc-400 mb-2">رقم الجوال</label>
+                            <input id="user-edit-phone" type="text" dir="ltr" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-zinc-400 mb-2">رقم الهوية</label>
+                            <input id="user-edit-national-id" type="text" dir="ltr" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-zinc-400 mb-2">تاريخ الميلاد</label>
+                            <input id="user-edit-birth-date" type="text" dir="ltr" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-zinc-400 mb-2">الجنسية</label>
+                            <input id="user-edit-nationality" type="text" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-zinc-400 mb-2">الموقع</label>
+                            <input id="user-edit-location" type="text" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-zinc-400 mb-2">المهنة</label>
+                            <input id="user-edit-profession" type="text" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs font-semibold text-zinc-400 mb-2">الجمعية / الانتساب</label>
+                            <input id="user-edit-association" type="text" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs font-semibold text-zinc-400 mb-2">نبذة</label>
+                            <textarea id="user-edit-bio" rows="3" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 resize-y"></textarea>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="space-y-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider">تغريدات ومنشورات المستخدم</h3>
+                            <p class="text-[11px] text-zinc-500 mt-1">إخفاء أو حذف المحتوى المسيء مباشرة من ملف المستخدم</p>
+                        </div>
+                        <span id="user-edit-posts-count" class="text-[11px] font-bold text-zinc-400 bg-zinc-950 border border-zinc-800 px-3 py-1 rounded-full">0</span>
+                    </div>
+                    <div id="user-edit-posts-list" class="space-y-3 max-h-72 overflow-y-auto rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+                        <p class="text-xs text-zinc-500 text-center py-6">افتح مستخدماً لعرض منشوراته.</p>
+                    </div>
+                </section>
+
+                <p id="user-edit-error" class="text-xs text-red-400 min-h-[16px]"></p>
+            </div>
+
+            <div class="sticky bottom-0 bg-zinc-900/95 backdrop-blur border-t border-zinc-800 px-6 py-4 flex items-center justify-end gap-3">
+                <button id="user-edit-cancel-btn" type="button" class="px-5 py-2.5 rounded-xl text-xs font-bold text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all">
+                    إلغاء
+                </button>
+                <button id="user-edit-save-btn" type="submit" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-all">
+                    حفظ التعديلات
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Report Detail Overlay -->
+    <div id="report-detail-overlay" class="fixed inset-0 z-[115] bg-zinc-950/90 backdrop-blur-sm hidden items-center justify-center p-4 sm:p-6">
+        <div class="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-zinc-900 border border-red-500/20 rounded-2xl shadow-2xl">
+            <div class="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur border-b border-zinc-800 px-6 py-5 flex items-start justify-between gap-4">
+                <div>
+                    <p class="text-[11px] font-bold text-red-400 uppercase tracking-wider">تفاصيل البلاغ</p>
+                    <h2 id="report-detail-title" class="text-lg font-bold text-white mt-1">—</h2>
+                    <p id="report-detail-date" class="text-[11px] text-zinc-500 mt-1">—</p>
+                </div>
+                <button id="report-detail-close-btn" type="button" class="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors" title="إغلاق">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div class="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+                        <p class="text-zinc-500 mb-1">المُبلِّغ</p>
+                        <p id="report-detail-reporter" class="font-mono text-white" dir="ltr">—</p>
+                    </div>
+                    <div class="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+                        <p class="text-zinc-500 mb-1">صاحب المنشور</p>
+                        <p id="report-detail-post-var" class="font-mono text-white" dir="ltr">—</p>
+                    </div>
+                    <div class="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 sm:col-span-2">
+                        <p class="text-zinc-500 mb-1">معرّف المنشور</p>
+                        <p id="report-detail-post-id" class="font-mono text-zinc-300 break-all" dir="ltr">—</p>
+                    </div>
+                </div>
+                <div class="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4 space-y-2">
+                    <p class="text-xs font-bold text-zinc-400">سبب البلاغ</p>
+                    <p id="report-detail-reason" class="text-sm text-white">—</p>
+                </div>
+                <div class="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4 space-y-2">
+                    <p class="text-xs font-bold text-zinc-400">معاينة المحتوى المبلّغ عنه</p>
+                    <p id="report-detail-preview" class="text-sm text-zinc-200 whitespace-pre-wrap break-words">—</p>
+                </div>
+                <div id="report-detail-post-block" class="rounded-xl border border-amber-500/20 bg-amber-950/10 p-4 space-y-2 hidden">
+                    <p class="text-xs font-bold text-amber-300">المنشور الحالي</p>
+                    <p id="report-detail-post-title" class="text-sm font-bold text-white">—</p>
+                    <p id="report-detail-post-content" class="text-sm text-zinc-300 whitespace-pre-wrap break-words">—</p>
+                </div>
+                <div id="report-detail-actions" class="flex items-center justify-end gap-2 flex-wrap pt-2"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- MAIN WRAPPER (Full screen with sidebar & main panel) -->
     <div id="admin-shell" class="flex flex-1 w-full min-h-screen hidden">
         
-        <!-- SIDEBAR (Right side for RTL layout) -->
-        <aside class="w-72 bg-zinc-900 border-l border-zinc-800 flex flex-col justify-between p-6 shrink-0 hidden lg:flex">
-            <div>
-                <!-- Logo & Brand Info -->
-                <div class="flex items-center gap-3 pb-8 border-b border-zinc-800">
-                    <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                        <i data-lucide="shield-check" class="w-6 h-6 text-white"></i>
-                    </div>
-                    <div>
-                        <h1 class="text-lg font-bold tracking-wide bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">نظام الإدارة الموحد</h1>
-                        <span id="server-status-label" class="text-xs text-emerald-400 flex items-center gap-1">
-                            <span id="server-status-dot" class="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
-                            جاري التحقق...
-                        </span>
-                    </div>
-                </div>
-
-                <!-- Navigation Menu -->
-                <nav class="mt-8 space-y-2">
-                    <a href="#dashboard" onclick="switchTab('dashboard', event)" class="nav-item active flex items-center justify-between px-4 py-3 rounded-xl bg-zinc-800/80 text-white transition-all duration-200">
-                        <div class="flex items-center gap-3">
-                            <i data-lucide="layout-dashboard" class="w-5 h-5 text-indigo-400"></i>
-                            <span class="font-medium text-sm">لوحة الإحصائيات العامة</span>
-                        </div>
-                        <span class="bg-indigo-500/10 text-indigo-400 text-xs px-2 py-0.5 rounded-full font-bold">مباشر</span>
-                    </a>
-
-                    <a href="#keys-panel" onclick="switchTab('keys-panel', event)" class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-100 transition-all duration-200">
-                        <i data-lucide="key-round" class="w-5 h-5"></i>
-                        <span class="font-medium text-sm">توليد وإدارة المفاتيح</span>
-                    </a>
-
-                    <a href="#users-panel" onclick="switchTab('users-panel', event)" class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-100 transition-all duration-200">
-                        <i data-lucide="users" class="w-5 h-5"></i>
-                        <span class="font-medium text-sm">إدارة شؤون الأعضاء</span>
-                    </a>
-
-                    <a href="#mode-panel" onclick="switchTab('mode-panel', event)" class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-100 transition-all duration-200">
-                        <i data-lucide="sliders" class="w-5 h-5"></i>
-                        <span class="font-medium text-sm">تخصيص وضع الواجهة (Modes)</span>
-                    </a>
-                </nav>
-            </div>
-
-            <!-- Admin Profile Quick Card -->
-            <div class="pt-6 border-t border-zinc-800 flex items-center gap-3">
-                <div class="relative">
-                    <div id="admin-avatar" class="w-11 h-11 rounded-full object-cover border border-zinc-700 bg-zinc-800 flex items-center justify-center text-sm font-bold text-zinc-200">A</div>
-                    <div class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-zinc-900"></div>
-                </div>
-                <div class="overflow-hidden">
-                    <p id="admin-name" class="text-sm font-semibold truncate">—</p>
-                    <p id="admin-role" class="text-xs text-zinc-500 truncate">—</p>
-                </div>
-                <button id="logout-btn" type="button" class="mr-auto p-2 text-zinc-500 hover:text-red-400 transition-colors">
-                    <i data-lucide="log-out" class="w-5 h-5"></i>
-                </button>
-            </div>
-        </aside>
+        <!-- SIDEBAR removed — navigation is in the top-left menu drawer -->
+        <aside class="hidden" aria-hidden="true"></aside>
 
         <!-- MAIN CONTENT CONTAINER (Expands completely) -->
         <main class="flex-1 flex flex-col min-w-0 bg-zinc-950">
@@ -143,52 +273,160 @@
             <!-- HEADER (Top Navbar with Mode Switch & User Indicator) -->
             <header class="h-20 border-b border-zinc-850 bg-zinc-900/40 backdrop-blur-md px-6 lg:px-10 flex items-center justify-between gap-4 sticky top-0 z-40">
                 
-                <!-- Welcome Title / Mobile Menu button -->
-                <div class="flex items-center gap-4">
-                    <button class="lg:hidden p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-all">
-                        <i data-lucide="menu" class="w-6 h-6"></i>
-                    </button>
-                    <div>
-                        <h2 class="text-xl font-bold tracking-tight text-white hidden sm:block" id="page-title">مرحباً بك مجدداً في الإدارة</h2>
-                        <p class="text-xs text-zinc-400 hidden sm:block">تصفح شامل بدون فراغات وبكفاءة عالية</p>
-                    </div>
-                </div>
+                <!-- Menu button — visual right in RTL -->
+                <button id="nav-menu-btn" type="button" class="shrink-0 h-10 w-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all" title="فتح القائمة">
+                    <i data-lucide="menu" class="w-5 h-5"></i>
+                </button>
 
-                <!-- PERSONALIZATION: Dynamic Switch (X-Mode / TikTok-Mode) as requested! -->
-                <div class="flex items-center bg-zinc-950 rounded-2xl p-1.5 border border-zinc-800 shadow-inner">
-                    <span class="text-xs font-bold text-zinc-400 px-3 hidden md:inline-block select-none">الوضع النشط:</span>
-                    
-                    <button id="btn-xmode" onclick="setGlobalMode('X-Mode')" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300 bg-blue-600 text-white shadow-lg shadow-blue-500/20 glow-xmode">
-                        <i data-lucide="zap" class="w-4 h-4 text-amber-300"></i>
-                        <span>X-Mode</span>
-                    </button>
-                    
-                    <button id="btn-ttmode" onclick="setGlobalMode('TikTok-Mode')" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300 text-zinc-400 hover:text-zinc-200">
-                        <i data-lucide="play" class="w-4 h-4"></i>
-                        <span>TikTok-Mode</span>
-                    </button>
-                </div>
-
-                <!-- Search & Status Notification Bar -->
-                <div class="flex items-center gap-3">
-                    <div class="relative hidden xl:block">
-                        <i data-lucide="search" class="w-4 h-4 text-zinc-500 absolute right-3.5 top-1/2 -translate-y-1/2"></i>
-                        <input id="global-search-input" type="text" placeholder="بحث VAR أو اسم مستخدم..." class="bg-zinc-900/60 border border-zinc-800 focus:border-zinc-700 rounded-xl pr-10 pl-4 py-2 text-xs text-zinc-300 focus:outline-none w-64 transition-all">
+                <!-- Center: mode switch + search -->
+                <div class="flex items-center gap-2 sm:gap-3 flex-1 justify-center min-w-0">
+                    <div class="hidden md:flex items-center bg-zinc-950 rounded-2xl p-1.5 border border-zinc-800 shadow-inner shrink-0">
+                        <span class="text-xs font-bold text-zinc-400 px-3 hidden md:inline-block select-none">الوضع النشط:</span>
+                        
+                        <button id="btn-xmode" onclick="setGlobalMode('X-Mode')" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300 bg-blue-600 text-white shadow-lg shadow-blue-500/20 glow-xmode">
+                            <i data-lucide="zap" class="w-4 h-4 text-amber-300"></i>
+                            <span>X-Mode</span>
+                        </button>
+                        
+                        <button id="btn-ttmode" onclick="setGlobalMode('TikTok-Mode')" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300 text-zinc-400 hover:text-zinc-200">
+                            <i data-lucide="play" class="w-4 h-4"></i>
+                            <span>TikTok-Mode</span>
+                        </button>
                     </div>
 
-                    <!-- Notification Bell -->
-                    <button id="refresh-dashboard-btn" type="button" class="relative h-10 w-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center hover:bg-zinc-800/80 transition-colors" title="تحديث البيانات">
+                    <div class="relative flex-1 min-w-[9rem] max-w-[14rem] sm:max-w-xs">
+                        <i data-lucide="search" class="w-4 h-4 text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                        <input id="global-search-input" type="text" dir="ltr" placeholder="VAR ID..." class="w-full bg-zinc-900/60 border border-zinc-800 focus:border-indigo-500 rounded-xl pr-9 pl-3 py-2 text-xs text-zinc-200 focus:outline-none transition-all" title="بحث VAR ID أو اسم مستخدم">
+                    </div>
+
+                    <button id="refresh-dashboard-btn" type="button" class="relative h-10 w-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center hover:bg-zinc-800/80 transition-colors shrink-0" title="تحديث البيانات">
                         <i data-lucide="refresh-cw" class="w-5 h-5 text-zinc-400"></i>
                     </button>
-                    <button type="button" onclick="showToast('لا توجد إشعارات غير مقروءة حالياً', 'success')" class="relative h-10 w-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center hover:bg-zinc-800/80 transition-colors">
+                    <button type="button" onclick="showToast('لا توجد إشعارات غير مقروءة حالياً', 'success')" class="relative hidden sm:flex h-10 w-10 rounded-xl bg-zinc-900 border border-zinc-800 items-center justify-center hover:bg-zinc-800/80 transition-colors shrink-0">
                         <i data-lucide="bell" class="w-5 h-5 text-zinc-400"></i>
                         <span class="absolute top-2 right-2 w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
                     </button>
                 </div>
+
+                <!-- Page title — visual left in RTL -->
+                <div class="flex items-center gap-4 min-w-0 shrink-0 max-w-[42%] sm:max-w-none">
+                    <div class="min-w-0 text-left">
+                        <h2 class="text-lg sm:text-xl font-bold tracking-tight text-white truncate" id="page-title">لوحة الإحصائيات</h2>
+                        <div class="flex items-center gap-2 mt-0.5 justify-end flex-row-reverse sm:flex-row sm:justify-start">
+                            <p class="text-xs text-zinc-400 truncate hidden sm:block" id="page-subtitle">نظرة عامة على النظام والأعضاء</p>
+                            <span id="server-status-label" class="text-[10px] text-emerald-400 flex items-center gap-1 shrink-0">
+                                <span id="server-status-dot" class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                                جاري التحقق...
+                            </span>
+                        </div>
+                    </div>
+                </div>
             </header>
 
-            <!-- MAIN WORKING AREA (Fills all space nicely) -->
-            <div id="dashboard-section" class="p-6 lg:p-10 space-y-8 flex-1 overflow-y-auto max-w-full">
+            <!-- Navigation Drawer (opens from the menu side) -->
+            <div id="nav-drawer-overlay" class="fixed inset-0 z-[55] bg-zinc-950/80 backdrop-blur-sm hidden"></div>
+            <aside id="nav-drawer" class="fixed top-0 right-0 z-[60] h-full w-72 max-w-[85vw] bg-zinc-900 border-l border-zinc-800 shadow-2xl flex flex-col transition-transform duration-300 ease-out">
+                <div class="p-5 border-b border-zinc-800 flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="h-9 w-9 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
+                            <i data-lucide="shield-check" class="w-5 h-5 text-white"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-bold text-white truncate">نظام الإدارة</p>
+                            <p class="text-[10px] text-zinc-500 truncate">اختر القسم للعرض</p>
+                        </div>
+                    </div>
+                    <button id="nav-drawer-close-btn" type="button" class="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors" title="إغلاق">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <nav class="flex-1 overflow-y-auto p-4 space-y-1.5">
+                    <button type="button" data-tab="dashboard" onclick="switchTab('dashboard', event)" class="nav-item active w-full flex items-center justify-between px-4 py-3 rounded-xl bg-zinc-800/80 text-white transition-all duration-200 text-right">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="layout-dashboard" class="w-5 h-5 text-indigo-400"></i>
+                            <span class="font-medium text-sm">لوحة الإحصائيات</span>
+                        </div>
+                        <span class="bg-indigo-500/10 text-indigo-400 text-[10px] px-2 py-0.5 rounded-full font-bold">مباشر</span>
+                    </button>
+
+                    <button type="button" data-tab="users-panel" onclick="switchTab('users-panel', event)" class="nav-item w-full flex items-center justify-between px-4 py-3 rounded-xl text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-100 transition-all duration-200 text-right">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="users" class="w-5 h-5"></i>
+                            <span class="font-medium text-sm">القسم 1 · الأعضاء</span>
+                        </div>
+                        <span id="users-nav-count" class="bg-indigo-500/10 text-indigo-300 text-[10px] px-2 py-0.5 rounded-full font-bold">0</span>
+                    </button>
+
+                    <button type="button" data-tab="moderation-panel" onclick="switchTab('moderation-panel', event)" class="nav-item w-full flex items-center justify-between px-4 py-3 rounded-xl text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-100 transition-all duration-200 text-right">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="shield-alert" class="w-5 h-5"></i>
+                            <span class="font-medium text-sm">القسم 2 · الإشراف</span>
+                        </div>
+                        <span id="moderation-open-count" class="bg-red-500/10 text-red-300 text-[10px] px-2 py-0.5 rounded-full font-bold">0</span>
+                    </button>
+
+                    <button type="button" data-tab="keys-panel" onclick="switchTab('keys-panel', event)" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-100 transition-all duration-200 text-right">
+                        <i data-lucide="key-round" class="w-5 h-5"></i>
+                        <span class="font-medium text-sm">القسم 4 · المفاتيح</span>
+                    </button>
+
+                    <button type="button" data-tab="mode-panel" onclick="switchTab('mode-panel', event)" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-100 transition-all duration-200 text-right">
+                        <i data-lucide="sliders" class="w-5 h-5"></i>
+                        <span class="font-medium text-sm">القسم 4 · أوضاع التطبيق</span>
+                    </button>
+                </nav>
+
+                <div class="p-4 border-t border-zinc-800 flex items-center gap-3">
+                    <div id="drawer-admin-avatar" class="w-10 h-10 rounded-full border border-zinc-700 bg-zinc-800 flex items-center justify-center text-sm font-bold text-zinc-200 shrink-0">A</div>
+                    <div class="min-w-0 flex-1">
+                        <p id="drawer-admin-name" class="text-sm font-semibold truncate">—</p>
+                        <p id="drawer-admin-role" class="text-[10px] text-zinc-500 truncate">—</p>
+                    </div>
+                    <button id="drawer-logout-btn" type="button" class="p-2 text-zinc-500 hover:text-red-400 transition-colors shrink-0" title="تسجيل الخروج">
+                        <i data-lucide="log-out" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </aside>
+
+            <!-- MAIN WORKING AREA — one view visible at a time -->
+            <div id="admin-views" class="flex-1 overflow-y-auto max-w-full">
+
+                <!-- Dashboard View -->
+                <div id="view-dashboard" class="admin-view p-6 lg:p-10 space-y-8">
+
+                <!-- Quick VAR ID Search -->
+                <div id="quick-var-search-bar" class="bg-zinc-900/80 border border-indigo-500/20 rounded-2xl p-4 sm:p-5 shadow-lg shadow-indigo-500/5">
+                    <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+                        <div class="flex items-center gap-3 shrink-0">
+                            <div class="h-10 w-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                                <i data-lucide="search" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-white">بحث سريع بالـ VAR ID</h3>
+                                <p class="text-[11px] text-zinc-500">VAR-12345678 · @username · اسم المستخدم</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-1 items-center gap-2 min-w-0">
+                            <input id="quick-var-search-input" type="text" dir="ltr" placeholder="VAR-12345678" class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm text-white font-mono focus:outline-none">
+                            <button id="quick-var-search-btn" type="button" class="shrink-0 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-5 py-3 rounded-xl transition-all">
+                                بحث
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Appwrite readiness -->
+                <div id="appwrite-health-card" class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-xl">
+                    <div class="flex items-center justify-between gap-3 mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-white">حالة ربط Appwrite</h3>
+                            <p class="text-[11px] text-zinc-500 mt-1">تحقق سريع من Collections بعد إعدادك</p>
+                        </div>
+                        <span id="appwrite-health-summary" class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-zinc-950 border border-zinc-800 text-zinc-400">جاري الفحص...</span>
+                    </div>
+                    <div id="appwrite-health-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3"></div>
+                </div>
 
                 <!-- 1. STATS SECTION (No empty spaces, well balanced) -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -270,11 +508,41 @@
                     </div>
                 </div>
 
-                <!-- 2. MAIN WORKING GRID (Left Column: Key Generation & List, Right Column: Mode Controls & System Health) -->
-                <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-                    
-                    <!-- LEFT CONTAINER (Takes 8 cols) - Key Generation Form & List -->
-                    <div class="xl:col-span-8 space-y-8">
+                <!-- Audit logs on dashboard -->
+                <div class="bg-zinc-900 border border-zinc-850 rounded-2xl p-6 shadow-xl">
+                    <div class="flex items-center justify-between pb-4 border-b border-zinc-800">
+                        <div class="flex items-center gap-2">
+                            <span class="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
+                            <h4 class="font-bold text-white text-base">سجل أحداث النظام والأمان</h4>
+                        </div>
+                        <button id="refresh-logs-btn" type="button" class="text-[10px] text-zinc-500 hover:text-indigo-400 transition-colors">تحديث السجل</button>
+                    </div>
+                    <div id="log-feed" class="mt-4 space-y-3 max-h-80 overflow-y-auto pr-1"></div>
+                    <div class="mt-6 pt-5 border-t border-zinc-850 space-y-3">
+                        <div>
+                            <div class="flex items-center justify-between text-xs text-zinc-400 mb-1.5">
+                                <span>استهلاك طاقة الخادم</span>
+                                <span class="font-bold text-emerald-400" id="server-power">24%</span>
+                            </div>
+                            <div class="w-full bg-zinc-950 h-2 rounded-full overflow-hidden">
+                                <div id="server-power-bar" class="bg-emerald-500 h-full w-[24%] transition-all duration-1000"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between text-xs text-zinc-400 mb-1.5">
+                                <span>استهلاك رامات التطبيق</span>
+                                <span class="font-bold text-indigo-400" id="server-ram">52%</span>
+                            </div>
+                            <div class="w-full bg-zinc-950 h-2 rounded-full overflow-hidden">
+                                <div id="server-ram-bar" class="bg-indigo-500 h-full w-[52%] transition-all duration-1000"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                </div>
+
+                <!-- Keys View -->
+                <div id="view-keys" class="admin-view hidden p-6 lg:p-10 space-y-8 max-w-full">
                         
                         <!-- KEY GENERATOR CARD -->
                         <div id="keys-panel" class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl">
@@ -283,8 +551,9 @@
                                     <i data-lucide="key-round" class="w-5 h-5"></i>
                                 </div>
                                 <div>
-                                    <h3 class="text-lg font-bold text-white">منصة توليد مفاتيح الأدمن المتقدمة</h3>
+                                    <h3 class="text-lg font-bold text-white">منصة توليد مفاتيح الأدmin المتقدمة</h3>
                                     <p class="text-xs text-zinc-400">أداة مرنة وسريعة لترخيص الأكواد، الصلاحيات، وإعطاء أذونات الاستخدام المؤقتة.</p>
+                                    <p class="text-[10px] text-emerald-500/80 mt-1">القسم 4 · مفاتيح الأدمن · نشط (Appwrite)</p>
                                 </div>
                             </div>
 
@@ -374,23 +643,43 @@
                                 </table>
                             </div>
                         </div>
+                </div>
+
+                <!-- Users View -->
+                <div id="view-users" class="admin-view hidden p-6 lg:p-10 max-w-full">
 
                         <!-- DETAILED USERS MANAGEMENT PANEL -->
                         <div id="users-panel" class="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
                             <div class="p-6 border-b border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
                                 <div>
                                     <h4 class="font-bold text-white text-base">إدارة شؤون الأعضاء واللاعبين</h4>
-                                    <p class="text-xs text-zinc-500 mt-1">عرض جميع حسابات المستخدمين وإمكانية تغيير رتبهم أو اتخاذ قرارات حظرهم فوراً.</p>
+                                    <p class="text-xs text-zinc-500 mt-1">القسم 1 · حسابات الأعضاء · بحث · تعديل · توثيق · بطاقة · حظر</p>
                                 </div>
                                 
                                 <!-- Filter Actions -->
-                                <div class="flex items-center gap-3">
-                                    <input id="user-search-input" onkeyup="filterUsers()" type="text" placeholder="ابحث بـ VAR أو اسم..." class="bg-zinc-950 border border-zinc-800 focus:border-zinc-700 px-4 py-2 text-xs text-white rounded-lg focus:outline-none w-56">
-                                    <select onchange="filterUsersByRole(this.value)" class="bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 rounded-lg px-3 py-2 focus:outline-none cursor-pointer">
-                                        <option value="All">الجميع</option>
+                                <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                                    <input id="user-search-input" onkeyup="filterUsers()" type="text" dir="ltr" placeholder="VAR-12345678" class="flex-1 min-w-[140px] md:w-48 bg-zinc-950 border border-zinc-800 focus:border-indigo-500 px-4 py-2 text-xs text-white font-mono rounded-lg focus:outline-none">
+                                    <button id="user-search-btn" type="button" class="shrink-0 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-lg transition-all">
+                                        بحث
+                                    </button>
+                                    <select id="user-role-filter" onchange="filterUsersByRole(this.value)" class="bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 rounded-lg px-3 py-2 focus:outline-none cursor-pointer">
+                                        <option value="All">كل الرتب</option>
                                         <option value="أدمن">أدمن</option>
                                         <option value="أعضاء">أعضاء</option>
                                     </select>
+                                    <select id="user-status-filter" onchange="filterUsers()" class="bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 rounded-lg px-3 py-2 focus:outline-none cursor-pointer">
+                                        <option value="all">كل الحالات</option>
+                                        <option value="active">نشط</option>
+                                        <option value="suspended">محظور</option>
+                                    </select>
+                                    <select id="user-verified-filter" onchange="filterUsers()" class="bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 rounded-lg px-3 py-2 focus:outline-none cursor-pointer">
+                                        <option value="all">التوثيق · الكل</option>
+                                        <option value="verified">موثّق</option>
+                                        <option value="unverified">غير موثّق</option>
+                                    </select>
+                                    <button id="refresh-users-btn" type="button" class="shrink-0 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-bold px-3 py-2 rounded-lg transition-all" title="تحديث القائمة">
+                                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5 inline-block"></i>
+                                    </button>
                                 </div>
                             </div>
 
@@ -405,7 +694,8 @@
                                             <th class="py-4 px-6">البطاقة</th>
                                             <th class="py-4 px-6">تاريخ التسجيل</th>
                                             <th class="py-4 px-6 text-center">الحالة</th>
-                                            <th class="py-4 px-6 text-center">حظر · ترقية · حذف</th>
+                                            <th class="py-4 px-6 text-center">التوثيق</th>
+                                            <th class="py-4 px-6 text-center">إجراءات</th>
                                         </tr>
                                     </thead>
                                     <tbody id="users-table-body" class="divide-y divide-zinc-850">
@@ -413,12 +703,141 @@
                                     </tbody>
                                 </table>
                             </div>
+                            <div class="p-4 border-t border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <p id="users-panel-meta" class="text-[11px] text-zinc-500">—</p>
+                                <div class="flex items-center gap-2">
+                                    <button id="users-prev-page" type="button" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-40 disabled:pointer-events-none transition-all">
+                                        السابق
+                                    </button>
+                                    <button id="users-next-page" type="button" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-40 disabled:pointer-events-none transition-all">
+                                        التالي
+                                    </button>
+                                </div>
+                            </div>
                         </div>
+                </div>
 
-                    </div>
+                <!-- Moderation View -->
+                <div id="view-moderation" class="admin-view hidden p-6 lg:p-10 max-w-full">
 
-                    <!-- RIGHT CONTAINER (Takes 4 cols) - Mode Controls & Active System Health Logs -->
-                    <div class="xl:col-span-4 space-y-8">
+                        <!-- MODERATION CENTER -->
+                        <div id="moderation-panel" class="bg-zinc-900 border border-red-500/20 rounded-2xl overflow-hidden shadow-xl shadow-red-500/5">
+                            <div class="p-6 border-b border-zinc-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                <div>
+                                    <h4 class="font-bold text-white text-base">مركز الإشراف · البلاغات والمحتوى المشبوه</h4>
+                                    <p class="text-xs text-zinc-500 mt-1">القسم 2 · بلاغات · محتوى مشبوه · مراجعة يدوية</p>
+                                    <p class="text-[10px] text-emerald-500/80 mt-0.5">القسم 3 · AI تلقائي · نشط</p>
+                                </div>
+                                <button id="refresh-moderation-btn" type="button" class="shrink-0 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-bold px-4 py-2 rounded-lg transition-all">
+                                    تحديث المركز
+                                </button>
+                            </div>
+
+                            <div class="grid grid-cols-1 xl:grid-cols-2 gap-0 xl:divide-x xl:divide-zinc-800 xl:divide-x-reverse">
+                                <div class="p-6 border-b xl:border-b-0 border-zinc-800">
+                                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                                        <div>
+                                            <h5 class="text-sm font-bold text-white">بلاغات المستخدمين</h5>
+                                            <span id="moderation-reports-source" class="text-[10px] text-zinc-500">—</span>
+                                        </div>
+                                        <select id="reports-status-filter" class="bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 rounded-lg px-3 py-2 focus:outline-none cursor-pointer">
+                                            <option value="open">مفتوحة</option>
+                                            <option value="resolved">تم حلها</option>
+                                            <option value="dismissed">متجاهلة</option>
+                                            <option value="all">الكل</option>
+                                        </select>
+                                    </div>
+                                    <div id="moderation-reports-list" class="space-y-3 max-h-[24rem] overflow-y-auto">
+                                        <p class="text-xs text-zinc-500 text-center py-8">لا توجد بلاغات.</p>
+                                    </div>
+                                    <div class="mt-4 pt-4 border-t border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                        <p id="reports-panel-meta" class="text-[11px] text-zinc-500">—</p>
+                                        <div class="flex items-center gap-2">
+                                            <button id="reports-prev-page" type="button" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-40 disabled:pointer-events-none transition-all">السابق</button>
+                                            <button id="reports-next-page" type="button" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-40 disabled:pointer-events-none transition-all">التالي</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="p-6">
+                                    <div class="flex items-center justify-between gap-3 mb-4">
+                                        <h5 class="text-sm font-bold text-white">محتوى مشبوه / AI</h5>
+                                        <span id="moderation-flagged-count" class="text-[10px] text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full font-bold">0</span>
+                                    </div>
+                                    <div id="moderation-flagged-list" class="space-y-3 max-h-[28rem] overflow-y-auto">
+                                        <p class="text-xs text-zinc-500 text-center py-8">لا يوجد محتوى مشبوه حالياً.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="ai-moderation-panel" class="p-6 border-t border-violet-500/20 bg-violet-950/5">
+                                <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-4">
+                                    <div>
+                                        <h5 class="text-sm font-bold text-white">القسم 3 · فحص AI التلقائي</h5>
+                                        <p class="text-[10px] text-zinc-500 mt-1">قواعد كلمات · webhook · فحص دفعي</p>
+                                    </div>
+                                    <button id="run-ai-scan-btn" type="button" class="shrink-0 bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">
+                                        فحص المنشورات الآن
+                                    </button>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+                                    <div class="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+                                        <p class="text-[10px] text-zinc-500">الحالة</p>
+                                        <p id="ai-settings-enabled" class="text-sm font-bold text-white mt-1">—</p>
+                                    </div>
+                                    <div class="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+                                        <p class="text-[10px] text-zinc-500">عتبة الوسم</p>
+                                        <p id="ai-settings-threshold" class="text-sm font-bold text-violet-300 mt-1">—</p>
+                                    </div>
+                                    <div class="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+                                        <p class="text-[10px] text-zinc-500">إخفاء تلقائي عند</p>
+                                        <p id="ai-settings-auto-hide" class="text-sm font-bold text-amber-300 mt-1">—</p>
+                                    </div>
+                                    <div class="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+                                        <p class="text-[10px] text-zinc-500">Webhook</p>
+                                        <p id="ai-settings-webhook" class="text-sm font-bold text-white mt-1">—</p>
+                                    </div>
+                                </div>
+                                <div class="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4 space-y-2">
+                                    <p class="text-xs font-bold text-zinc-400">رابط Webhook (Appwrite Function / Event)</p>
+                                    <p id="ai-webhook-url" class="text-[11px] font-mono text-zinc-300 break-all" dir="ltr">—</p>
+                                    <p class="text-[10px] text-zinc-500">Header: <span class="font-mono text-zinc-400">X-AI-Webhook-Secret</span> · Body: <span class="font-mono text-zinc-400">postId, title, content</span></p>
+                                    <p id="ai-keywords-preview" class="text-[10px] text-zinc-500">—</p>
+                                </div>
+                                <div id="ai-scan-results" class="mt-4 space-y-2 max-h-48 overflow-y-auto"></div>
+                            </div>
+
+                            <div class="p-6 border-t border-zinc-800">
+                                <div class="flex items-center justify-between gap-3 mb-4">
+                                    <div>
+                                        <h5 class="text-sm font-bold text-white">التعليقات والردود</h5>
+                                        <p class="text-[10px] text-zinc-500 mt-1">من socialinteractions · إخفاء · حذف</p>
+                                    </div>
+                                    <span id="moderation-comments-source" class="text-[10px] text-zinc-500">—</span>
+                                    <span id="moderation-comments-count" class="text-[10px] font-bold text-sky-300 bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 rounded-full">0</span>
+                                </div>
+                                <div id="moderation-comments-list" class="space-y-3 max-h-[28rem] overflow-y-auto">
+                                    <p class="text-xs text-zinc-500 text-center py-8">جاري تحميل التعليقات...</p>
+                                </div>
+                            </div>
+
+                            <div class="p-6 border-t border-zinc-800">
+                                <div class="flex items-center justify-between gap-3 mb-4">
+                                    <div>
+                                        <h5 class="text-sm font-bold text-white">جميع المنشورات</h5>
+                                        <p class="text-[10px] text-zinc-500 mt-1">إشراف عام · إخفاء · حذف</p>
+                                    </div>
+                                    <span id="moderation-all-posts-count" class="text-[10px] font-bold text-zinc-300 bg-zinc-950 border border-zinc-800 px-2 py-0.5 rounded-full">0</span>
+                                </div>
+                                <div id="moderation-all-posts-list" class="space-y-3 max-h-[32rem] overflow-y-auto">
+                                    <p class="text-xs text-zinc-500 text-center py-8">جاري تحميل المنشورات...</p>
+                                </div>
+                            </div>
+                        </div>
+                </div>
+
+                <!-- Mode / System View -->
+                <div id="view-mode" class="admin-view hidden p-6 lg:p-10 space-y-8 max-w-full">
                         
                         <!-- SYSTEM MODES PRESETS AND CONTROLLER -->
                         <div id="mode-panel" class="bg-zinc-900 border border-zinc-850 rounded-2xl p-6 shadow-xl relative overflow-hidden">
@@ -431,6 +850,7 @@
                                 <div>
                                     <h4 class="font-bold text-white text-base">متحكم الوضع المزدوج</h4>
                                     <p class="text-xs text-zinc-400">تحكم بمسار وسلوك واجهة تطبيقك بالكامل</p>
+                                    <p class="text-[10px] text-emerald-500/80 mt-1">القسم 4 · أوضاع التطبيق · نشط (Appwrite)</p>
                                 </div>
                             </div>
 
@@ -439,6 +859,7 @@
                                 <span class="text-xs text-zinc-500 block uppercase font-bold tracking-widest">تكوين النطاق الحالي</span>
                                 <h2 id="current-mode-headline" class="text-2xl font-black mt-2 text-blue-400 transition-colors">X-MODE ACTIVE</h2>
                                 <p id="current-mode-desc" class="text-xs text-zinc-400 mt-1 transition-all">مخصصة للمطورين والتجارب السريعة مع وصول غير محدود.</p>
+                                <p id="mode-sync-status" class="text-[10px] text-zinc-500 mt-2">جاري التحميل...</p>
                             </div>
 
                             <!-- Interactive Config Swaps -->
@@ -449,7 +870,7 @@
                                         <span class="text-[10px] text-zinc-500">مؤثرات بصرية وصوتية متطورة</span>
                                     </div>
                                     <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" checked class="sr-only peer" onchange="showToast('تم تحديث إعدادات عرض الأيقونات بالخلفية', 'success')">
+                                        <input id="mode-rich-icons" type="checkbox" checked class="sr-only peer">
                                         <div class="w-11 h-6 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:content-[''] after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-zinc-400 after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:bg-white"></div>
                                     </label>
                                 </div>
@@ -460,50 +881,9 @@
                                         <span class="text-[10px] text-zinc-500">تفعيل تسريع الأجهزة التلقائي</span>
                                     </div>
                                     <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" checked class="sr-only peer" onchange="showToast('تم تمكين وضع الحوسبة القصوى للرسوميات', 'info')">
+                                        <input id="mode-gpu-accel" type="checkbox" checked class="sr-only peer">
                                         <div class="w-11 h-6 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:content-[''] after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-zinc-400 after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:bg-white"></div>
                                     </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- LIVE SYSTEM MONITOR / EVENT LOGS -->
-                        <div class="bg-zinc-900 border border-zinc-850 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
-                            <div>
-                                <div class="flex items-center justify-between pb-4 border-b border-zinc-800">
-                                    <div class="flex items-center gap-2">
-                                        <span class="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
-                                        <h4 class="font-bold text-white text-base">سجل أحداث النظام والأمان</h4>
-                                    </div>
-                                    <button id="refresh-logs-btn" type="button" class="text-[10px] text-zinc-500 hover:text-indigo-400 transition-colors">تحديث السجل</button>
-                                </div>
-
-                                <!-- Scrolling Logs Panel -->
-                                <div id="log-feed" class="mt-4 space-y-3 max-h-80 overflow-y-auto pr-1">
-                                    <!-- Dynamic Logs -->
-                                </div>
-                            </div>
-
-                            <!-- System Status Diagnostics Bar -->
-                            <div class="mt-6 pt-5 border-t border-zinc-850 space-y-3">
-                                <div>
-                                    <div class="flex items-center justify-between text-xs text-zinc-400 mb-1.5">
-                                        <span>استهلاك طاقة الخادم</span>
-                                        <span class="font-bold text-emerald-400" id="server-power">24%</span>
-                                    </div>
-                                    <div class="w-full bg-zinc-950 h-2 rounded-full overflow-hidden">
-                                        <div id="server-power-bar" class="bg-emerald-500 h-full w-[24%] transition-all duration-1000"></div>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <div class="flex items-center justify-between text-xs text-zinc-400 mb-1.5">
-                                        <span>استهلاك رامات التطبيق</span>
-                                        <span class="font-bold text-indigo-400" id="server-ram">52%</span>
-                                    </div>
-                                    <div class="w-full bg-zinc-950 h-2 rounded-full overflow-hidden">
-                                        <div id="server-ram-bar" class="bg-indigo-500 h-full w-[52%] transition-all duration-1000"></div>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -516,12 +896,9 @@
                                 ملاحظات المطورين
                             </h5>
                             <p class="text-xs text-zinc-400 leading-relaxed">
-                                يمكنك توليد أي عدد من مفاتيح الإدارة للتحقق من الصلاحيات. في حال اختيار تاريخ انتهاء مخصص، سيتم حفظ الخصائص المحددة فوراً وتطبيقها لحماية لوحة الإدارة من المتسللين.
+                                تغيير X-Mode أو TikTok-Mode من هنا يُطبَّق على جميع مستخدمي التطبيق خلال ~45 ثانية (أو عند سحب التحديث). مفتاحا الأيقونات والرسوميات يتحكمان بشريط التنقل وسلاسة فيديو TikTok.
                             </p>
                         </div>
-
-                    </div>
-
                 </div>
 
             </div>

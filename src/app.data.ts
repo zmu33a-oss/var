@@ -423,7 +423,7 @@ export const INITIAL_PROFILE: ProfileData = {
   username: "@nasser",
   bio: "Software Engineer",
   location: "الرياض، السعودية",
-  email: "nasser@xtik.app",
+  email: "",
   phoneNumber: "055 248 7319",
   profession: "Software Engineer",
   nationalId: "1093478521",

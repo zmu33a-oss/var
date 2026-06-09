@@ -315,6 +315,10 @@ export function toAppwritePostRecord(
 
   const mediaUri =
     typeof document.mediaUri === "string" ? document.mediaUri.trim() : "";
+  const fromVarLibrary =
+    document.fromVarLibrary === true ||
+    document.fromVarLibrary === "true" ||
+    document.fromVarLibrary === 1;
 
   return {
     id: document.$id,
@@ -323,6 +327,7 @@ export function toAppwritePostRecord(
     authorId,
     varId,
     mediaUri: mediaUri || undefined,
+    fromVarLibrary: fromVarLibrary || undefined,
     createdAt: document.$createdAt,
   };
 }
@@ -333,14 +338,16 @@ export function toAppwriteAuthUser(
   const email = typeof document.email === "string" ? document.email.trim() : "";
   const name = typeof document.name === "string" ? document.name.trim() : "";
   const prefs = toAppwriteProfilePrefs(document.prefs);
-  const fallbackUsername = normalizeAppwriteUsername(
-    email.split("@")[0] || document.$id,
-  );
-  const resolvedUsername = prefs.username || fallbackUsername;
-  const resolvedRole = resolveAdminRole(email, resolvedUsername, prefs.role);
   const resolvedVarId = prefs.varId || buildAppwriteVarId(document.$id);
   const resolvedDisplayVarId =
     prefs.displayVarId || buildAppwriteDisplayVarId(document.$id);
+  const fallbackUsername = normalizeAppwriteUsername(
+    resolvedDisplayVarId.replace(/^VAR-/i, "") ||
+      resolvedVarId.replace(/^VAR-/i, "") ||
+      document.$id,
+  );
+  const resolvedUsername = prefs.username || fallbackUsername;
+  const resolvedRole = resolveAdminRole(email, resolvedUsername, prefs.role);
   const createdAt =
     typeof document.$createdAt === "string" ? document.$createdAt : "";
 
@@ -348,7 +355,7 @@ export function toAppwriteAuthUser(
     id: document.$id,
     varId: resolvedVarId,
     displayVarId: resolvedDisplayVarId,
-    name: name || email.split("@")[0] || "WEBPLUS User",
+    name: name || resolvedDisplayVarId || "VAR Member",
     email,
     username: resolvedUsername,
     phoneNumber: prefs.phoneNumber || "",

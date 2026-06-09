@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { StatusBar } from "expo-status-bar";
@@ -28,7 +28,9 @@ import LeaguesScreen from "./screens/leagues";
 import AuthScreen from "./screens/AuthScreen";
 import ProfileScreen from "./screens/profile";
 import AdminDashboardScreen from "./screens/AdminDashboardScreen";
+import { fetchAppRuntimeSettings } from "./lib/app/app-runtime-settings";
 import FloatingThemeSwitch from "./components/FloatingThemeSwitch";
+import LogoutFarewellOverlay from "./components/LogoutFarewellOverlay";
 import BottomNav from "./components/BottomNav";
 import {
   client as appwriteClient,
@@ -52,6 +54,7 @@ import type {
   Post,
   PostReply,
 } from "./app.types";
+import type { XFeedTab } from "./screens/x-feed/x-feed.types";
 import { styles, SHELL_WIDTH } from "./appshell/appshell.styles";
 import {
   normalizeAuthorId,
@@ -72,6 +75,9 @@ import {
   useAppwritePostsSync,
   publishAppwritePost,
 } from "./appshell/appshell.posts";
+import { getAppwriteProfileImagesBucketConfigurationError } from "./lib/appwrite";
+import type { VarLibraryPublishInput } from "./screens/x-feed/varPlayerLibrary.constants";
+import { composeVarLibraryPostImage } from "./screens/x-feed/varPlayerLibrary.utils";
 import {
   useAppwriteVarProfile,
   makeTrackVarInteraction,
@@ -80,6 +86,7 @@ import { lockMatchPrediction } from "./appshell/appshell.predictions";
 import type { MatchPredictionLockInput } from "./lib/predictions/matchPrediction.utils";
 
 const POST_COMPOSER_DEFAULT_TITLE = "رسالة عامة";
+const LOGOUT_FAREWELL_MS = 3000;
 const INITIAL_NOTICE = hasAppwriteProjectConfig()
   ? "تم تجهيز الواجهة وربط Appwrite الأساسي."
   : "تم تجهيز الواجهة بالكامل داخل Expo.";
@@ -129,6 +136,12 @@ export default function AppShell() {
   const { height, width } = useWindowDimensions();
   const [currentTab, setCurrentTab] = useState<MainTab>("home");
   const [homeMode, setHomeMode] = useState<HomeMode>("tiktok");
+  const [xFeedActiveTab, setXFeedActiveTab] = useState<XFeedTab>("timeline");
+  const [appRuntimeSettings, setAppRuntimeSettings] = useState({
+    richIconsEnabled: true,
+    gpuAccelerationEnabled: true,
+    updatedAt: "",
+  });
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
   const [notice, setNotice] = useState(INITIAL_NOTICE);
@@ -169,9 +182,11 @@ export default function AppShell() {
   const [resumeReplyPostId, setResumeReplyPostId] = useState<number | null>(
     null,
   );
+  const [isLogoutFarewellVisible, setIsLogoutFarewellVisible] = useState(false);
   const layoutWidth = Math.min(width, SHELL_WIDTH);
   const chromeScale = Math.max(0.84, Math.min(1, layoutWidth / SHELL_WIDTH));
-  const themeSwitchTopInset = Math.round(8 * chromeScale);
+  const themeSwitchTopInset = Math.round(9.5 * chromeScale);
+  const themeSwitchLeftInset = Math.round(17.5 * chromeScale);
   const bottomDockHorizontalInset = Math.round(8 * chromeScale);
   const bottomDockBottomInset = Math.round(6 * chromeScale);
 
@@ -230,6 +245,33 @@ export default function AppShell() {
     appwriteUser,
     refreshVarProfile,
   );
+
+  const handleSignOutWithFarewell = async () => {
+    if (isLogoutFarewellVisible) {
+      return;
+    }
+
+    setIsLogoutFarewellVisible(true);
+    setNotice("");
+    const startedAt = Date.now();
+
+    try {
+      await signOut({ suppressNotice: true });
+      setCurrentTab("account");
+      setAuthMode("login");
+    } finally {
+      const elapsed = Date.now() - startedAt;
+      const remaining = Math.max(0, LOGOUT_FAREWELL_MS - elapsed);
+
+      if (remaining > 0) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, remaining);
+        });
+      }
+
+      setIsLogoutFarewellVisible(false);
+    }
+  };
 
   useEffect(() => {
     if (!notice) {
@@ -355,6 +397,27 @@ export default function AppShell() {
   const isRefreshingAnyAppData =
     isRefreshingPosts || isRefreshingVisibleAppData;
 
+  const syncAppRuntimeSettings = useCallback(async () => {
+    const settings = await fetchAppRuntimeSettings();
+    setAppRuntimeSettings({
+      richIconsEnabled: settings.richIconsEnabled,
+      gpuAccelerationEnabled: settings.gpuAccelerationEnabled,
+      updatedAt: settings.updatedAt,
+    });
+    setHomeMode(settings.uiMode);
+  }, []);
+
+  useEffect(() => {
+    void syncAppRuntimeSettings();
+    const intervalId = setInterval(() => {
+      void syncAppRuntimeSettings();
+    }, 20000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [syncAppRuntimeSettings]);
+
   const refreshVisibleAppData = async () => {
     if (isRefreshingAnyAppData) {
       return;
@@ -365,6 +428,7 @@ export default function AppShell() {
     try {
       await Promise.all([
         refreshPosts(),
+        syncAppRuntimeSettings(),
         appwriteUser?.varId
           ? refreshVarProfile(appwriteUser.varId, true)
           : Promise.resolve(),
@@ -538,10 +602,9 @@ export default function AppShell() {
       ...currentVideos,
     ]);
     closeStudio();
-    setHomeMode("tiktok");
     setCurrentTab("home");
     trackVarInteraction({
-      mode: "tiktok",
+      mode: homeMode,
       action: "post",
       targetId: String(nextVideoId),
       value: trimmedCaption,
@@ -600,7 +663,6 @@ export default function AppShell() {
       profile,
       onPublished: (post) => {
         prependPost(post);
-        setHomeMode("x");
         setCurrentTab("home");
       },
       setIsPublishingPost,
@@ -608,6 +670,54 @@ export default function AppShell() {
       onClose: closePostComposer,
       trackVarInteraction,
     });
+  };
+
+  const handlePublishLibraryPost = async (
+    input: VarLibraryPublishInput,
+  ): Promise<boolean> => {
+    if (!isLoggedIn) {
+      requireAuth("سجّل الدخول لنشر من مكتبة فار على حسابك.");
+      return false;
+    }
+
+    const bucketConfigurationError =
+      getAppwriteProfileImagesBucketConfigurationError();
+
+    if (bucketConfigurationError) {
+      setNotice(bucketConfigurationError);
+      return false;
+    }
+
+    let mediaUri = input.imageUri;
+
+    try {
+      mediaUri = await composeVarLibraryPostImage(input);
+    } catch {
+      mediaUri = input.imageUri;
+    }
+
+    let published = false;
+
+    await publishAppwritePost({
+      postTitle: POST_COMPOSER_DEFAULT_TITLE,
+      postContent: input.caption.trim(),
+      postMediaUri: mediaUri,
+      fromVarLibrary: true,
+      postAuthorId: getDefaultComposerAuthorId(),
+      appwriteUser,
+      profile,
+      onPublished: (post) => {
+        published = true;
+        prependPost({ ...post, fromVarLibrary: true });
+        setCurrentTab("home");
+      },
+      setIsPublishingPost,
+      setNotice,
+      onClose: () => {},
+      trackVarInteraction,
+    });
+
+    return published;
   };
 
   const handleHomeAction = () => {
@@ -1404,6 +1514,7 @@ export default function AppShell() {
   };
 
   const reportPost = (postId: number) => {
+    const targetPost = posts.find((candidate) => candidate.id === postId);
     const interactionTargetId = resolvePostInteractionTargetId(postId);
 
     trackVarInteraction({
@@ -1412,6 +1523,19 @@ export default function AppShell() {
       targetId: interactionTargetId,
       value: "[report]",
     });
+
+    if (appwriteUser?.varId.trim() && targetPost) {
+      void import("./lib/appwrite/appwrite.reports").then(({ submitAppwritePostReport }) =>
+        submitAppwritePostReport({
+          postId: targetPost.sourceId?.trim() || String(postId),
+          postVarId: targetPost.authorId?.trim() || appwriteUser.varId,
+          reporterVarId: appwriteUser.varId,
+          contentPreview: targetPost.content,
+          reason: "user_report",
+        }),
+      );
+    }
+
     setNotice("تم إرسال الإبلاغ.");
   };
 
@@ -1438,27 +1562,21 @@ export default function AppShell() {
 
     switch (pendingAuthIntent.type) {
       case "open-x-post":
-        setHomeMode("x");
         openPostComposer();
         break;
       case "reply-post":
-        setHomeMode("x");
         setResumeReplyPostId(pendingAuthIntent.postId);
         break;
       case "toggle-post-like":
-        setHomeMode("x");
         togglePostLike(pendingAuthIntent.postId);
         break;
       case "toggle-post-repost":
-        setHomeMode("x");
         togglePostRepost(pendingAuthIntent.postId);
         break;
       case "share-post":
-        setHomeMode("x");
         void sharePost(pendingAuthIntent.postId);
         break;
       case "toggle-follow-author":
-        setHomeMode("x");
         toggleAuthorFollow(pendingAuthIntent.authorVarId);
         break;
       case "toggle-support":
@@ -1501,12 +1619,17 @@ export default function AppShell() {
   let screen: ReactNode;
   const visibleTab: MainTab = currentTab;
   const palette = HOME_PALETTES[homeMode];
+  const showThemeSwitch =
+    visibleTab === "home" &&
+    !isVideoFullscreen &&
+    (homeMode === "tiktok" || xFeedActiveTab === "timeline");
 
   switch (visibleTab) {
     case "home":
       screen = (
         <HomeScreen
           homeMode={homeMode}
+          gpuAccelerationEnabled={appRuntimeSettings.gpuAccelerationEnabled}
           isLoggedIn={isLoggedIn}
           palette={palette}
           posts={posts}
@@ -1531,6 +1654,8 @@ export default function AppShell() {
           }
           currentUserJoinDate={profile.joinDate}
           currentUserNationality={profile.nationality}
+          currentUserAssociation={profile.association}
+          currentUserCardTier={profile.cardTier}
           currentUserUsername={profile.username || appwriteUser?.username || ""}
           currentUserRole={
             appwriteUser?.role === "admin" || profile.isVerified
@@ -1553,6 +1678,10 @@ export default function AppShell() {
           onDeletePost={deletePost}
           onUpdatePostContent={updatePostContent}
           onReportPost={reportPost}
+          onPublishLibraryPost={handlePublishLibraryPost}
+          isPublishingLibraryPost={isPublishingPost}
+          canManageVarLibrary={canAccessAdminPanel}
+          onXFeedTabChange={setXFeedActiveTab}
           onToggleVideoLike={toggleVideoLike}
           onToggleVideoSave={toggleVideoSave}
           onToggleVideoShare={toggleVideoShare}
@@ -1621,7 +1750,9 @@ export default function AppShell() {
               },
             );
           }}
-          onSignOut={signOut}
+          onSignOut={() => {
+            void handleSignOutWithFarewell();
+          }}
           onAddUserByDisplayVarId={handleAddUserByDisplayVarId}
         />
       ) : (
@@ -1657,7 +1788,7 @@ export default function AppShell() {
         </View>
 
         <View style={styles.shell}>
-          {notice && !isVideoFullscreen ? (
+          {notice && !isVideoFullscreen && !isLogoutFarewellVisible ? (
             <View style={styles.noticeWrap}>
               <View style={styles.noticePill}>
                 <Ionicons name="sparkles-outline" size={16} color="#E8F6FF" />
@@ -1668,9 +1799,15 @@ export default function AppShell() {
 
           {screen}
 
-          {visibleTab === "home" && !isVideoFullscreen ? (
+          {showThemeSwitch ? (
             <View
-              style={[styles.themeSwitchLayer, { top: themeSwitchTopInset }]}
+              style={[
+                styles.themeSwitchLayer,
+                {
+                  top: themeSwitchTopInset,
+                  left: themeSwitchLeftInset,
+                },
+              ]}
             >
               <FloatingThemeSwitch
                 selection={homeMode}
@@ -1680,7 +1817,7 @@ export default function AppShell() {
           ) : null}
         </View>
 
-        {!isVideoFullscreen ? (
+        {!isVideoFullscreen && !isLogoutFarewellVisible ? (
           <View
             style={[
               styles.bottomDock,
@@ -1694,6 +1831,7 @@ export default function AppShell() {
             <BottomNav
               current={visibleTab}
               homeMode={homeMode}
+              richIconsEnabled={appRuntimeSettings.richIconsEnabled}
               onHomeAction={handleHomeAction}
               onSelect={selectMainTab}
             />
@@ -1756,6 +1894,8 @@ export default function AppShell() {
             />
           ) : null}
         </Modal>
+
+        <LogoutFarewellOverlay visible={isLogoutFarewellVisible} />
       </View>
     </SafeAreaView>
   );

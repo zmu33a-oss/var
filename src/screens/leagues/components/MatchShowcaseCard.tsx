@@ -45,6 +45,7 @@ import { LeagueText as Text } from "./common/LeagueText";
 import { GlassCard } from "./common/GlassCard";
 import { ModeSwitchButton } from "./common/ModeSwitchButton";
 import { FooterTabButton as MatchShowcaseFooterTabButton } from "./common/FooterTabButton";
+import { MatchShowcaseMetaStrip } from "./common/MatchShowcaseMetaStrip";
 import { TeamHeroPanel as MatchShowcaseHeroTeamPanel } from "./common/TeamHeroPanel";
 import { Pitch } from "./lineup/Pitch";
 import { PollVoteRow } from "./polls/PollVoteRow";
@@ -559,6 +560,11 @@ export function MatchShowcaseCard(props: {
                   caption="الضيف"
                 />
               </View>
+
+              <MatchShowcaseMetaStrip
+                attendance={props.config.attendance}
+                stadium={props.config.stadium}
+              />
             </Pressable>
 
             <View style={styles.matchShowcaseFooterTabsRow}>

@@ -152,19 +152,22 @@ export function buildDefaultPostAuthorId(profile: ProfileData) {
   const username = profile.username.trim();
 
   if (username) {
-    return normalizeAuthorId(username);
+    return normalizeAuthorId(username.replace(/^@+/, ""));
   }
 
-  return normalizeAuthorId(profile.email.trim().split("@")[0] || "local-user");
+  return normalizeAuthorId("member");
 }
 
 export function buildProfileIdentity(authUser: AppwriteAuthUser) {
   const username = normalizeAuthorId(
-    authUser.username || authUser.email.trim().split("@")[0] || authUser.id,
+    authUser.username?.replace(/^@+/, "") ||
+      authUser.displayVarId?.replace(/^VAR-/i, "") ||
+      authUser.varId?.replace(/^VAR-/i, "") ||
+      authUser.id,
   );
 
   return {
-    displayName: authUser.name.trim() || username,
+    displayName: authUser.name.trim() || username || "VAR Member",
     username: `@${username.replace(/^@+/, "")}`,
   };
 }
@@ -464,7 +467,7 @@ export function mergeProfileWithAuthUser(
     displayVarId: authUser.displayVarId || currentProfile.displayVarId,
     displayName: identity.displayName,
     username: identity.username,
-    email: authUser.email || currentProfile.email,
+    email: "",
     phoneNumber:
       authUser.phoneNumber ||
       getProfileFallbackValue(
@@ -599,6 +602,26 @@ function resolveAdminDevServerOrigin(protocol: string, hostname: string, port: s
   }
 
   return `${protocol}//${hostname}${port ? `:${port}` : ""}`;
+}
+
+export function redirectExpoAdminPathToAdminServer() {
+  if (!IS_WEB_RUNTIME || typeof window === "undefined") {
+    return;
+  }
+
+  const { pathname, port, protocol, hostname, search, hash } = window.location;
+  if (!pathname.startsWith("/admin")) {
+    return;
+  }
+
+  if (!EXPO_WEB_DEV_PORTS.has(port)) {
+    return;
+  }
+
+  const adminOrigin = resolveAdminDevServerOrigin(protocol, hostname, port);
+  window.location.replace(
+    `${adminOrigin}${pathname}${search}${hash}`,
+  );
 }
 
 export function resolveAdminPanelUrl() {
@@ -838,6 +861,7 @@ export function mapAppwritePostRecordToPost(
     time: formatPostTime(record.createdAt),
     content: record.content,
     mediaUri: record.mediaUri?.trim() || undefined,
+    fromVarLibrary: record.fromVarLibrary || undefined,
     replyItems: [],
     likes: 0,
     replies: 0,

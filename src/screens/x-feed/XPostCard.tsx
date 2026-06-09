@@ -2,8 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import SealCheckIcon from "../../components/SealCheckIcon";
 import type { IconName, Post, PostReply } from "../../app.types";
+import { VarLibrarySourceStamp } from "./VarLibrarySourceStamp";
 
-function PostMediaPreview(props: { mediaUri: string }) {
+function PostMediaPreview(props: {
+  mediaUri: string;
+  fromVarLibrary?: boolean;
+}) {
   return (
     <View style={styles.xMediaCard}>
       <Image
@@ -11,6 +15,9 @@ function PostMediaPreview(props: { mediaUri: string }) {
         style={styles.xMediaImage}
         resizeMode="cover"
       />
+      {props.fromVarLibrary ? (
+        <VarLibrarySourceStamp compact style={styles.xMediaLibraryStamp} />
+      ) : null}
     </View>
   );
 }
@@ -25,7 +32,12 @@ function PostBodyBlock(props: {
     <>
       {post.title ? <Text style={styles.xPostTitle}>{post.title}</Text> : null}
       <Text style={styles.xPostBody}>{post.content}</Text>
-      {mediaUri ? <PostMediaPreview mediaUri={mediaUri} /> : null}
+      {mediaUri ? (
+        <PostMediaPreview
+          mediaUri={mediaUri}
+          fromVarLibrary={post.fromVarLibrary}
+        />
+      ) : null}
     </>
   );
 
@@ -434,6 +446,11 @@ const styles = StyleSheet.create({
   xMediaImage: {
     width: "100%",
     height: "100%",
+  },
+  xMediaLibraryStamp: {
+    position: "absolute",
+    top: 10,
+    right: 10,
   },
   xRepostBanner: {
     flexDirection: "row-reverse",

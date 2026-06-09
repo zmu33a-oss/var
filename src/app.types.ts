@@ -75,6 +75,7 @@ export type Post = {
   time: string;
   content: string;
   mediaUri?: string;
+  fromVarLibrary?: boolean;
   repostMeta?: PostRepostMeta;
   replyItems?: PostReply[];
   likes: number;

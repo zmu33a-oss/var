@@ -1,4 +1,11 @@
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Animated,
@@ -26,6 +33,7 @@ import {
   getAppwriteVarProfile,
 } from "../lib/appwrite";
 import type { AppwriteLockedPrediction } from "../lib/appwrite";
+import type { MembershipCardTier } from "../lib/membershipCardTier";
 import type {
   FollowingProfileCard,
   PendingAuthIntent,
@@ -61,6 +69,12 @@ import { XNotificationsScreen } from "./x-feed/XMessagesScreen";
 import { XHashtagTrendCard } from "./x-feed/XHashtagDirectory";
 import { XProfileHub } from "./x-feed/XProfileHub";
 import { XAuthorProfileScreen } from "./x-feed/XAuthorProfileScreen";
+import { VarPlayerLibrary } from "./x-feed/VarPlayerLibrary";
+import type { VarLibraryPublishInput } from "./x-feed/varPlayerLibrary.constants";
+import {
+  getAppwriteProfileImagesBucketConfigurationError,
+  hasAppwriteProfileImagesBucketConfig,
+} from "../lib/appwrite";
 import { XPostActionsModal } from "./x-feed/XPostActionsModal";
 import { styles } from "./x-feed/x-feed.styles";
 import ChatOverlay from "./ChatOverlay";
@@ -90,6 +104,8 @@ type XFeedScreenProps = {
   currentUserAvatarUri: string;
   currentUserJoinDate?: string;
   currentUserNationality?: string;
+  currentUserAssociation?: string;
+  currentUserCardTier?: MembershipCardTier;
   currentUserUsername?: string;
   currentUserRole?: "admin" | "member";
   currentUserIsVerified?: boolean;
@@ -108,6 +124,10 @@ type XFeedScreenProps = {
   onDeletePost: (postId: number) => void;
   onUpdatePostContent: (postId: number, content: string) => void;
   onReportPost: (postId: number) => void;
+  onPublishLibraryPost: (input: VarLibraryPublishInput) => Promise<boolean>;
+  isPublishingLibraryPost: boolean;
+  canManageVarLibrary?: boolean;
+  onActiveTabChange?: (tab: XFeedTab) => void;
 };
 
 type OpenedAuthorReplyItem = import("../app.types").PostReply & {
@@ -136,6 +156,8 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     currentUserAvatarUri,
     currentUserJoinDate,
     currentUserNationality,
+    currentUserAssociation,
+    currentUserCardTier,
     currentUserUsername,
     currentUserRole,
     currentUserIsVerified,
@@ -154,6 +176,10 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     onDeletePost,
     onUpdatePostContent,
     onReportPost,
+    onPublishLibraryPost,
+    isPublishingLibraryPost,
+    canManageVarLibrary = false,
+    onActiveTabChange,
   } = props;
   const normalizedCurrentUserVarId = normalizeAuthorId(currentUserVarId);
   const resolvedCurrentUserDisplayVarId = buildComposerDisplayVarId(
@@ -174,6 +200,21 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         normalizeAuthorId(followedId) === normalizeAuthorId(authorVarId),
     );
   const [activeTab, setActiveTab] = useState<XFeedTab>("timeline");
+
+  useEffect(() => {
+    onActiveTabChange?.(activeTab);
+  }, [activeTab, onActiveTabChange]);
+
+  const handlePublishLibraryPost = useCallback(
+    async (input: VarLibraryPublishInput) => {
+      const published = await onPublishLibraryPost(input);
+      if (published) {
+        setActiveTab("timeline");
+      }
+      return published;
+    },
+    [onPublishLibraryPost],
+  );
   const [replyDraft, setReplyDraft] = useState("");
   const [replyTargetPost, setReplyTargetPost] = useState<Post | null>(null);
   const [openedPost, setOpenedPost] = useState<Post | null>(null);
@@ -267,6 +308,62 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   const replyAuthorInitial = normalizedReplyAuthorName.slice(0, 1) || "V";
   const hasTypedReply = replyDraft.length > 0;
   const canSubmitReply = replyDraft.trim().length > 0;
+
+  const markPrivateThreadAsRead = useCallback(
+    (peerVarId: string, messages?: PrivateMessageEntry[]) => {
+      const normalizedPeerVarId = normalizeAuthorId(peerVarId.trim());
+
+      if (!normalizedPeerVarId) {
+        return;
+      }
+
+      const threadMessages =
+        messages ?? privateMessagesByVarId[normalizedPeerVarId] ?? [];
+
+      if (!threadMessages.length) {
+        return;
+      }
+
+      setSeenPrivateMessageIds((currentIds) => {
+        let didChange = false;
+        const nextIds = { ...currentIds };
+
+        threadMessages.forEach((message) => {
+          if (message.sender !== "peer" || nextIds[message.id]) {
+            return;
+          }
+
+          nextIds[message.id] = true;
+          didChange = true;
+        });
+
+        return didChange ? nextIds : currentIds;
+      });
+
+      setSeenNotificationIds((currentIds) => {
+        let didChange = false;
+        const nextIds = { ...currentIds };
+
+        threadMessages.forEach((message) => {
+          if (message.sender !== "peer") {
+            return;
+          }
+
+          const notificationId = `dm-${normalizedPeerVarId}-${message.id}`;
+
+          if (nextIds[notificationId]) {
+            return;
+          }
+
+          nextIds[notificationId] = true;
+          didChange = true;
+        });
+
+        return didChange ? nextIds : currentIds;
+      });
+    },
+    [privateMessagesByVarId],
+  );
 
   const pushActivityNotification = (
     notification: Omit<XNotificationEntry, "sortOrder"> & {
@@ -731,59 +828,12 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   }, [isLoggedIn, normalizedCurrentUserVarId]);
 
   useEffect(() => {
-    const normalizedOpenedThreadVarId = normalizeAuthorId(
-      openedMessageThreadVarId?.trim() || "",
-    );
-
-    if (!normalizedOpenedThreadVarId) {
+    if (!openedMessageThreadVarId?.trim()) {
       return;
     }
 
-    const threadMessages =
-      privateMessagesByVarId[normalizedOpenedThreadVarId] ?? [];
-
-    if (!threadMessages.length) {
-      return;
-    }
-
-    setSeenPrivateMessageIds((currentIds) => {
-      let didChange = false;
-      const nextIds = { ...currentIds };
-
-      threadMessages.forEach((message) => {
-        if (message.sender !== "peer" || nextIds[message.id]) {
-          return;
-        }
-
-        nextIds[message.id] = true;
-        didChange = true;
-      });
-
-      return didChange ? nextIds : currentIds;
-    });
-
-    setSeenNotificationIds((currentIds) => {
-      let didChange = false;
-      const nextIds = { ...currentIds };
-
-      threadMessages.forEach((message) => {
-        if (message.sender !== "peer") {
-          return;
-        }
-
-        const notificationId = `dm-${normalizedOpenedThreadVarId}-${message.id}`;
-
-        if (nextIds[notificationId]) {
-          return;
-        }
-
-        nextIds[notificationId] = true;
-        didChange = true;
-      });
-
-      return didChange ? nextIds : currentIds;
-    });
-  }, [openedMessageThreadVarId, privateMessagesByVarId]);
+    markPrivateThreadAsRead(openedMessageThreadVarId);
+  }, [markPrivateThreadAsRead, openedMessageThreadVarId, privateMessagesByVarId]);
 
   const messageProfilesByVarId = useMemo(() => {
     const nextProfiles: Record<string, FollowingProfileCard> = {};
@@ -933,12 +983,17 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         return;
       }
 
-      if (seenPrivateMessageIds[latestMessage.id]) {
+      const notificationId = `dm-${thread.id}-${latestMessage.id}`;
+
+      if (
+        seenPrivateMessageIds[latestMessage.id] ||
+        seenNotificationIds[notificationId]
+      ) {
         return;
       }
 
       nextNotifications.push({
-        id: `dm-${thread.id}-${latestMessage.id}`,
+        id: notificationId,
         title: "رسالة خاصة جديدة",
         body: `${thread.displayName}: ${latestMessage.content}`,
         timeLabel: latestMessage.timeLabel || thread.timeLabel,
@@ -1027,6 +1082,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     normalizedReplyAuthorDisplayName,
     normalizedReplyAuthorHandle,
     posts,
+    seenNotificationIds,
     seenPrivateMessageIds,
   ]);
 
@@ -1277,6 +1333,12 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       nationality: viewingOwnProfile
         ? currentUserNationality || openedAuthorProfile.nationality
         : openedAuthorProfile.nationality,
+      association: viewingOwnProfile
+        ? currentUserAssociation || openedAuthorProfile.association
+        : openedAuthorProfile.association,
+      cardTier: viewingOwnProfile
+        ? currentUserCardTier || openedAuthorProfile.cardTier
+        : openedAuthorProfile.cardTier,
     } satisfies OpenedAuthorProfile;
   }, [
     currentUserAvatarUri,
@@ -1285,6 +1347,8 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     currentUserIsVerified,
     currentUserJoinDate,
     currentUserNationality,
+    currentUserAssociation,
+    currentUserCardTier,
     currentUserRole,
     currentUserUsername,
     followedProfiles,
@@ -1463,8 +1527,11 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     setReplyDraft("");
     setIsHashtagDirectoryOpen(false);
     setIsNotificationsOpen(false);
+    const normalizedPeerVarId = normalizeAuthorId(thread.profile.varId);
+
     setOpenedMessageThreadProfile(thread.profile);
-    setOpenedMessageThreadVarId(normalizeAuthorId(thread.profile.varId));
+    setOpenedMessageThreadVarId(normalizedPeerVarId);
+    markPrivateThreadAsRead(normalizedPeerVarId, thread.messages);
   };
 
   const openAuthorPrivateMessageThread = (profile: OpenedAuthorProfile) => {
@@ -1484,6 +1551,10 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   };
 
   const closePrivateMessageThread = () => {
+    if (openedMessageThreadVarId?.trim()) {
+      markPrivateThreadAsRead(openedMessageThreadVarId);
+    }
+
     setOpenedMessageThreadProfile(null);
     setOpenedMessageThreadVarId(null);
   };
@@ -1505,6 +1576,11 @@ export default function XFeedScreen(props: XFeedScreenProps) {
 
   const openNotificationTarget = (notification: XNotificationEntry) => {
     setIsNotificationsOpen(false);
+    setSeenNotificationIds((currentIds) =>
+      currentIds[notification.id]
+        ? currentIds
+        : { ...currentIds, [notification.id]: true },
+    );
 
     const notificationTarget = notification.target;
 
@@ -2237,23 +2313,35 @@ export default function XFeedScreen(props: XFeedScreenProps) {
             ) : null}
           </>
         ) : activeTab === "var-library" ? (
-          <View style={styles.xVarLibraryPage} />
+          <VarPlayerLibrary
+            isLoggedIn={isLoggedIn}
+            isPublishing={isPublishingLibraryPost}
+            canPublishWithImage={hasAppwriteProfileImagesBucketConfig()}
+            canManageLibrary={canManageVarLibrary}
+            managerVarId={currentUserVarId}
+            imagePublishSetupMessage={getAppwriteProfileImagesBucketConfigurationError()}
+            onRequireAuth={(message) => onRequireAuth(message)}
+            onPublishLibraryPost={handlePublishLibraryPost}
+            onShowNotice={(message) => onShowNotice?.(message)}
+          />
         ) : null}
       </ScrollView>
 
-      <Pressable
-        style={[
-          styles.xHashtagButton,
-          {
-            width: xHashtagButtonSize,
-            height: xHashtagButtonSize,
-            borderRadius: Math.round(15 * chromeScale),
-          },
-        ]}
-        onPress={openHashtagDirectory}
-      >
-        <Text style={styles.xHashtagButtonText}>#</Text>
-      </Pressable>
+      {activeTab === "timeline" ? (
+        <Pressable
+          style={[
+            styles.xHashtagButton,
+            {
+              width: xHashtagButtonSize,
+              height: xHashtagButtonSize,
+              borderRadius: Math.round(15 * chromeScale),
+            },
+          ]}
+          onPress={openHashtagDirectory}
+        >
+          <Text style={styles.xHashtagButtonText}>#</Text>
+        </Pressable>
+      ) : null}
 
       <Modal
         visible={isHashtagDirectoryOpen}
@@ -2473,44 +2561,14 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       >
         {resolvedOpenedAuthorProfile ? (
           <XAuthorProfileScreen
-            activeTab={authorProfileTab}
             canToggleFollow={
               resolvedOpenedAuthorProfile.authorId !==
               normalizedCurrentUserVarId
             }
             isFollowing={isAuthorFollowed(resolvedOpenedAuthorProfile.authorId)}
-            likesTotal={openedAuthorLikesTotal}
-            posts={openedAuthorPosts}
-            replyItems={openedAuthorReplyItems}
-            postsRepliesTotal={openedAuthorRepliesTotal}
-            postsSharesTotal={openedAuthorSharesTotal}
-            lockedPredictions={authorLockedPredictions}
             profile={resolvedOpenedAuthorProfile}
-            sectionNoticeDismissal={openedAuthorSectionNoticeDismissal}
-            sectionVisibility={openedAuthorSectionVisibility}
-            topLikedPosts={openedAuthorTopLikedPosts}
-            onChangeTab={setAuthorProfileTab}
             onClose={closeAuthorProfile}
-            onDismissSectionNotice={(tab) =>
-              dismissAuthorSectionNotice(
-                resolvedOpenedAuthorProfile.authorId,
-                tab,
-              )
-            }
-            onLikePost={handlePostLike}
-            onOpenMessageThread={openAuthorPrivateMessageThread}
-            onOpenPost={openPostFromAuthorProfile}
-            onOpenAuthor={openAuthorProfile}
             onPlaySwipeSound={playSwipeSound}
-            onReplyPost={openReplyComposer}
-            onRepostPost={handlePostRepost}
-            onSharePost={handlePostShare}
-            onToggleSectionVisibility={(tab) =>
-              toggleAuthorSectionVisibility(
-                resolvedOpenedAuthorProfile.authorId,
-                tab,
-              )
-            }
             onToggleFollow={() =>
               toggleAuthorFollowByVarId(resolvedOpenedAuthorProfile.authorId)
             }

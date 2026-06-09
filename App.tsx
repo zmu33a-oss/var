@@ -4,6 +4,11 @@ import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Platform, StyleSheet, type ViewStyle } from "react-native";
 import AppShell from "./src/AppShell";
+import { redirectExpoAdminPathToAdminServer } from "./src/appshell/appshell.helpers";
+
+if (Platform.OS === "web") {
+  redirectExpoAdminPathToAdminServer();
+}
 
 export default function App() {
   useEffect(() => {

@@ -44,7 +44,20 @@ export const COLLECTION_DEFAULTS: AppwriteCollectionIds = {
     process.env.EXPO_PUBLIC_APPWRITE_SHARES_COLLECTION_ID?.trim() || "",
   profileImagesBucketId:
     process.env.EXPO_PUBLIC_APPWRITE_PROFILE_IMAGES_BUCKET_ID?.trim() || "",
+  varLibraryCollectionId:
+    process.env.EXPO_PUBLIC_APPWRITE_VAR_LIBRARY_COLLECTION_ID?.trim() ||
+    "var_library",
 };
+
+export function hasAppwriteVarLibraryConfig() {
+  const collectionId = APPWRITE_CONFIG.varLibraryCollectionId.trim();
+
+  return (
+    Boolean(APPWRITE_CONFIG.databaseId.trim()) &&
+    Boolean(collectionId) &&
+    !isAppwritePlaceholderValue(collectionId)
+  );
+}
 
 export const APPWRITE_CONFIG: AppwriteConfig = {
   ...PROJECT_DEFAULTS,
@@ -94,6 +107,20 @@ export function getMissingAppwritePostsFields() {
 
 export function hasAppwritePostsConfig() {
   return getMissingAppwritePostsFields().length === 0;
+}
+
+export function hasAppwriteProfileImagesBucketConfig() {
+  const bucketId = APPWRITE_CONFIG.profileImagesBucketId.trim();
+
+  return Boolean(bucketId) && !isAppwritePlaceholderValue(bucketId);
+}
+
+export function getAppwriteProfileImagesBucketConfigurationError(): string | null {
+  if (hasAppwriteProfileImagesBucketConfig()) {
+    return null;
+  }
+
+  return "نشر صور مكتبة فار يحتاج EXPO_PUBLIC_APPWRITE_PROFILE_IMAGES_BUCKET_ID في ملف .env (من Appwrite → Storage → Bucket ID)، ثم أعد تشغيل التطبيق.";
 }
 
 export function getAppwritePostsConfigurationError(): string | null {
