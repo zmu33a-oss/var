@@ -14,12 +14,21 @@ import {
 import {
   AppwriteID,
   AppwriteQuery,
+  getAccountBridge,
   getDatabasesBridge,
+  IS_WEB_RUNTIME,
 } from "./appwrite.client";
+import { Permission as NativePermission, Role as NativeRole } from "react-native-appwrite";
+import { Permission as WebPermission, Role as WebRole } from "appwrite";
 import {
   canAttemptAppwriteCollectionRead,
   disableAppwriteCollectionRead,
 } from "./appwrite.state";
+import { deletePostViaAppApi } from "../app/app-posts-api";
+import { isPermissionDeniedAppwriteError } from "./appwrite.helpers";
+
+const AppwritePermission = IS_WEB_RUNTIME ? WebPermission : NativePermission;
+const AppwriteRole = IS_WEB_RUNTIME ? WebRole : NativeRole;
 
 // ─── Internal: posts database getter ─────────────────────────────────────────
 
@@ -129,11 +138,34 @@ export async function listAppwritePostsByVarId(
   );
 }
 
+async function readCurrentAppwriteUserId() {
+  try {
+    const account = getAccountBridge();
+    const user = (await account.get()) as { $id?: string };
+    return typeof user.$id === "string" ? user.$id.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+function buildPostDocumentPermissions(userId: string) {
+  if (!userId) {
+    return undefined;
+  }
+
+  return [
+    AppwritePermission.read(AppwriteRole.any()),
+    AppwritePermission.update(AppwriteRole.user(userId)),
+    AppwritePermission.delete(AppwriteRole.user(userId)),
+  ];
+}
+
 export async function createAppwritePost(
   input: AppwritePostInput,
 ): Promise<AppwritePostRecord> {
   const databases = getPostsDatabase();
   const normalizedVarId = normalizeAppwriteVarId(input.varId);
+  const userId = await readCurrentAppwriteUserId();
   const document = await databases.createDocument(
     APPWRITE_CONFIG.databaseId,
     APPWRITE_CONFIG.postsCollectionId,
@@ -146,6 +178,7 @@ export async function createAppwritePost(
       ...(input.mediaUri?.trim() ? { mediaUri: input.mediaUri.trim() } : {}),
       ...(input.fromVarLibrary ? { fromVarLibrary: true } : {}),
     },
+    buildPostDocumentPermissions(userId),
   );
 
   return toAppwritePostRecord(document as unknown as AppwritePostDocument);
@@ -177,11 +210,21 @@ export async function updateAppwritePost(
 }
 
 export async function deleteAppwritePost(postId: string): Promise<void> {
+  const trimmedPostId = postId.trim();
   const databases = getPostsDatabase();
 
-  await databases.deleteDocument(
-    APPWRITE_CONFIG.databaseId,
-    APPWRITE_CONFIG.postsCollectionId,
-    postId.trim(),
-  );
+  try {
+    await databases.deleteDocument(
+      APPWRITE_CONFIG.databaseId,
+      APPWRITE_CONFIG.postsCollectionId,
+      trimmedPostId,
+    );
+    return;
+  } catch (error) {
+    if (!isPermissionDeniedAppwriteError(error)) {
+      throw error;
+    }
+  }
+
+  await deletePostViaAppApi(trimmedPostId);
 }

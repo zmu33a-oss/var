@@ -80,6 +80,27 @@ type AdminLookupSnapshot = {
   warning: string;
 };
 
+async function withAdminRefreshTimeout<T>(
+  promise: Promise<T>,
+  fallback: T,
+  timeoutMs = 3500,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timeoutId = setTimeout(() => resolve(fallback), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 async function readAdminDashboardSnapshot(
   adminVarId: string,
 ): Promise<AdminDashboardSnapshot> {
@@ -91,12 +112,16 @@ async function readAdminDashboardSnapshot(
   const taskLabels: string[] = [];
 
   if (hasAppwritePostsConfig()) {
-    tasks.push(listAppwritePosts());
+    tasks.push(
+      withAdminRefreshTimeout(listAppwritePosts(), { records: [], total: 0 }),
+    );
     taskLabels.push("posts");
   }
 
   if (hasAppwriteVarProfileConfig() && adminVarId.trim()) {
-    tasks.push(getAppwriteVarProfile(adminVarId.trim()));
+    tasks.push(
+      withAdminRefreshTimeout(getAppwriteVarProfile(adminVarId.trim()), null),
+    );
     taskLabels.push("varProfile");
   }
 
@@ -461,10 +486,10 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      const nextSnapshot = await readAdminDashboardSnapshot(
-        props.adminUser.varId,
-      );
-      await props.onRefreshAppData?.();
+      const [nextSnapshot] = await Promise.all([
+        readAdminDashboardSnapshot(props.adminUser.varId),
+        Promise.resolve(props.onRefreshAppData?.()),
+      ]);
       setAppwritePosts(nextSnapshot.appwritePosts);
       setAdminVarProfile(nextSnapshot.varProfile);
       setLoadErrors(nextSnapshot.errors);

@@ -1,0 +1,4 @@
+export const X_POST_MEDIA_ASPECT_RATIO = 16 / 9;
+export const X_POST_MEDIA_EXPORT_WIDTH = 1200;
+export const X_POST_MEDIA_EXPORT_HEIGHT = 675;
+export const X_POST_MEDIA_BACKGROUND = "#15202B";

@@ -1,7 +1,12 @@
-import { Ionicons } from "@expo/vector-icons";
+import { useFonts } from "expo-font";
+import { useMemo } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { XFeedTab } from "../screens/x-feed/x-feed.types";
+import {
+  PROFILE_ARABIC_FONT,
+  PROFILE_ARABIC_FONT_FAMILY,
+} from "../screens/profile/profile.constants";
 
 const SHELL_WIDTH = 430;
 const VAR_WORDMARK_ICON = require("../../assets/icons/var.png");
@@ -15,23 +20,36 @@ type XFeedHeaderProps = {
   notificationCount?: number;
   notificationsActive?: boolean;
   onOpenNotifications?: () => void;
+  onOpenProfile?: () => void;
 };
 
 export default function XFeedHeader(props: XFeedHeaderProps) {
-  const layoutWidth = Math.min(props.windowWidth, SHELL_WIDTH);
-  const chromeScale = Math.max(0.84, Math.min(1, layoutWidth / SHELL_WIDTH));
-  const xTopBarPaddingTop = Math.round(44 * chromeScale);
-  const xTopBarPaddingHorizontal = Math.round(12 * chromeScale);
-  const xTopBarPaddingBottom = Math.max(10, Math.round(10 * chromeScale));
-  const xTopBarItemSize = Math.round(36 * chromeScale);
-  const xTopBarChatIconSize = Math.round(34 * chromeScale);
-  const xTopBarUnreadIndicatorSize = Math.round(14 * chromeScale);
-  const xHeaderLogoFrameWidth = Math.round(118 * chromeScale);
-  const xHeaderLogoFrameHeight = Math.round(28 * chromeScale);
-  const xHeaderLogoImageWidth = Math.round(132 * chromeScale);
-  const xHeaderLogoImageHeight = Math.round(82 * chromeScale);
+  const [isArabicFontLoaded] = useFonts({
+    [PROFILE_ARABIC_FONT_FAMILY]: PROFILE_ARABIC_FONT,
+  });
+  const tabFontFamily = isArabicFontLoaded
+    ? PROFILE_ARABIC_FONT_FAMILY
+    : undefined;
+
+  const metrics = useMemo(() => {
+    const layoutWidth = Math.min(props.windowWidth, SHELL_WIDTH);
+    const chromeScale = Math.max(0.84, Math.min(1, layoutWidth / SHELL_WIDTH));
+    return {
+      xTopBarPaddingTop: Math.round(44 * chromeScale),
+      xTopBarPaddingHorizontal: Math.round(12 * chromeScale),
+      xTopBarPaddingBottom: Math.max(10, Math.round(10 * chromeScale)),
+      xTopBarItemSize: Math.round(36 * chromeScale),
+      xTopBarChatIconSize: Math.round(34 * chromeScale),
+      xTopBarUnreadIndicatorSize: Math.round(14 * chromeScale),
+      xHeaderLogoImageWidth: Math.round(132 * chromeScale),
+      xHeaderLogoImageHeight: Math.round(82 * chromeScale),
+      chromeScale,
+    };
+  }, [props.windowWidth]);
+
   const normalizedNotificationCount = Math.max(0, props.notificationCount ?? 0);
   const isNotificationButtonActive = props.notificationsActive ?? false;
+  const isTimelineActive = props.activeTab !== "profile";
 
   return (
     <>
@@ -39,48 +57,38 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
         style={[
           styles.xTopBar,
           {
-            paddingTop: xTopBarPaddingTop,
-            paddingHorizontal: xTopBarPaddingHorizontal,
-            paddingBottom: xTopBarPaddingBottom,
+            paddingTop: metrics.xTopBarPaddingTop,
+            paddingHorizontal: metrics.xTopBarPaddingHorizontal,
+            paddingBottom: metrics.xTopBarPaddingBottom,
           },
         ]}
       >
         <View
           style={[
             styles.xTopBarSpacer,
-            { width: xTopBarItemSize, height: xTopBarItemSize },
+            { width: metrics.xTopBarItemSize, height: metrics.xTopBarItemSize },
           ]}
         />
 
         <View style={styles.xTopBarCenter}>
-          <View
+          <Image
+            source={VAR_WORDMARK_ICON}
+            resizeMode="contain"
             style={[
-              styles.xHeaderLogoFrame,
+              styles.xHeaderLogoImage,
               {
-                width: xHeaderLogoFrameWidth,
-                height: xHeaderLogoFrameHeight,
+                width: metrics.xHeaderLogoImageWidth,
+                height: metrics.xHeaderLogoImageHeight,
               },
             ]}
-          >
-            <Image
-              source={VAR_WORDMARK_ICON}
-              resizeMode="contain"
-              style={[
-                styles.xHeaderLogoImage,
-                {
-                  width: xHeaderLogoImageWidth,
-                  height: xHeaderLogoImageHeight,
-                },
-              ]}
-            />
-          </View>
+          />
         </View>
 
         <Pressable
           style={[
             styles.xTopBarChatButton,
             isNotificationButtonActive ? styles.xTopBarChatButtonActive : null,
-            { width: xTopBarItemSize, height: xTopBarItemSize },
+            { width: metrics.xTopBarItemSize, height: metrics.xTopBarItemSize },
           ]}
           onPress={
             props.onOpenNotifications ? props.onOpenNotifications : undefined
@@ -91,8 +99,8 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
             source={VAR_CHAT_ICON}
             resizeMode="contain"
             style={{
-              width: xTopBarChatIconSize,
-              height: xTopBarChatIconSize,
+              width: metrics.xTopBarChatIconSize,
+              height: metrics.xTopBarChatIconSize,
             }}
           />
 
@@ -103,8 +111,8 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
               style={[
                 styles.xTopBarUnreadIndicator,
                 {
-                  width: xTopBarUnreadIndicatorSize,
-                  height: xTopBarUnreadIndicatorSize,
+                  width: metrics.xTopBarUnreadIndicatorSize,
+                  height: metrics.xTopBarUnreadIndicatorSize,
                 },
               ]}
             />
@@ -113,55 +121,27 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
       </View>
 
       <View style={styles.xTabsBar}>
-        <View style={styles.xTabsInner}>
-          <XHomeTab
-            label="ملفك"
-            active={props.activeTab === "profile"}
-            onPress={() => props.onChangeTab("profile")}
-          />
-          <XHomeTab
-            label="تايم لاين"
-            active={props.activeTab === "timeline"}
-            onPress={() => props.onChangeTab("timeline")}
-            showLiveDot
-          />
-          <XHomeTab
-            label="مكتبة فار"
-            active={props.activeTab === "var-library"}
-            onPress={() => props.onChangeTab("var-library")}
-          />
-        </View>
+        <Pressable
+          style={styles.xTabsInnerCentered}
+          onPress={() => props.onChangeTab("timeline")}
+          accessibilityRole="button"
+          accessibilityLabel="تايم لاين"
+        >
+          <View style={styles.xHomeTabLabelRow}>
+            <View style={styles.xHomeTabLiveDot} />
+            <Text
+              style={[
+                styles.xHomeTabText,
+                tabFontFamily ? { fontFamily: tabFontFamily } : null,
+                isTimelineActive ? styles.xHomeTabTextActive : null,
+              ]}
+            >
+              تايم لاين
+            </Text>
+          </View>
+        </Pressable>
       </View>
     </>
-  );
-}
-
-function XHomeTab(props: {
-  label: string;
-  active?: boolean;
-  onPress: () => void;
-  showLiveDot?: boolean;
-}) {
-  return (
-    <Pressable style={styles.xHomeTab} onPress={props.onPress}>
-      <View style={styles.xHomeTabLabelRow}>
-        {props.showLiveDot ? <View style={styles.xHomeTabLiveDot} /> : null}
-        <Text
-          style={[
-            styles.xHomeTabText,
-            props.active ? styles.xHomeTabTextActive : null,
-          ]}
-        >
-          {props.label}
-        </Text>
-      </View>
-      <View
-        style={[
-          styles.xHomeTabUnderline,
-          props.active ? styles.xHomeTabUnderlineActive : null,
-        ]}
-      />
-    </Pressable>
   );
 }
 
@@ -178,6 +158,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   xTopBarCenter: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -194,12 +175,6 @@ const styles = StyleSheet.create({
     top: -2,
     right: 0,
   },
-  xHeaderLogoFrame: {
-    width: 146,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   xHeaderLogoImage: {
     width: 158,
     height: 104,
@@ -212,19 +187,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.98)",
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.12)",
-    paddingTop: 6,
-  },
-  xTabsInner: {
-    flexDirection: "row-reverse",
-    alignItems: "flex-end",
-    paddingHorizontal: 6,
-  },
-  xHomeTab: {
-    flex: 1,
-    minHeight: 48,
+    paddingTop: 2,
+    paddingBottom: 8,
     alignItems: "center",
-    justifyContent: "flex-end",
-    paddingTop: 12,
+  },
+  xTabsInnerCentered: {
+    minHeight: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
   },
   xHomeTabLabelRow: {
     flexDirection: "row-reverse",
@@ -240,22 +211,11 @@ const styles = StyleSheet.create({
   },
   xHomeTabText: {
     color: "rgba(255,255,255,0.52)",
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: "700",
   },
   xHomeTabTextActive: {
     color: "#FFFFFF",
     fontWeight: "800",
-  },
-  xHomeTabUnderline: {
-    width: 0,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: "#1D9BF0",
-    marginTop: 10,
-    marginBottom: -1,
-  },
-  xHomeTabUnderlineActive: {
-    width: 56,
   },
 });

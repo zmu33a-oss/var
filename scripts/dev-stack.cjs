@@ -6,10 +6,34 @@ require("./load-env.cjs");
 const rootDir = path.resolve(__dirname, "..");
 
 console.log("");
+const os = require("node:os");
+
+function resolveLanIp() {
+  for (const entries of Object.values(os.networkInterfaces())) {
+    for (const entry of entries || []) {
+      if (
+        (entry.family === "IPv4" || entry.family === 4) &&
+        !entry.internal &&
+        entry.address.startsWith("192.168.")
+      ) {
+        return entry.address;
+      }
+    }
+  }
+
+  return "";
+}
+
+const lanIp = resolveLanIp();
+
 console.log("VAR full dev stack");
 console.log("  Admin UI + API : http://localhost:3000/admin/");
-console.log("  Expo web app   : http://localhost:8081/");
-console.log("  Tip: /admin on :8081 redirects to :3000 automatically.");
+console.log("  Expo PC        : http://localhost:8081/");
+if (lanIp) {
+  console.log(`  Expo Mobile    : http://${lanIp}:8081/`);
+  console.log(`  API Mobile     : http://${lanIp}:3000/`);
+}
+console.log("  Same Wi-Fi required on phone and PC.");
 console.log("");
 
 const children = [];
@@ -38,7 +62,7 @@ function start(name, command, args) {
 }
 
 start("admin", "npm", ["run", "admin:dev"]);
-start("expo", "npm", ["run", "web"]);
+start("expo", "npm", ["run", "web:lan"]);
 
 function shutdown() {
   for (const child of children) {

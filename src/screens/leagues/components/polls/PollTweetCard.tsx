@@ -11,16 +11,11 @@ export function PollTweetCard(props: {
   return (
     <View style={[styles.pollTweetCard, { height: props.cardHeight }]}>
       <View style={styles.pollTweetCardHeader}>
-        <LinearGradient
-          colors={props.tweet.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.pollTweetAvatar}
-        >
-          <RNText style={styles.pollTweetAvatarText}>
-            {props.tweet.avatarLabel}
-          </RNText>
-        </LinearGradient>
+        <Ionicons
+          name="ellipsis-horizontal"
+          size={16}
+          color="rgba(255,255,255,0.34)"
+        />
 
         <View style={styles.pollTweetMetaBlock}>
           <View style={styles.pollTweetIdentityRow}>
@@ -37,11 +32,16 @@ export function PollTweetCard(props: {
           ) : null}
         </View>
 
-        <Ionicons
-          name="ellipsis-horizontal"
-          size={16}
-          color="rgba(255,255,255,0.34)"
-        />
+        <LinearGradient
+          colors={props.tweet.gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.pollTweetAvatar}
+        >
+          <RNText style={styles.pollTweetAvatarText}>
+            {props.tweet.avatarLabel}
+          </RNText>
+        </LinearGradient>
       </View>
 
       <RNText style={styles.pollTweetQuote} numberOfLines={3}>

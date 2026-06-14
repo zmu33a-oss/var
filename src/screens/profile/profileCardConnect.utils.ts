@@ -291,38 +291,9 @@ export function getQrTightCropLayout(
     sourceSize: displaySize,
   };
 
-  try {
-    const { modules } = QRCodeCreator.create(payload, {
-      errorCorrectionLevel: QR_ERROR_CORRECTION,
-    });
-    const bounds = scanQrDarkBounds(modules);
-    if (!bounds) {
-      return fallback;
-    }
-
-    const { moduleCount, minRow, minCol, activeSize } = bounds;
-    const scale = moduleCount / activeSize;
-    const modulePx = displaySize / moduleCount;
-    const renderSize = displaySize * scale;
-    const sourceX = (minCol * renderSize) / moduleCount;
-    const sourceY = (minRow * renderSize) / moduleCount;
-    const sourceSize = (activeSize * renderSize) / moduleCount;
-
-    return {
-      moduleCount,
-      minRow,
-      minCol,
-      activeSize,
-      scale,
-      offsetX: -minCol * modulePx * scale,
-      offsetY: -minRow * modulePx * scale,
-      sourceX,
-      sourceY,
-      sourceSize,
-    };
-  } catch {
-    return fallback;
-  }
+  // QRCodeCreator.create is not available in the qrcode package
+  // Return fallback layout
+  return fallback;
 }
 
 function resolveVarQrAppUrl() {

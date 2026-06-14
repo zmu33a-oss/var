@@ -8,7 +8,6 @@ import {
   Pressable,
   Share,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import type { MembershipCardTier } from "../../../lib/membershipCardTier";
@@ -29,36 +28,53 @@ export function ProfileCardConnectPanel(props: {
     displayVarId: string,
   ) => Promise<{ ok: boolean; message: string }>;
 }) {
-  const [searchValue, setSearchValue] = useState("");
   const [isBusy, setIsBusy] = useState(false);
   const [feedback, setFeedback] = useState("");
   const arabicTextStyle = getArabicFontStyle(
     props.arabicFontFamily,
-    feedback || searchValue,
+    feedback,
   );
 
-  const runAddUser = async (rawValue: string) => {
-    const normalizedDisplayVarId = parseVarIdFromScannedValue(rawValue);
+  const runScanAndAdd = async () => {
+    if (isBusy) return;
 
-    if (!normalizedDisplayVarId) {
-      setFeedback("أدخل VAR ID صالحًا مثل VAR-1234567.");
-      return;
-    }
-
-    setIsBusy(true);
     setFeedback("");
 
     try {
-      const result = await props.onAddUserByDisplayVarId(
-        normalizedDisplayVarId,
-      );
-      setFeedback(result.message);
+      const pickerResult = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 1,
+      });
 
-      if (result.ok) {
-        setSearchValue("");
+      if (pickerResult.canceled) return;
+
+      const imageUri = pickerResult.assets[0]?.uri;
+      if (!imageUri) {
+        setFeedback("تعذر قراءة الصورة المختارة.");
+        return;
       }
+
+      setIsBusy(true);
+
+      const scanResults = await scanFromURLAsync(imageUri, ["qr"]);
+      const scannedValue = scanResults[0]?.data?.trim();
+
+      if (!scannedValue) {
+        setFeedback("لم يتم العثور على باركود في الصورة.");
+        return;
+      }
+
+      const normalizedDisplayVarId = parseVarIdFromScannedValue(scannedValue);
+      if (!normalizedDisplayVarId) {
+        setFeedback("أدخل VAR ID صالحًا مثل VAR-1234567.");
+        return;
+      }
+
+      const result = await props.onAddUserByDisplayVarId(normalizedDisplayVarId);
+      setFeedback(result.message);
     } catch {
-      setFeedback("تعذر إضافة المستخدم الآن.");
+      setFeedback("تعذر مسح البطاقة من الصورة.");
     } finally {
       setIsBusy(false);
     }
@@ -111,105 +127,38 @@ export function ProfileCardConnectPanel(props: {
     }
   };
 
-  const handleScanCardPhoto = async () => {
-    if (isBusy) {
-      return;
-    }
-
-    setFeedback("");
-
-    try {
-      const pickerResult = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        quality: 1,
-      });
-
-      if (pickerResult.canceled) {
-        return;
-      }
-
-      const imageUri = pickerResult.assets[0]?.uri;
-
-      if (!imageUri) {
-        setFeedback("تعذر قراءة الصورة المختارة.");
-        return;
-      }
-
-      setIsBusy(true);
-
-      const scanResults = await scanFromURLAsync(imageUri, ["qr"]);
-      const scannedValue = scanResults[0]?.data?.trim();
-
-      if (!scannedValue) {
-        setFeedback(
-          "لم يتم العثور على باركود في الصورة. جرّب صورة أوضح للبطاقة.",
-        );
-        return;
-      }
-
-      await runAddUser(scannedValue);
-    } catch {
-      setFeedback("تعذر مسح البطاقة من الصورة.");
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
   return (
     <View style={styles.cardConnectPanel}>
-      <Pressable
-        accessibilityLabel="مشاركة بطاقة VAR"
-        disabled={isBusy}
-        onPress={() => {
-          void handleShareCard();
-        }}
-        style={({ pressed }) => [
-          styles.cardConnectShareButton,
-          pressed ? styles.cardConnectShareButtonPressed : null,
-        ]}
-      >
-        <View style={styles.cardConnectShareIconWrap}>
-          <Ionicons color="#09111C" name="share-outline" size={18} />
-        </View>
-        <Text style={[styles.cardConnectShareText, arabicTextStyle]}>
-          مشاركة البطاقة
-        </Text>
-      </Pressable>
-
-      <View style={styles.cardConnectSearchRow}>
+      <View style={styles.cardConnectCompactRow}>
         <Pressable
-          accessibilityLabel="مسح بطاقة VAR من الصور"
+          accessibilityLabel="مشاركة بطاقة VAR"
           disabled={isBusy}
-          onPress={() => {
-            void handleScanCardPhoto();
-          }}
+          onPress={() => void handleShareCard()}
           style={({ pressed }) => [
-            styles.cardConnectCameraButton,
-            pressed ? styles.cardConnectCameraButtonPressed : null,
+            styles.cardConnectCompactBtn,
+            pressed && styles.cardConnectCompactBtnPressed,
+          ]}
+        >
+          <Ionicons color="#F4C565" name="share-outline" size={16} />
+          <Text style={styles.cardConnectCompactText}>مشاركة</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityLabel="إضافة عبر مسح QR"
+          disabled={isBusy}
+          onPress={() => void runScanAndAdd()}
+          style={({ pressed }) => [
+            styles.cardConnectCompactBtn,
+            pressed && styles.cardConnectCompactBtnPressed,
           ]}
         >
           {isBusy ? (
             <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
-            <Ionicons color="#FFFFFF" name="camera-outline" size={20} />
+            <Ionicons color="#63C6FF" name="scan" size={16} />
           )}
+          <Text style={styles.cardConnectCompactText}>إضافة</Text>
         </Pressable>
-
-        <TextInput
-          autoCapitalize="characters"
-          autoCorrect={false}
-          editable={!isBusy}
-          onChangeText={setSearchValue}
-          onSubmitEditing={() => {
-            void runAddUser(searchValue);
-          }}
-          placeholder="بحث بالـ VAR ID"
-          placeholderTextColor="rgba(255,255,255,0.34)"
-          returnKeyType="search"
-          style={[styles.cardConnectSearchInput, arabicTextStyle]}
-          value={searchValue}
-        />
       </View>
 
       {feedback ? (

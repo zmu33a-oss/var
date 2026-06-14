@@ -14,6 +14,7 @@ import type {
   LockedPredictionSummary,
   ProfileData,
 } from "../../../app.types";
+import { LEAGUES } from "../../../app.data";
 import { buildComposerDisplayVarId } from "../../../appshell/appshell.helpers";
 import { MilestoneProgressBar } from "../../../components/MilestoneProgressBar";
 import {
@@ -237,12 +238,27 @@ export function ProfileUserPreviewScreen(props: {
   const earnedPoints = Math.max(0, props.profile.earnedPoints);
   const associationLabel =
     props.profile.association?.trim() || props.clubName || "بدون رابطة";
+  const leagueNameMap = Object.fromEntries(LEAGUES.map((l) => [l.id, l.name]));
+  const leagueClubEntries: { leagueId: string; leagueName: string; club: string }[] = (() => {
+    const raw = props.profile.leagueClub?.trim() || "";
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw) as Record<string, string>;
+      return Object.entries(parsed)
+        .filter(([, club]) => club)
+        .map(([leagueId, club]) => ({
+          leagueId,
+          leagueName: leagueNameMap[leagueId] || leagueId,
+          club,
+        }));
+    } catch {
+      return raw ? [{ leagueId: "other", leagueName: "الرابطة", club: raw }] : [];
+    }
+  })();
   const previewVarIdLabel = sportsCardNumber.replace(/^VAR-/i, "VAR ");
   const wonPredictions = predictions.filter(
     (prediction) => prediction.pointsAwarded > 0,
   ).length;
-  const followedProfilesCount = props.followedProfiles.length;
-  const followedProfilesPreview = props.followedProfiles.slice(0, 4);
   const profileMetricGroups = [
     {
       id: "predictions",
@@ -314,7 +330,7 @@ export function ProfileUserPreviewScreen(props: {
         {
           id: "added",
           label: "المضافون",
-          value: String(followedProfilesCount),
+          value: String(props.followedProfiles.length),
         },
       ],
     },
@@ -392,6 +408,14 @@ export function ProfileUserPreviewScreen(props: {
                   {previewVarIdLabel}
                 </Text>
               </View>
+              {leagueClubEntries.length > 0 ? (
+                <View style={styles.identityInfoRow}>
+                  <Ionicons name="football-outline" size={13} color="#F4C565" />
+                  <Text numberOfLines={2} style={styles.identityAssociation}>
+                    {leagueClubEntries.map((e) => e.club).join(" · ")}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -420,60 +444,39 @@ export function ProfileUserPreviewScreen(props: {
         <View style={styles.followedPreviewSection}>
           <View style={styles.followedPreviewHeader}>
             <View style={styles.followedPreviewIconWrap}>
-              <Ionicons name="people" size={18} color="#34D399" />
+              <Ionicons name="football" size={18} color="#F4C565" />
             </View>
             <View style={styles.followedPreviewHeaderCopy}>
               <Text style={[styles.followedPreviewTitle, titleArabicTextStyle]}>
-                المضافون عبر VAR
+                أندية الدوريات
               </Text>
               <Text style={styles.followedPreviewHint}>
-                {followedProfilesCount
-                  ? `${followedProfilesCount} حساب في قائمتك`
-                  : "لم تضف أي حساب بالباركود بعد"}
+                {leagueClubEntries.length
+                  ? `${leagueClubEntries.length} ${leagueClubEntries.length === 1 ? "نادي مختار" : "أندية مختارة"}`
+                  : "لم يتم اختيار أي نادٍ بعد"}
               </Text>
             </View>
           </View>
 
-          {followedProfilesPreview.length ? (
+          {leagueClubEntries.length ? (
             <View style={styles.followedPreviewList}>
-              {followedProfilesPreview.map((followedProfile) => (
-                <View
-                  key={followedProfile.varId}
-                  style={styles.followedPreviewCard}
-                >
-                  <View style={styles.followedPreviewAvatarWrap}>
-                    {followedProfile.avatarUri ? (
-                      <Image
-                        source={{
-                          uri: resolveProfileAvatarUri(
-                            followedProfile.avatarUri,
-                          ),
-                        }}
-                        style={styles.followedPreviewAvatarImage}
-                      />
-                    ) : (
-                      <Text style={styles.followedPreviewAvatarFallback}>
-                        {followedProfile.displayName.slice(0, 1) || "V"}
-                      </Text>
-                    )}
+              {leagueClubEntries.map((entry) => (
+                <View key={entry.leagueId} style={styles.followedPreviewCard}>
+                  <View style={[styles.followedPreviewAvatarWrap, previewStyles.leagueIconWrap]}>
+                    <Ionicons name="football-outline" size={20} color="#F4C565" />
                   </View>
-
                   <View style={styles.followedPreviewCardCopy}>
                     <Text
                       numberOfLines={1}
                       style={[
                         styles.followedPreviewName,
-                        getArabicFontStyle(
-                          props.arabicFontFamily,
-                          followedProfile.displayName,
-                        ),
+                        getArabicFontStyle(props.arabicFontFamily, entry.club),
                       ]}
                     >
-                      {followedProfile.displayName ||
-                        followedProfile.displayVarId}
+                      {entry.club}
                     </Text>
                     <Text numberOfLines={1} style={styles.followedPreviewVarId}>
-                      {followedProfile.displayVarId || followedProfile.varId}
+                      {entry.leagueName}
                     </Text>
                   </View>
                 </View>
@@ -482,7 +485,7 @@ export function ProfileUserPreviewScreen(props: {
           ) : (
             <View style={styles.followedPreviewEmptyCard}>
               <Text style={styles.followedPreviewEmptyText}>
-                امسح باركود بطاقة VAR لأي مستخدم، وسيظهر هنا فور إضافته.
+                اختر أنديتك المفضلة من كل دوري في صفحة تعديل البروفايل.
               </Text>
             </View>
           )}
@@ -539,3 +542,11 @@ export function ProfileUserPreviewScreen(props: {
     </View>
   );
 }
+
+const previewStyles = StyleSheet.create({
+  leagueIconWrap: {
+    backgroundColor: "rgba(244,197,101,0.12)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});

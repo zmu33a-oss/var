@@ -29,6 +29,8 @@ export function SwipeActionControl(props: SwipeActionControlProps) {
   const isCompleted = props.completed || localCompleted;
   const activeLabel =
     isCompleted || props.busy ? props.completedLabel : props.label;
+  const iconName = isCompleted ? "checkmark" : (props.iconName ?? "logo-apple");
+  const iconColor = isCompleted ? "#09111C" : (props.iconColor ?? "rgba(255,255,255,0.96)");
   const maxOffset = Math.max(
     0,
     trackWidth - SLIDE_THUMB_SIZE - SLIDE_HORIZONTAL_PADDING * 2,
@@ -73,24 +75,32 @@ export function SwipeActionControl(props: SwipeActionControlProps) {
 
   const completeSlide = async () => {
     setLocalCompleted(true);
-    await props.onReachedEnd();
+    await props.onReachedEnd?.();
     await props.onComplete();
 
     if (props.resetAfterComplete && !props.completed) {
       resetTimeoutRef.current = setTimeout(() => {
         resetThumb();
-      }, 900);
+      }, props.resetDelayMs ?? 900);
     }
   };
 
   const panResponder = PanResponder.create({
+    onStartShouldSetPanResponderCapture: () =>
+      !props.busy && !isCompleted && maxOffset > 0,
     onStartShouldSetPanResponder: () =>
       !props.busy && !isCompleted && maxOffset > 0,
+    onMoveShouldSetPanResponderCapture: (_event, gestureState) =>
+      !props.busy &&
+      !isCompleted &&
+      maxOffset > 0 &&
+      gestureState.dx > 3 &&
+      Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
     onMoveShouldSetPanResponder: (_event, gestureState) =>
       !props.busy &&
       !isCompleted &&
       maxOffset > 0 &&
-      gestureState.dx > 6 &&
+      gestureState.dx > 3 &&
       Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
     onPanResponderMove: (_event, gestureState) => {
       const nextOffset = Math.max(0, Math.min(maxOffset, gestureState.dx));
@@ -112,13 +122,14 @@ export function SwipeActionControl(props: SwipeActionControlProps) {
 
       resetThumb();
     },
+    onPanResponderTerminationRequest: () => false,
     onPanResponderTerminate: resetThumb,
   });
 
   return (
     <View style={styles.sliderTrack} onLayout={handleTrackLayout}>
       <View style={styles.sliderTextRow}>
-        <Ionicons name="logo-apple" size={15} color="rgba(255,255,255,0.96)" />
+        <Ionicons name={iconName} size={15} color={iconColor} />
         <Text style={[styles.sliderText, sliderTextArabicStyle]}>
           {activeLabel}
         </Text>
@@ -157,11 +168,7 @@ export function SwipeActionControl(props: SwipeActionControlProps) {
           },
         ]}
       >
-        <Ionicons
-          name={isCompleted ? "checkmark" : "chevron-forward"}
-          size={22}
-          color="#09111C"
-        />
+        <Ionicons name={isCompleted ? "checkmark" : "chevron-forward"} size={22} color="#09111C" />
       </Animated.View>
     </View>
   );

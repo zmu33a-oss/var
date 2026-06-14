@@ -528,6 +528,7 @@ export async function saveAppwriteUserProfile(input: {
   birthDate: string;
   nationality: string;
   association: string;
+  leagueClub: string;
   displayVarId: string;
   avatarUri: string;
 }) {
@@ -559,6 +560,7 @@ export async function saveAppwriteUserProfile(input: {
       birthDate: input.birthDate.trim(),
       nationality: input.nationality.trim(),
       association: input.association.trim(),
+      leagueClub: input.leagueClub.trim(),
       avatarUri: nextAvatarUrl,
       avatarUrl: nextAvatarUrl,
       role: mappedUser.role,

@@ -1,49 +1,41 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Image,
+  PanResponder,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   View,
+  type LayoutChangeEvent,
 } from "react-native";
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
 import QRCode from "react-native-qrcode-svg";
 import type { MembershipCardTier } from "../../../../lib/membershipCardTier";
 import {
   getMembershipCardTheme,
   getMembershipCardTierLabel,
 } from "../../../../lib/membershipCardTier";
-import {
-  getArabicFontStyle,
-  resolveProfileAvatarUri,
-} from "../../profile.helpers";
+import { getArabicFontStyle } from "../../profile.helpers";
 import {
   buildVarQrPayload,
   generateTightVarQrDataUrl,
   scaleVarQrDisplaySize,
 } from "../../profileCardConnect.utils";
 
+const WALLET_SLIDE_THUMB_SIZE = 49;
+const WALLET_SLIDE_PADDING = 0;
+const WALLET_SLIDE_THRESHOLD = 0.72;
+
 const CARD_ASPECT_RATIO = 0.57;
 
 type VarIdentityCardProps = {
   width: number;
-  avatarUri: string;
-  displayName: string;
   displayVarId: string;
-  association: string;
-  joinDate: string;
-  nationalityArabic: string;
-  nationalityEnglish: string;
   arabicFontFamily?: string;
   cardTier?: MembershipCardTier;
+  onWalletSwipe?: () => void;
 };
 
 function resolveQrRenderLightColor(
@@ -119,9 +111,9 @@ function TightVarQr(props: {
         />
       ) : (
         <Image
-          source={{ uri: qrUri! }}
+          source={{ uri: qrUri }}
+          resizeMode="contain"
           style={{ width: props.size, height: props.size }}
-          resizeMode="stretch"
         />
       )}
     </View>
@@ -154,6 +146,7 @@ function CardFront(props: {
   width: number;
   displayVarId: string;
   cardTier: MembershipCardTier;
+  onWalletSwipe?: () => void;
 }) {
   const theme = getMembershipCardTheme(props.cardTier);
   const cardHeight = props.width * CARD_ASPECT_RATIO;
@@ -179,10 +172,11 @@ function CardFront(props: {
     >
       <LinearGradient
         colors={theme.sheenGradient}
+        pointerEvents="none"
         style={StyleSheet.absoluteFillObject}
       />
 
-      <View style={styles.watermarkContainer}>
+      <View pointerEvents="none" style={styles.watermarkContainer}>
         <Text style={[styles.watermarkText, { color: theme.watermark }]}>
           VAR
         </Text>
@@ -238,251 +232,114 @@ function CardFront(props: {
           )}
         </View>
       </View>
+
+      {props.onWalletSwipe && (
+        <CardWalletSlide onComplete={props.onWalletSwipe} />
+      )}
     </LinearGradient>
   );
 }
 
-function CardBack(props: {
-  width: number;
-  avatarUri: string;
-  displayName: string;
-  displayVarId: string;
-  association: string;
-  joinDate: string;
-  nationalityArabic: string;
-  nationalityEnglish: string;
-  arabicTextStyle: object | undefined;
-  cardTier: MembershipCardTier;
-}) {
-  const theme = getMembershipCardTheme(props.cardTier);
-  const cardHeight = props.width * CARD_ASPECT_RATIO;
-  const qrSize = scaleVarQrDisplaySize(props.width < 340 ? 64 : 72);
-  const qrPayload = buildVarQrPayload(props.displayVarId);
+function CardWalletSlide(props: { onComplete: () => void }) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const maxOffset = Math.max(
+    0,
+    trackWidth - WALLET_SLIDE_THUMB_SIZE - WALLET_SLIDE_PADDING * 2,
+  );
+
+  const resetThumb = () => {
+    Animated.spring(translateX, {
+      toValue: 0,
+      bounciness: 0,
+      speed: 20,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  const handleTrackLayout = (event: LayoutChangeEvent) => {
+    setTrackWidth(event.nativeEvent.layout.width);
+  };
+
+  const panResponder = PanResponder.create({
+    onStartShouldSetPanResponderCapture: () => maxOffset > 0,
+    onStartShouldSetPanResponder: () => maxOffset > 0,
+    onMoveShouldSetPanResponderCapture: (_event, gestureState) =>
+      maxOffset > 0 &&
+      gestureState.dx > 3 &&
+      Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
+    onMoveShouldSetPanResponder: (_event, gestureState) =>
+      maxOffset > 0 &&
+      gestureState.dx > 3 &&
+      Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
+    onPanResponderMove: (_event, gestureState) => {
+      const nextOffset = Math.max(0, Math.min(maxOffset, gestureState.dx));
+      translateX.setValue(nextOffset);
+    },
+    onPanResponderRelease: (_event, gestureState) => {
+      const nextOffset = Math.max(0, Math.min(maxOffset, gestureState.dx));
+
+      if (nextOffset >= maxOffset * WALLET_SLIDE_THRESHOLD) {
+        Animated.timing(translateX, {
+          toValue: maxOffset,
+          duration: 170,
+          useNativeDriver: false,
+        }).start(() => {
+          props.onComplete();
+          resetThumb();
+        });
+        return;
+      }
+
+      resetThumb();
+    },
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderTerminate: resetThumb,
+  });
 
   return (
-    <LinearGradient
-      colors={theme.backGradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[
-        styles.card,
-        styles.cardBack,
-        {
-          width: props.width,
-          height: cardHeight,
-          borderColor: theme.borderColor,
-          shadowColor: theme.shadowColor,
-        },
-      ]}
-    >
-      <LinearGradient
-        colors={theme.sheenGradient}
-        style={StyleSheet.absoluteFillObject}
-      />
-
-      <View style={styles.backHeader}>
-        <Text style={[styles.backTitle, { color: theme.primaryText }]}>
-          MEMBER DETAILS
-        </Text>
-        <Text style={[styles.backSubtitle, { color: theme.mutedText }]}>
-          VAR PRIVATE ID
-        </Text>
+    <View style={styles.walletSlideTrack} onLayout={handleTrackLayout}>
+      <View style={styles.walletSlideTextRow}>
+        <Ionicons name="wallet-outline" size={13} color="#F4C565" />
+        <Text style={styles.walletSlideText}>walIt</Text>
       </View>
 
-      <View style={styles.backBody}>
-        <View
-          style={[styles.backAvatarWrap, { borderColor: theme.borderColor }]}
-        >
-          <Image
-            source={{ uri: resolveProfileAvatarUri(props.avatarUri) }}
-            style={styles.backAvatarImage}
-          />
-        </View>
-
-        <View style={styles.backInfoBlock}>
-          <View style={styles.backInfoRow}>
-            <Text style={[styles.backInfoLabel, { color: theme.mutedText }]}>
-              MEMBER NAME
-            </Text>
-            <Text
-              style={[
-                styles.backInfoValue,
-                props.arabicTextStyle,
-                { color: theme.primaryText },
-              ]}
-            >
-              {props.displayName || "—"}
-            </Text>
-          </View>
-
-          <View style={styles.backInfoRow}>
-            <Text style={[styles.backInfoLabel, { color: theme.mutedText }]}>
-              ASSOCIATION
-            </Text>
-            <Text
-              style={[
-                styles.backInfoValue,
-                props.arabicTextStyle,
-                { color: theme.primaryText },
-              ]}
-            >
-              {props.association || "—"}
-            </Text>
-          </View>
-
-          <View style={styles.backInfoRow}>
-            <Text style={[styles.backInfoLabel, { color: theme.mutedText }]}>
-              MEMBER SINCE
-            </Text>
-            <Text
-              style={[
-                styles.backInfoValue,
-                props.arabicTextStyle,
-                { color: theme.primaryText },
-              ]}
-            >
-              {props.joinDate || "—"}
-            </Text>
-          </View>
-
-          <View style={styles.backInfoRow}>
-            <Text style={[styles.backInfoLabel, { color: theme.mutedText }]}>
-              NATIONALITY
-            </Text>
-            <Text
-              style={[
-                styles.backInfoValue,
-                props.arabicTextStyle,
-                { color: theme.primaryText },
-              ]}
-            >
-              {props.nationalityArabic || "—"}
-            </Text>
-            {props.nationalityEnglish ? (
-              <Text
-                style={[
-                  styles.backInfoSubValue,
-                  { color: theme.secondaryText },
-                ]}
-              >
-                {props.nationalityEnglish}
-              </Text>
-            ) : null}
-          </View>
-        </View>
-
-        <View style={styles.backQrPlate}>
-          <TightVarQr
-            value={qrPayload}
-            size={qrSize}
-            cardTier={props.cardTier}
-            qrColor={theme.qrColor}
-            qrBackground={theme.qrBackground}
-          />
-        </View>
+      <View style={styles.walletSlideTrail}>
+        <Ionicons name="chevron-forward" size={12} color="rgba(255,255,255,0.28)" />
+        <Ionicons name="chevron-forward" size={12} color="rgba(255,255,255,0.44)" style={styles.walletSlideTrailIcon} />
+        <Ionicons name="chevron-forward" size={12} color="rgba(255,255,255,0.62)" style={styles.walletSlideTrailIcon} />
       </View>
 
-      <View style={styles.backFooter}>
-        <Text style={[styles.backFooterId, { color: theme.idBadgeText }]}>
-          {props.displayVarId || "VAR-0000000"}
-        </Text>
-      </View>
-    </LinearGradient>
+      <Animated.View
+        {...panResponder.panHandlers}
+        style={[
+          styles.walletSlideThumb,
+          {
+            transform: [{ translateX }],
+          },
+        ]}
+      >
+        <Ionicons name="chevron-forward" size={19} color="#09111C" />
+      </Animated.View>
+    </View>
   );
 }
 
 export function VarIdentityCard(props: VarIdentityCardProps) {
   const cardTier = props.cardTier ?? "classic";
-  const theme = getMembershipCardTheme(cardTier);
-  const [isFlipped, setIsFlipped] = useState(false);
-  const rotation = useSharedValue(0);
-  const arabicTextStyle = getArabicFontStyle(props.arabicFontFamily);
   const cardHeight = props.width * CARD_ASPECT_RATIO;
-
-  const toggleFlip = () => {
-    const nextFlipped = !isFlipped;
-    setIsFlipped(nextFlipped);
-    rotation.value = withTiming(nextFlipped ? 180 : 0, {
-      duration: 550,
-      easing: Easing.inOut(Easing.cubic),
-    });
-  };
-
-  const flipStyle = useAnimatedStyle(() => ({
-    transform: [{ perspective: 1200 }, { rotateY: `${rotation.value}deg` }],
-  }));
 
   return (
     <View style={[styles.wrapper, { width: props.width }]}>
-      <View style={[styles.flipStage, { height: cardHeight }]}>
-        <Animated.View
-          style={[
-            styles.flipInner,
-            flipStyle,
-            Platform.OS === "web"
-              ? ({ transformStyle: "preserve-3d" } as object)
-              : null,
-          ]}
-        >
-          <View
-            style={[
-              styles.cardFace,
-              Platform.OS === "web"
-                ? ({ backfaceVisibility: "hidden" } as object)
-                : null,
-            ]}
-          >
-            <CardFront
-              width={props.width}
-              displayVarId={props.displayVarId}
-              cardTier={cardTier}
-            />
-          </View>
-
-          <View
-            style={[
-              styles.cardFace,
-              styles.cardFaceBack,
-              Platform.OS === "web"
-                ? ({ backfaceVisibility: "hidden" } as object)
-                : null,
-            ]}
-          >
-            <CardBack
-              width={props.width}
-              avatarUri={props.avatarUri}
-              displayName={props.displayName}
-              displayVarId={props.displayVarId}
-              association={props.association}
-              joinDate={props.joinDate}
-              nationalityArabic={props.nationalityArabic}
-              nationalityEnglish={props.nationalityEnglish}
-              arabicTextStyle={arabicTextStyle}
-              cardTier={cardTier}
-            />
-          </View>
-        </Animated.View>
-      </View>
-
-      <Pressable
-        style={[
-          styles.flipButton,
-          {
-            borderColor: theme.flipButtonBorder,
-          },
-        ]}
-        onPress={toggleFlip}
-      >
-        <Ionicons
-          name="sync-outline"
-          size={16}
-          color={theme.flipButtonText}
-          style={isFlipped ? styles.flipIconFlipped : null}
+      <View style={{ height: cardHeight }}>
+        <CardFront
+          width={props.width}
+          displayVarId={props.displayVarId}
+          cardTier={cardTier}
+          onWalletSwipe={props.onWalletSwipe}
         />
-        <Text style={[styles.flipButtonText, { color: theme.flipButtonText }]}>
-          {isFlipped ? "عرض الوجه الأمامي" : "قلب البطاقة"}
-        </Text>
-      </Pressable>
+      </View>
     </View>
   );
 }
@@ -491,19 +348,6 @@ const styles = StyleSheet.create({
   wrapper: {
     alignSelf: "center",
     marginTop: 10,
-  },
-  flipStage: {
-    width: "100%",
-  },
-  flipInner: {
-    width: "100%",
-    height: "100%",
-  },
-  cardFace: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  cardFaceBack: {
-    transform: [{ rotateY: "180deg" }],
   },
   card: {
     borderRadius: 14,
@@ -515,7 +359,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
   },
-  cardBack: {},
   watermarkContainer: {
     position: "absolute",
     left: 0,
@@ -524,6 +367,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 0,
   },
   watermarkText: {
     fontSize: 120,
@@ -546,6 +390,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 10,
+    zIndex: 5,
   },
   logoContainer: {
     alignItems: "flex-start",
@@ -565,6 +410,8 @@ const styles = StyleSheet.create({
   },
   frontQrPlate: {
     marginTop: 28,
+    zIndex: 10,
+    elevation: 10,
   },
   footerRow: {
     flexDirection: "row",
@@ -598,95 +445,60 @@ const styles = StyleSheet.create({
     marginTop: 2,
     letterSpacing: 0.6,
   },
-  backHeader: {
-    alignItems: "flex-end",
-  },
-  backTitle: {
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.4,
-  },
-  backSubtitle: {
-    fontSize: 8.5,
-    fontWeight: "700",
-    letterSpacing: 1.1,
-    marginTop: 2,
-  },
-  backBody: {
-    flex: 1,
+  walletSlideTrack: {
+    position: "absolute",
+    bottom: 14,
+    left: 14,
+    height: 44,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "rgba(8,14,24,0.84)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.92)",
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 14,
-    gap: 10,
+    width: 152,
+    zIndex: 20,
+    elevation: 20,
   },
-  backAvatarWrap: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    overflow: "hidden",
-    borderWidth: 1.5,
-    backgroundColor: "rgba(255,255,255,0.08)",
-  },
-  backAvatarImage: {
-    width: "100%",
-    height: "100%",
-  },
-  backInfoBlock: {
-    flex: 1,
-    minWidth: 0,
-    gap: 10,
-  },
-  backInfoRow: {
-    alignItems: "flex-end",
-  },
-  backInfoLabel: {
-    fontSize: 7,
-    fontWeight: "800",
-    letterSpacing: 1,
-  },
-  backInfoValue: {
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 2,
-    textAlign: "right",
-  },
-  backInfoSubValue: {
-    fontSize: 8.5,
-    fontWeight: "600",
-    marginTop: 1,
-    textAlign: "right",
-  },
-  backQrPlate: {
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  backFooter: {
-    alignItems: "flex-end",
-    marginTop: 8,
-  },
-  backFooterId: {
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-  },
-  flipButton: {
-    marginTop: 14,
-    alignSelf: "center",
-    flexDirection: "row-reverse",
+  walletSlideTextRow: {
+    position: "absolute",
+    left: 56,
+    right: 10,
+    flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    justifyContent: "flex-start",
+    gap: 6,
   },
-  flipButtonText: {
+  walletSlideText: {
+    color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "900",
+    letterSpacing: 0.5,
   },
-  flipIconFlipped: {
-    transform: [{ rotate: "180deg" }],
+  walletSlideTrail: {
+    position: "absolute",
+    right: 12,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  walletSlideTrailIcon: {
+    marginLeft: -4,
+  },
+  walletSlideThumb: {
+    position: "absolute",
+    left: WALLET_SLIDE_PADDING,
+    top: 0,
+    width: 53,
+    height: 42,
+    borderRadius: 15,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
   },
 });

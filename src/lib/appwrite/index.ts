@@ -187,6 +187,16 @@ export {
 } from "./appwrite.social";
 export { submitAppwritePostReport } from "./appwrite.reports";
 
+export {
+  listFansPostsByClub,
+  createFansPost,
+} from "./appwrite.fansPosts";
+
+export type {
+  AppwriteFansPostRecord,
+  CreateFansPostInput,
+} from "./appwrite.fansPosts";
+
 // ─── Notifications ────────────────────────────────────────────────────────────
 export {
   saveAppwriteNotification,

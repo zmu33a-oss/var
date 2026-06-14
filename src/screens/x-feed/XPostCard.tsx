@@ -2,22 +2,28 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import SealCheckIcon from "../../components/SealCheckIcon";
 import type { IconName, Post, PostReply } from "../../app.types";
-import { VarLibrarySourceStamp } from "./VarLibrarySourceStamp";
+import {
+  X_POST_MEDIA_BACKGROUND,
+} from "./x-feed.media.constants";
+import { useRemoteImageAspectRatio } from "./x-feed.media.utils";
 
-function PostMediaPreview(props: {
-  mediaUri: string;
-  fromVarLibrary?: boolean;
-}) {
+function PostMediaPreview(props: { mediaUri: string }) {
+  const mediaAspectRatio = useRemoteImageAspectRatio(props.mediaUri, false);
+
   return (
-    <View style={styles.xMediaCard}>
+    <View
+      style={[
+        styles.xMediaCard,
+        {
+          aspectRatio: mediaAspectRatio,
+        },
+      ]}
+    >
       <Image
         source={{ uri: props.mediaUri }}
         style={styles.xMediaImage}
         resizeMode="cover"
       />
-      {props.fromVarLibrary ? (
-        <VarLibrarySourceStamp compact style={styles.xMediaLibraryStamp} />
-      ) : null}
     </View>
   );
 }
@@ -28,16 +34,16 @@ function PostBodyBlock(props: {
 }) {
   const { post, showQuotedShell = false } = props;
   const mediaUri = post.mediaUri?.trim() || "";
+  const displayTitle = post.title?.trim();
+  const shouldShowTitle =
+    Boolean(displayTitle) && displayTitle !== "رسالة عامة";
   const body = (
     <>
-      {post.title ? <Text style={styles.xPostTitle}>{post.title}</Text> : null}
-      <Text style={styles.xPostBody}>{post.content}</Text>
-      {mediaUri ? (
-        <PostMediaPreview
-          mediaUri={mediaUri}
-          fromVarLibrary={post.fromVarLibrary}
-        />
+      {shouldShowTitle ? (
+        <Text style={styles.xPostTitle}>{displayTitle}</Text>
       ) : null}
+      <Text style={styles.xPostBody}>{post.content}</Text>
+      {mediaUri ? <PostMediaPreview mediaUri={mediaUri} /> : null}
     </>
   );
 
@@ -103,6 +109,8 @@ export function XPostCard(props: {
 
   const headerBlock = (
     <View style={styles.xPostHead}>
+      {headerActions}
+
       {onOpenAuthor ? (
         <Pressable
           style={styles.xPostMetaBlockPressable}
@@ -164,8 +172,6 @@ export function XPostCard(props: {
           </View>
         </View>
       )}
-
-      {headerActions}
     </View>
   );
 
@@ -435,22 +441,16 @@ const styles = StyleSheet.create({
   },
   xMediaCard: {
     alignSelf: "stretch",
-    height: 190,
     borderRadius: 18,
     overflow: "hidden",
     marginTop: 12,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "#15202B",
+    backgroundColor: X_POST_MEDIA_BACKGROUND,
   },
   xMediaImage: {
     width: "100%",
     height: "100%",
-  },
-  xMediaLibraryStamp: {
-    position: "absolute",
-    top: 10,
-    right: 10,
   },
   xRepostBanner: {
     flexDirection: "row-reverse",

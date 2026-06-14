@@ -22,7 +22,7 @@ console.log(
 );
 console.log("");
 
-execSync("npx vercel dev --listen 3000 --yes", {
+execSync("npx vercel dev --listen 0.0.0.0:3000 --yes", {
   cwd: rootDir,
   stdio: "inherit",
   env: process.env,

@@ -152,6 +152,7 @@ export async function handleSaveProfile(
       birthDate: nextProfile.birthDate,
       nationality: nextProfile.nationality,
       association: nextProfile.association,
+      leagueClub: nextProfile.leagueClub || "",
       displayVarId: normalizedDisplayVarId,
       avatarUri: nextProfile.avatarUri,
     });

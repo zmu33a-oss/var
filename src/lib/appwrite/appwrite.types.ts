@@ -127,6 +127,7 @@ export type AppwriteAuthUser = {
   birthDate: string;
   nationality: string;
   association: string;
+  leagueClub: string;
   avatarUri: string;
   role: AppwriteUserRole;
   adminLabel: string;
@@ -182,6 +183,7 @@ export type AppwriteCollectionIds = {
   sharesCollectionId: string;
   profileImagesBucketId: string;
   varLibraryCollectionId: string;
+  fansPostsCollectionId: string;
 };
 
 export type AppwriteVarLibraryRecord = {
@@ -236,6 +238,7 @@ export type AppwriteProfilePrefs = {
   birthDate?: string;
   nationality?: string;
   association?: string;
+  leagueClub?: string;
   avatarUri?: string;
   avatarUrl?: string;
   role?: AppwriteUserRole;

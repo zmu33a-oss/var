@@ -2,6 +2,10 @@ import { Platform } from "react-native";
 import { isAppwriteStorageViewUrl } from "../../lib/appwrite/appwrite.storage";
 import type { AppwriteVarLibraryRecord } from "../../lib/appwrite/appwrite.types";
 import {
+  X_POST_MEDIA_EXPORT_WIDTH,
+} from "./x-feed.media.constants";
+import { clampLibraryMediaAspectRatio } from "./x-feed.media.utils";
+import {
   VAR_LIBRARY_BRAND_MARK,
   type VarLibraryPublishInput,
   type VarPlayerLibraryEntry,
@@ -99,20 +103,6 @@ async function loadImageElement(uri: string): Promise<{
   return {
     image: await loadImageFromSrc(uri, "anonymous"),
   };
-}
-
-function drawImageCover(
-  context: CanvasRenderingContext2D,
-  image: HTMLImageElement,
-  width: number,
-  height: number,
-) {
-  const scale = Math.max(width / image.width, height / image.height);
-  const drawWidth = image.width * scale;
-  const drawHeight = image.height * scale;
-  const offsetX = (width - drawWidth) / 2;
-  const offsetY = (height - drawHeight) / 2;
-  context.drawImage(image, offsetX, offsetY, drawWidth, drawHeight);
 }
 
 function fillRoundedRect(
@@ -225,8 +215,10 @@ export async function composeVarLibraryPostImage(
     return input.imageUri;
   }
 
-  const width = 1080;
-  const height = 1350;
+  const width = X_POST_MEDIA_EXPORT_WIDTH;
+  const image = loadedImage.image;
+  const aspectRatio = clampLibraryMediaAspectRatio(image.width / image.height);
+  const height = Math.max(1, Math.round(width / aspectRatio));
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -238,7 +230,7 @@ export async function composeVarLibraryPostImage(
   }
 
   try {
-    drawImageCover(context, loadedImage.image, width, height);
+    context.drawImage(image, 0, 0, width, height);
     drawVarLibraryCornerStamp(context, width - 36, 36, 1);
     return canvas.toDataURL("image/jpeg", 0.92);
   } catch {

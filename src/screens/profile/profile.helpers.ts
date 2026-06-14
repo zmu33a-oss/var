@@ -80,15 +80,6 @@ export function getEnglishProfileName(
   return getAutomaticEnglishLabel(trimmedDisplayName) || fallbackValue;
 }
 
-export function getEnglishProfileLine(profile: ProfileData) {
-  const usernameAlias = profile.username.replace(/^@/, "").trim();
-
-  return getEnglishProfileName(
-    profile.displayName,
-    usernameAlias || profile.displayVarId || "VAR Member",
-  );
-}
-
 export function resolveProfileAvatarUri(avatarUri?: string) {
   const normalizedAvatarUri = avatarUri?.trim();
 

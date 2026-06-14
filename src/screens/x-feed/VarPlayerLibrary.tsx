@@ -19,6 +19,7 @@ import {
   type VarLibraryPublishInput,
   type VarPlayerLibraryEntry,
 } from "./varPlayerLibrary.constants";
+import { useRemoteImageAspectRatio } from "./x-feed.media.utils";
 import {
   mapAppwriteRecordToLibraryEntry,
   resolveVarLibraryEntryImageUri,
@@ -106,6 +107,10 @@ export function VarPlayerLibrary({
   const selectedPortraitUri = selectedPlayer
     ? resolveVarLibraryEntryImageUri(selectedPlayer)
     : "";
+  const previewAspectRatio = useRemoteImageAspectRatio(
+    selectedPortraitUri,
+    Boolean(selectedPortraitUri),
+  );
 
   const handleSelectPlayer = (player: VarPlayerLibraryEntry) => {
     setSelectedPlayer(player);
@@ -171,7 +176,7 @@ export function VarPlayerLibrary({
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.composerCard}>
-          <View style={styles.previewShell}>
+          <View style={[styles.previewShell, { aspectRatio: previewAspectRatio }]}>
             <Image
               source={{ uri: selectedPortraitUri }}
               style={styles.previewImage}
@@ -527,10 +532,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   previewShell: {
-    aspectRatio: 0.8,
     borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: "#020617",
+    backgroundColor: "#15202B",
     borderWidth: 1,
     borderColor: "rgba(51, 65, 85, 0.85)",
   },

@@ -17,7 +17,7 @@ export default function App() {
     }
 
     const viewportContent =
-      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
+      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=overlays-content";
     const existingViewportMeta = document.querySelector(
       'meta[name="viewport"]',
     );

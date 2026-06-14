@@ -165,6 +165,7 @@ export function useAppwriteAuth(callbacks: AppwriteAuthCallbacks) {
         birthDate: nextProfile.birthDate,
         nationality: nextProfile.nationality,
         association: nextProfile.association,
+        leagueClub: nextProfile.leagueClub || "",
         displayVarId: normalizedDisplayVarId,
         avatarUri: nextProfile.avatarUri,
       });

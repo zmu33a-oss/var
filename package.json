@@ -18,10 +18,12 @@
     "dev:stack": "node scripts/dev-stack.cjs",
     "admin:build": "node scripts/admin-build.cjs",
     "setup:admin-collections": "node scripts/setup-admin-collections.cjs",
+    "setup:posts-permissions": "node scripts/ensure-posts-delete-permission.cjs",
     "dev:api": "node scripts/dev-api.cjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@expo-google-fonts/bebas-neue": "^0.4.1",
     "@expo/metro-runtime": "~55.0.10",
     "@react-native-async-storage/async-storage": "^2.1.2",
     "appwrite": "^25.0.0",

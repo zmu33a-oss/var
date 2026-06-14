@@ -1,15 +1,17 @@
 import {
-  type ComponentProps,
   createContext,
+  forwardRef,
   useContext,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
+  type ComponentProps,
   type ReactNode,
 } from "react";
+import { BebasNeue_400Regular } from "@expo-google-fonts/bebas-neue";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useFonts } from "expo-font";
 import {
   Animated,
@@ -17,21 +19,36 @@ import {
   Image,
   Platform,
   Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
   Text as RNText,
   type TextProps,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { FAN_CLUBS } from "../../app.data";
 import type { FanClub, FanClubId } from "../../app.types";
+import { createCompatStyleSheet, createShadowStyle } from "../../lib/crossPlatformStyles";
+import FansCounterDigits from "./FansCounterDigits";
 import {
-  createCompatStyleSheet,
-  getNativePointerEventsProps,
-  getWebPointerEventsStyle,
-} from "../../lib/crossPlatformStyles";
+  FANS_STICKY_HEADER_TOP,
+  FANS_TONGUE_COLLAPSED_BAR_HEIGHT,
+  FANS_TONGUE_COLLAPSED_LOGO_FLOAT,
+  FANS_TONGUE_DROPDOWN_HEIGHT_RATIO,
+  FANS_TONGUE_DROPDOWN_WIDTH_RATIO,
+  FANS_TONGUE_PAGE_SHELL_WIDTH,
+} from "./fans.layout.constants";
 
 const TONGUE_FONT_FAMILY = "TongueZain";
+const TONGUE_COUNTER_FONT_FAMILY = "BebasNeue_400Regular";
+const TONGUE_COUNTER_FONT_FALLBACK =
+  Platform.OS === "ios"
+    ? "Helvetica Neue"
+    : Platform.OS === "android"
+      ? "sans-serif-condensed"
+      : "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const TONGUE_FONT = require("../../../assets/images/alfont_com_zainpcv2mob600-zainpcv2.ttf");
-const CLICK_SOUND = require("../../../assets/audio/click.mp3.mp3");
 const HILAL_ICON = require("../../../assets/icons/alhilal.png.png");
 const NASSR_ICON = require("../../../assets/icons/alnassr.png.png");
 
@@ -44,33 +61,29 @@ const RANK_LABELS: Record<number, string> = {
   1: "المركز الاول",
   2: "المركز الثاني",
   3: "المركز الثالث",
+  4: "المركز الرابع",
+  5: "المركز الخامس",
 };
 
+const TONGUE_ANCHOR_WIDTH = "82%";
+const TONGUE_ANCHOR_MAX_WIDTH = 292;
 const TONGUE_CARD_HEIGHT = 118;
 const TONGUE_CARD_GAP = 14;
 const TONGUE_STACK_PADDING_V = 30;
 const TONGUE_STACK_PADDING_H = 14;
-const TONGUE_STACK_HEIGHT =
-  TONGUE_STACK_PADDING_V * 2 + TONGUE_CARD_HEIGHT * 3 + TONGUE_CARD_GAP * 2;
-const TONGUE_COLLAPSED_HEIGHT = 52;
-const TONGUE_FLOATING_CHEVRON_OFFSET = 18;
-export const FANS_TONGUE_RESERVED_HEIGHT =
-  TONGUE_COLLAPSED_HEIGHT + TONGUE_FLOATING_CHEVRON_OFFSET;
+const TONGUE_COLLAPSED_TOUCH_HEIGHT =
+  FANS_TONGUE_COLLAPSED_BAR_HEIGHT + FANS_TONGUE_COLLAPSED_LOGO_FLOAT;
+const TONGUE_DROPDOWN_CONTENT_TOP_INSET =
+  FANS_STICKY_HEADER_TOP + TONGUE_COLLAPSED_TOUCH_HEIGHT + 8;
+const TONGUE_COLLAPSED_BAR_HEIGHT = FANS_TONGUE_COLLAPSED_BAR_HEIGHT;
+const TONGUE_COLLAPSED_LOGO_SIZE = 18;
+const TONGUE_COLLAPSED_LOGO_COLOR = "#F97316";
+const TONGUE_COLLAPSED_LOGO_FLOAT = FANS_TONGUE_COLLAPSED_LOGO_FLOAT;
 const TONGUE_LOGO_SIZE = 36;
-const TONGUE_COLLAPSED_LOGO_SIZE = 28;
 const TONGUE_CARD_RADIUS = 22;
 const TONGUE_OUTER_RADIUS = 26;
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
-
-type WebAudioInstance = {
-  currentTime: number;
-  pause?: () => void;
-  play?: () => Promise<void> | void;
-  preload: string;
-};
-
-type WebAudioConstructor = new (src?: string) => WebAudioInstance;
 
 type RankedClubEntry = {
   club: FanClub;
@@ -81,6 +94,7 @@ type RankedClubEntry = {
 };
 
 const TongueFontContext = createContext<string | undefined>(undefined);
+const TongueCounterFontContext = createContext<string | undefined>(undefined);
 
 function TongueText(props: TextProps) {
   const tongueFontFamily = useContext(TongueFontContext);
@@ -96,27 +110,53 @@ function TongueText(props: TextProps) {
   );
 }
 
+export type FansSupportTongueHandle = {
+  collapse: () => void;
+};
+
 export type FansSupportTongueProps = {
   supporters: Record<FanClubId, number>;
   supportedTeams: FanClubId[];
   isLoggedIn: boolean;
+  activeLeagueId?: string;
   onRequireAuth: (message?: string) => void;
   onToggleSupport: (clubId: FanClubId) => void;
+  onEnterClub?: (clubId: FanClubId) => void;
+  onExpandedChange?: (expanded: boolean) => void;
 };
 
-export default function FansSupportTongue(props: FansSupportTongueProps) {
+const FansSupportTongue = forwardRef<
+  FansSupportTongueHandle,
+  FansSupportTongueProps
+>(function FansSupportTongue(props, ref) {
   const [areTongueFontsLoaded] = useFonts({
     [TONGUE_FONT_FAMILY]: TONGUE_FONT,
+    [TONGUE_COUNTER_FONT_FAMILY]: BebasNeue_400Regular,
   });
   const tongueFontFamily = areTongueFontsLoaded
     ? TONGUE_FONT_FAMILY
     : undefined;
+  const counterFontFamily = areTongueFontsLoaded
+    ? TONGUE_COUNTER_FONT_FAMILY
+    : TONGUE_COUNTER_FONT_FALLBACK;
   const [contentExpanded, setContentExpanded] = useState(false);
-  const clickSoundRef = useRef<WebAudioInstance | null>(null);
+  const [clubSearchQuery, setClubSearchQuery] = useState("");
   const expandAnim = useRef(new Animated.Value(0)).current;
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const layoutWidth = Math.min(windowWidth, FANS_TONGUE_PAGE_SHELL_WIDTH);
+  const dropdownWidth = layoutWidth * FANS_TONGUE_DROPDOWN_WIDTH_RATIO;
+  const dropdownHeight = windowHeight * FANS_TONGUE_DROPDOWN_HEIGHT_RATIO;
+
+  const leagueClubs = useMemo(
+    () =>
+      props.activeLeagueId
+        ? FAN_CLUBS.filter((c) => c.leagueId === props.activeLeagueId)
+        : FAN_CLUBS,
+    [props.activeLeagueId],
+  );
 
   const rankedClubs = useMemo<RankedClubEntry[]>(() => {
-    return [...FAN_CLUBS]
+    return [...leagueClubs]
       .map((club) => {
         const count = props.supporters[club.id] ?? 0;
 
@@ -133,53 +173,20 @@ export default function FansSupportTongue(props: FansSupportTongueProps) {
         ...entry,
         rank: index + 1,
       }));
-  }, [props.supporters]);
+  }, [leagueClubs, props.supporters]);
 
   const leader = rankedClubs[0];
+  const filteredRankedClubs = useMemo(() => {
+    const query = clubSearchQuery.trim();
 
-  const clickSoundUri = useMemo(() => {
-    try {
-      const resolvedSource = Image.resolveAssetSource(CLICK_SOUND);
-
-      if (resolvedSource?.uri) {
-        return resolvedSource.uri;
-      }
-    } catch {
-      // Ignore asset resolution failures on unsupported platforms.
+    if (!query) {
+      return rankedClubs;
     }
 
-    return typeof CLICK_SOUND === "string" ? CLICK_SOUND : null;
-  }, []);
-
-  useEffect(() => {
-    if (Platform.OS !== "web" || !clickSoundUri) {
-      clickSoundRef.current = null;
-      return;
-    }
-
-    const audioConstructor = (
-      globalThis as typeof globalThis & { Audio?: WebAudioConstructor }
-    ).Audio;
-
-    if (!audioConstructor) {
-      clickSoundRef.current = null;
-      return;
-    }
-
-    const sound = new audioConstructor(clickSoundUri);
-    sound.preload = "auto";
-    clickSoundRef.current = sound;
-
-    return () => {
-      try {
-        sound.pause?.();
-      } catch {
-        // Ignore teardown failures and keep the UI responsive.
-      }
-
-      clickSoundRef.current = null;
-    };
-  }, [clickSoundUri]);
+    return rankedClubs.filter((entry) =>
+      entry.club.title.includes(query),
+    );
+  }, [clubSearchQuery, rankedClubs]);
 
   useEffect(() => {
     if (!contentExpanded) {
@@ -187,42 +194,9 @@ export default function FansSupportTongue(props: FansSupportTongueProps) {
     }
   }, [contentExpanded, expandAnim]);
 
-  const playCheerSound = async () => {
-    const sound = clickSoundRef.current;
-
-    if (!sound) {
-      return;
-    }
-
-    try {
-      sound.currentTime = 0;
-      const playback = sound.play?.();
-
-      if (
-        playback &&
-        typeof playback === "object" &&
-        "catch" in playback &&
-        typeof playback.catch === "function"
-      ) {
-        await playback.catch(() => undefined);
-      }
-    } catch {
-      // Ignore playback failures so button feedback still completes.
-    }
-  };
-
-  const handleCheerPress = (clubId: FanClubId) => {
-    if (!props.isLoggedIn) {
-      props.onRequireAuth("سجل الدخول لدعم ناديك.");
-      return;
-    }
-
-    void playCheerSound();
-    props.onToggleSupport(clubId);
-  };
-
   const handleExpand = () => {
     setContentExpanded(true);
+    props.onExpandedChange?.(true);
     expandAnim.setValue(0);
     Animated.spring(expandAnim, {
       toValue: 1,
@@ -234,6 +208,7 @@ export default function FansSupportTongue(props: FansSupportTongueProps) {
   };
 
   const handleCollapse = () => {
+    props.onExpandedChange?.(false);
     Animated.timing(expandAnim, {
       toValue: 0,
       duration: 280,
@@ -242,16 +217,17 @@ export default function FansSupportTongue(props: FansSupportTongueProps) {
     }).start(({ finished }) => {
       if (finished) {
         setContentExpanded(false);
+        setClubSearchQuery("");
       }
     });
   };
 
-  const dropdownHeight = expandAnim.interpolate({
+  const animatedDropdownHeight = expandAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, TONGUE_STACK_HEIGHT],
+    outputRange: [0, dropdownHeight],
   });
 
-  const handleChevronPress = () => {
+  const handleToggleExpand = () => {
     if (contentExpanded) {
       handleCollapse();
       return;
@@ -260,239 +236,285 @@ export default function FansSupportTongue(props: FansSupportTongueProps) {
     handleExpand();
   };
 
+  useImperativeHandle(ref, () => ({
+    collapse: handleCollapse,
+  }));
+
   if (!leader) {
     return null;
   }
 
   return (
     <TongueFontContext.Provider value={tongueFontFamily}>
+      <TongueCounterFontContext.Provider value={counterFontFamily}>
       <View style={styles.tongueRoot}>
         <View style={styles.tongueAnchor}>
-          {!contentExpanded ? (
-            <AnimatedBorderFrame borderRadius={24} variant="collapsed">
-              <Pressable
-                style={styles.tongueCollapsedInner}
-                onPress={handleExpand}
-                testID="support-tongue"
-              >
-                <View style={styles.tongueCollapsedRow}>
-                  <TongueCounterDigits digits={leader.digits} compact />
-
-                  <View style={styles.tongueCollapsedLogoSlot}>
-                    <TongueClubLogo
-                      club={leader.club}
-                      emblem={leader.emblem}
-                      size={TONGUE_COLLAPSED_LOGO_SIZE}
-                    />
-                  </View>
-
-                  <TongueText
-                    style={styles.tongueLeaderLabel}
-                    numberOfLines={1}
-                  >
-                    النادي الاكثر جماهيرية
-                  </TongueText>
-                </View>
-              </Pressable>
-            </AnimatedBorderFrame>
-          ) : null}
-
           {contentExpanded ? (
             <Animated.View
               style={[
                 styles.tongueDropdownOverlay,
                 {
-                  height: dropdownHeight,
+                  top: -FANS_STICKY_HEADER_TOP,
+                  width: dropdownWidth,
+                  height: animatedDropdownHeight,
                   opacity: expandAnim,
                 },
               ]}
             >
-              <AnimatedBorderFrame
-                borderRadius={TONGUE_OUTER_RADIUS}
-                variant="expanded"
-              >
-                <View style={styles.tongueCardsStack}>
-                  {rankedClubs
+              <TongueShell borderRadius={TONGUE_OUTER_RADIUS} variant="expanded">
+                <ScrollView
+                  style={styles.tongueDropdownScroll}
+                  contentContainerStyle={[
+                    styles.tongueCardsStack,
+                    { paddingTop: TONGUE_DROPDOWN_CONTENT_TOP_INSET },
+                  ]}
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
+                >
+                  {filteredRankedClubs
                     .slice()
                     .reverse()
                     .map((entry) => (
                       <TongueRankCard
                         key={entry.club.id}
                         entry={entry}
-                        isSupported={props.supportedTeams.includes(
-                          entry.club.id,
-                        )}
-                        onCheerPress={() => handleCheerPress(entry.club.id)}
+                        onEnterClub={props.onEnterClub}
                       />
                     ))}
-                </View>
-              </AnimatedBorderFrame>
+                </ScrollView>
+              </TongueShell>
+
+              <View style={styles.tongueDropdownFooterSearch}>
+                <Ionicons
+                  name="search"
+                  size={16}
+                  color="rgba(255,255,255,0.55)"
+                  style={styles.tongueDropdownSearchIcon}
+                />
+                <TextInput
+                  value={clubSearchQuery}
+                  onChangeText={setClubSearchQuery}
+                  placeholder="ابحث عن النادي..."
+                  placeholderTextColor="rgba(255,255,255,0.38)"
+                  style={styles.tongueDropdownSearchInput}
+                  textAlign="right"
+                  returnKeyType="search"
+                />
+              </View>
             </Animated.View>
           ) : null}
 
           <Pressable
             style={[
-              styles.tongueFloatingChevron,
-              contentExpanded ? styles.tongueFloatingChevronExpanded : null,
+              styles.tongueCollapsedTouch,
+              styles.tongueCollapsedTouchOnTop,
+              {
+                width: TONGUE_ANCHOR_WIDTH,
+                maxWidth: TONGUE_ANCHOR_MAX_WIDTH,
+              },
             ]}
-            onPress={handleChevronPress}
+            onPress={handleToggleExpand}
+            testID="support-tongue"
           >
-            <View style={styles.tongueChevronCircle}>
-              <Ionicons
-                name={contentExpanded ? "chevron-up" : "chevron-down"}
-                size={12}
-                color="#FFFFFF"
-              />
+            <View style={styles.tongueCollapsedTitleRow}>
+              <TongueText
+                style={styles.tongueLeaderLabelCollapsed}
+                numberOfLines={1}
+              >
+                جماهيرية
+              </TongueText>
+
+              <View style={styles.tongueCollapsedAnchorColumn}>
+                <TongueText
+                  style={styles.tongueLeaderLabelCollapsed}
+                  numberOfLines={1}
+                >
+                  الاكثر
+                </TongueText>
+
+                <View style={styles.tongueCollapsedClubSlot}>
+                  <TongueClubIconControl
+                    club={leader.club}
+                    emblem={leader.emblem}
+                    expanded={contentExpanded}
+                    tintColor={TONGUE_COLLAPSED_LOGO_COLOR}
+                    onPress={handleToggleExpand}
+                  />
+                </View>
+              </View>
+
+              <TongueText
+                style={styles.tongueLeaderLabelCollapsed}
+                numberOfLines={1}
+              >
+                النادي
+              </TongueText>
             </View>
           </Pressable>
         </View>
       </View>
+      </TongueCounterFontContext.Provider>
     </TongueFontContext.Provider>
   );
-}
+});
 
-function AnimatedBorderFrame(props: {
+export default FansSupportTongue;
+
+function TongueShell(props: {
   borderRadius: number;
   variant?: "collapsed" | "expanded";
   children: ReactNode;
 }) {
-  const rotatingBorderProgress = useRef(new Animated.Value(0)).current;
   const isCollapsed = props.variant === "collapsed";
-  const ringRadiusStyle = isCollapsed
+  const shellRadiusStyle = isCollapsed
     ? {
         borderTopLeftRadius: 10,
         borderTopRightRadius: 10,
         borderBottomLeftRadius: props.borderRadius,
         borderBottomRightRadius: props.borderRadius,
       }
-    : { borderRadius: props.borderRadius };
-  const shellRadiusStyle = isCollapsed
-    ? {
-        borderTopLeftRadius: 9,
-        borderTopRightRadius: 9,
-        borderBottomLeftRadius: props.borderRadius - 1,
-        borderBottomRightRadius: props.borderRadius - 1,
-      }
-    : { borderRadius: props.borderRadius - 1 };
-
-  useEffect(() => {
-    rotatingBorderProgress.setValue(0);
-
-    const borderLoop = Animated.loop(
-      Animated.timing(rotatingBorderProgress, {
-        toValue: 1,
-        duration: 9200,
-        easing: Easing.linear,
-        useNativeDriver: Platform.OS !== "web",
-      }),
-      { resetBeforeIteration: true },
-    );
-
-    borderLoop.start();
-
-    return () => {
-      borderLoop.stop();
-      rotatingBorderProgress.stopAnimation();
-      rotatingBorderProgress.setValue(0);
-    };
-  }, [rotatingBorderProgress]);
-
-  const rotatingBorderSpin = rotatingBorderProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "360deg"],
-  });
+    : {
+        borderTopLeftRadius: 0,
+        borderTopRightRadius: 0,
+        borderBottomLeftRadius: props.borderRadius,
+        borderBottomRightRadius: props.borderRadius,
+      };
 
   return (
-    <LinearGradient
-      colors={[
-        "rgba(255,255,255,0.28)",
-        "rgba(255,255,255,0.08)",
-        "rgba(255,255,255,0.28)",
+    <View
+      style={[
+        styles.tongueBorderShell,
+        isCollapsed ? styles.tongueBorderShellCollapsed : styles.tongueBorderShellExpanded,
+        shellRadiusStyle,
+        styles.tongueShell,
+        !isCollapsed ? styles.tongueShellExpanded : null,
       ]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[styles.tongueBorderRing, ringRadiusStyle]}
+    >
+      {props.children}
+    </View>
+  );
+}
+
+function useTongueBobAnimation(enabled: boolean) {
+  const bobAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!enabled) {
+      bobAnim.stopAnimation();
+      bobAnim.setValue(0);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bobAnim, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(bobAnim, {
+          toValue: 0,
+          duration: 900,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    loop.start();
+
+    return () => {
+      loop.stop();
+      bobAnim.stopAnimation();
+      bobAnim.setValue(0);
+    };
+  }, [enabled, bobAnim]);
+
+  return bobAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 5],
+  });
+}
+
+function TongueClubIconControl(props: {
+  club: FanClub;
+  emblem?: number;
+  expanded: boolean;
+  onPress: () => void;
+  size?: number;
+  tintColor?: string;
+}) {
+  const iconTranslateY = useTongueBobAnimation(!props.expanded);
+  const iconSize = props.size ?? TONGUE_COLLAPSED_LOGO_SIZE;
+
+  return (
+    <Pressable
+      style={styles.tongueClubIconPressable}
+      onPress={(event) => {
+        event.stopPropagation?.();
+        props.onPress();
+      }}
+      hitSlop={8}
     >
       <Animated.View
-        {...getNativePointerEventsProps("none")}
-        style={[
-          styles.tongueBorderSpinner,
-          { transform: [{ rotate: rotatingBorderSpin }] },
-          getWebPointerEventsStyle("none"),
-        ]}
+        style={
+          !props.expanded
+            ? { transform: [{ translateY: iconTranslateY }] }
+            : undefined
+        }
       >
-        <LinearGradient
-          colors={[
-            "rgba(0,0,0,0)",
-            "rgba(0,0,0,0)",
-            "rgba(255,255,255,0.96)",
-            "rgba(255,255,255,0.96)",
-            "rgba(0,0,0,0)",
-            "rgba(0,0,0,0)",
-            "rgba(0,0,0,0)",
-          ]}
-          locations={[0, 0.34, 0.45, 0.52, 0.58, 0.68, 1]}
-          start={{ x: 0.08, y: 0 }}
-          end={{ x: 0.92, y: 1 }}
-          style={styles.tongueBorderSpinnerGradient}
+        <TongueClubLogo
+          club={props.club}
+          emblem={props.emblem}
+          size={iconSize}
+          plain
+          tintColor={props.tintColor ?? TONGUE_COLLAPSED_LOGO_COLOR}
         />
       </Animated.View>
-
-      <View style={[styles.tongueBorderShell, shellRadiusStyle]}>
-        {props.children}
-      </View>
-    </LinearGradient>
+    </Pressable>
   );
 }
 
 function TongueRankCard(props: {
   entry: RankedClubEntry;
-  isSupported: boolean;
-  onCheerPress: () => void;
+  onEnterClub?: (clubId: FanClubId) => void;
 }) {
-  const supportLabel =
-    props.entry.rank === 1 ? "النادي الاكثر جماهيرية" : "ادعم ناديك";
+  const supportLabel = "ادعم ناديك";
 
   return (
     <View style={styles.tongueRankCard}>
       <View style={styles.tongueRankCardLogoCenter}>
-        <TongueClubLogo
-          club={props.entry.club}
-          emblem={props.entry.emblem}
-          size={TONGUE_LOGO_SIZE}
-        />
+        <View style={styles.tongueRankCardLogoStack}>
+          <TongueClubLogo
+            club={props.entry.club}
+            emblem={props.entry.emblem}
+            size={TONGUE_LOGO_SIZE}
+          />
+          <TongueText style={styles.tongueRankClubTitle} numberOfLines={1}>
+            {props.entry.club.title}
+          </TongueText>
+        </View>
       </View>
 
       <View style={styles.tongueRankCardTopRow}>
-        <Pressable
-          style={[
-            styles.tongueCheerButton,
-            props.isSupported ? styles.tongueCheerButtonActive : null,
-          ]}
-          onPress={props.onCheerPress}
-        >
-          <TongueText
-            style={[
-              styles.tongueCheerButtonText,
-              props.isSupported ? styles.tongueCheerButtonTextActive : null,
-            ]}
-          >
-            شجع
-          </TongueText>
-          <Ionicons
-            name={props.isSupported ? "checkmark" : "add"}
-            size={11}
-            color={props.isSupported ? "#05210F" : "#111111"}
-          />
-        </Pressable>
-
         <TongueText style={styles.tongueRankLabel} numberOfLines={1}>
           {RANK_LABELS[props.entry.rank] ?? `المركز ${props.entry.rank}`}
         </TongueText>
+
+        <Pressable
+          style={styles.tongueEntryLabelHost}
+          onPress={() => props.onEnterClub?.(props.entry.club.id)}
+          hitSlop={6}
+        >
+          <TongueText style={styles.tongueEntryLabel} numberOfLines={1}>
+            دخول
+          </TongueText>
+        </Pressable>
       </View>
 
       <View style={styles.tongueRankCardBottomRow}>
-        <TongueCounterDigits digits={props.entry.digits} />
+        <FansCounterDigits digits={props.entry.digits} compact />
 
         <TongueText style={styles.tongueSupportLabel} numberOfLines={1}>
           {supportLabel}
@@ -506,7 +528,35 @@ function TongueClubLogo(props: {
   club: FanClub;
   emblem?: number;
   size: number;
+  plain?: boolean;
+  tintColor?: string;
 }) {
+  const plainColor = props.tintColor ?? "#FFFFFF";
+
+  if (props.plain) {
+    if (props.emblem) {
+      return (
+        <Image
+          source={props.emblem}
+          resizeMode="contain"
+          style={{
+            width: props.size,
+            height: props.size,
+            tintColor: plainColor,
+          }}
+        />
+      );
+    }
+
+    return (
+      <Ionicons
+        name={props.club.icon as IoniconName}
+        size={Math.max(14, props.size * 0.62)}
+        color={plainColor}
+      />
+    );
+  }
+
   const radius = props.size / 2;
 
   return (
@@ -525,19 +575,19 @@ function TongueClubLogo(props: {
           source={props.emblem}
           resizeMode="contain"
           style={{
-            width: props.size - 4,
-            height: props.size - 4,
+            width: props.size,
+            height: props.size,
+            tintColor: "#FFFFFF",
           }}
         />
       ) : (
-        <LinearGradient
-          colors={props.club.gradient}
+        <View
           style={[
             styles.tongueClubLogoFallback,
             {
-              width: props.size - 8,
-              height: props.size - 8,
-              borderRadius: radius - 4,
+              width: props.size,
+              height: props.size,
+              borderRadius: radius,
             },
           ]}
         >
@@ -546,14 +596,14 @@ function TongueClubLogo(props: {
             size={Math.max(18, props.size * 0.42)}
             color="#FFFFFF"
           />
-        </LinearGradient>
+        </View>
       )}
     </View>
   );
 }
 
 function TongueCounterDigit(props: { digit: string; compact?: boolean }) {
-  const tongueFontFamily = useContext(TongueFontContext);
+  const counterFontFamily = useContext(TongueCounterFontContext);
 
   return (
     <View
@@ -564,7 +614,7 @@ function TongueCounterDigit(props: { digit: string; compact?: boolean }) {
     >
       <RNText
         style={[
-          tongueFontFamily ? { fontFamily: tongueFontFamily } : null,
+          counterFontFamily ? { fontFamily: counterFontFamily } : null,
           styles.tongueCounterDigitText,
           props.compact ? styles.tongueCounterDigitTextCompact : null,
         ]}
@@ -601,52 +651,86 @@ const styles = createCompatStyleSheet({
   tongueRoot: {
     width: "100%",
     alignItems: "center",
+    overflow: "visible",
   },
   tongueAnchor: {
-    width: "96%",
-    maxWidth: 380,
+    width: "100%",
     position: "relative",
     alignItems: "center",
+    minHeight: TONGUE_COLLAPSED_TOUCH_HEIGHT,
+    overflow: "visible",
+    zIndex: 2,
   },
-  tongueBorderRing: {
+  tongueShell: {
     width: "100%",
-    overflow: "hidden",
-    position: "relative",
-    padding: 1.2,
   },
-  tongueBorderSpinner: {
-    position: "absolute",
-    top: -180,
-    right: -180,
-    bottom: -180,
-    left: -180,
-    opacity: 0.98,
-  },
-  tongueBorderSpinnerGradient: {
+  tongueShellExpanded: {
     flex: 1,
+    height: "100%",
   },
   tongueBorderShell: {
     overflow: "hidden",
     backgroundColor: "rgba(6, 9, 18, 0.98)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
     direction: "ltr",
+  },
+  tongueBorderShellCollapsed: {
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    overflow: "visible",
+  },
+  tongueBorderShellExpanded: {
+    flex: 1,
+    height: "100%",
+    backgroundColor: "transparent",
   },
   tongueBodyClip: {
     overflow: "hidden",
   },
   tongueDropdownOverlay: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
+    alignSelf: "center",
     zIndex: 40,
     overflow: "hidden",
-    backgroundColor: "rgba(4, 7, 12, 0.98)",
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: TONGUE_OUTER_RADIUS,
+    borderBottomRightRadius: TONGUE_OUTER_RADIUS,
+    backgroundColor: "transparent",
+  },
+  tongueDropdownScroll: {
+    flex: 1,
+  },
+  tongueDropdownFooterSearch: {
+    position: "absolute",
+    bottom: 10,
+    left: 14,
+    right: 14,
+    zIndex: 50,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 40,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.82)",
+    backgroundColor: "rgba(0, 0, 0, 0.88)",
+  },
+  tongueDropdownSearchIcon: {
+    flexShrink: 0,
+  },
+  tongueDropdownSearchInput: {
+    flex: 1,
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "600",
+    paddingVertical: Platform.OS === "ios" ? 8 : 6,
+    writingDirection: "rtl",
   },
   tongueCardsStack: {
     paddingHorizontal: TONGUE_STACK_PADDING_H,
-    paddingVertical: TONGUE_STACK_PADDING_V,
+    paddingTop: TONGUE_STACK_PADDING_V,
+    paddingBottom: TONGUE_STACK_PADDING_V + 52,
     gap: TONGUE_CARD_GAP,
   },
   tongueRankCard: {
@@ -654,12 +738,21 @@ const styles = createCompatStyleSheet({
     borderRadius: TONGUE_CARD_RADIUS,
     borderWidth: 1.2,
     borderColor: "rgba(255,255,255,0.82)",
-    backgroundColor: "#151F38",
+    backgroundColor: "#000000",
     paddingHorizontal: 14,
     paddingTop: 20,
     paddingBottom: 20,
     justifyContent: "space-between",
     position: "relative",
+    ...createShadowStyle({
+      color: "#FFFFFF",
+      x: 0,
+      y: 2,
+      blur: 12,
+      spread: 0,
+      opacity: 0.35,
+      elevation: 8,
+    }),
   },
   tongueRankCardLogoCenter: {
     position: "absolute",
@@ -671,59 +764,93 @@ const styles = createCompatStyleSheet({
     justifyContent: "center",
     pointerEvents: "none",
   },
+  tongueRankCardLogoStack: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  tongueRankClubTitle: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "center",
+    writingDirection: "rtl",
+    lineHeight: 14,
+  },
   tongueRankCardTopRow: {
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
     zIndex: 1,
+    gap: 10,
   },
   tongueRankCardBottomRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     justifyContent: "space-between",
     zIndex: 1,
     gap: 8,
   },
-  tongueCollapsedInner: {
-    height: TONGUE_COLLAPSED_HEIGHT,
-    justifyContent: "center",
-    paddingHorizontal: 10,
-  },
-  tongueCollapsedRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  tongueCollapsedLogoSlot: {
+  tongueEntryLabelHost: {
+    backgroundColor: "#1D9BF0",
+    borderRadius: 999,
+    minWidth: 58,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
-  tongueLeaderLabel: {
-    flex: 1,
+  tongueEntryLabel: {
     color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "900",
-    textAlign: "right",
+    textAlign: "center",
     writingDirection: "rtl",
+    lineHeight: 12,
   },
-  tongueChevronCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  tongueCollapsedTouch: {
+    width: "100%",
+    minHeight: TONGUE_COLLAPSED_TOUCH_HEIGHT,
+    justifyContent: "flex-start",
+    paddingTop: 4,
+    paddingHorizontal: 6,
+    overflow: "visible",
+  },
+  tongueCollapsedTouchOnTop: {
+    position: "relative",
+    zIndex: 60,
+    elevation: 24,
+  },
+  tongueCollapsedTitleRow: {
+    flexDirection: "row",
+    direction: "rtl",
+    alignItems: "flex-start",
+    justifyContent: "center",
+    overflow: "visible",
+  },
+  tongueCollapsedAnchorColumn: {
+    alignItems: "center",
+    overflow: "visible",
+  },
+  tongueCollapsedClubSlot: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    marginTop: 1,
+    zIndex: 40,
   },
-  tongueFloatingChevron: {
-    position: "absolute",
-    top: TONGUE_COLLAPSED_HEIGHT - 12,
-    alignSelf: "center",
-    zIndex: 60,
+  tongueLeaderLabelCollapsed: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+    textAlign: "center",
+    writingDirection: "rtl",
+    flexShrink: 0,
+    lineHeight: 18,
   },
-  tongueFloatingChevronExpanded: {
-    top: TONGUE_STACK_HEIGHT - 12,
+  tongueClubIconPressable: {
+    alignItems: "center",
+    justifyContent: "center",
   },
   tongueRankLabel: {
     flex: 1,
@@ -734,38 +861,6 @@ const styles = createCompatStyleSheet({
     writingDirection: "rtl",
     lineHeight: 18,
     marginLeft: 10,
-  },
-  tongueCheerButton: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 999,
-    backgroundColor: "#FFFFFF",
-    width: 58,
-    height: 28,
-    borderWidth: 0,
-  },
-  tongueCheerButtonActive: {
-    backgroundColor: "#22C55E",
-  },
-  tongueCheerButtonText: {
-    color: "#111111",
-    fontSize: 11,
-    fontWeight: "900",
-    marginRight: 3,
-  },
-  tongueCheerButtonTextActive: {
-    color: "#05210F",
-  },
-  tongueChevronCircleSmall: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.22)",
   },
   tongueSupportLabel: {
     flex: 1,
@@ -780,41 +875,49 @@ const styles = createCompatStyleSheet({
   tongueClubLogoWrap: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#000000",
     borderWidth: 0,
     overflow: "hidden",
   },
   tongueClubLogoFallback: {
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "#000000",
   },
   tongueCounterDigitsRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 2,
   },
   tongueCounterDigitBox: {
     width: 22,
     height: 28,
-    borderRadius: 6,
-    marginHorizontal: 2,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#FFFFFF",
-    borderWidth: 0,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 2,
+    elevation: 2,
   },
   tongueCounterDigitBoxCompact: {
-    width: 17,
-    height: 21,
-    borderRadius: 4,
-    marginHorizontal: 1.5,
+    width: 16,
+    height: 24,
+    borderRadius: 6,
   },
   tongueCounterDigitText: {
-    color: "#111111",
-    fontSize: 13,
-    fontWeight: "900",
+    color: "#000000",
+    fontSize: 17,
+    letterSpacing: 0.4,
+    includeFontPadding: false,
+    marginTop: Platform.OS === "android" ? -1 : 1,
   },
   tongueCounterDigitTextCompact: {
-    fontSize: 10.5,
+    fontSize: 15,
+    letterSpacing: 0.3,
+    marginTop: Platform.OS === "android" ? -1 : 0,
   },
 });

@@ -1,6 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "name": "var",
   "installCommand": "npm install",
   "buildCommand": "npm run vercel-build",
   "devCommand": "node scripts/vercel-dev-static.cjs",
@@ -12,28 +11,16 @@
   },
   "rewrites": [
     {
-      "source": "/api/admin/users/:action",
-      "destination": "/api/admin/users?action=:action"
+      "source": "/api/admin/:section/:action",
+      "destination": "/api/admin/index?section=:section&action=:action"
     },
     {
-      "source": "/api/admin/posts/:action",
-      "destination": "/api/admin/posts?action=:action"
+      "source": "/api/admin/:section",
+      "destination": "/api/admin/index?section=:section"
     },
     {
-      "source": "/api/admin/audit/:action",
-      "destination": "/api/admin/audit?action=:action"
-    },
-    {
-      "source": "/api/admin/moderation/:action",
-      "destination": "/api/admin/moderation?action=:action"
-    },
-    {
-      "source": "/api/admin/keys/:action",
-      "destination": "/api/admin/keys?action=:action"
-    },
-    {
-      "source": "/api/admin/settings/:action",
-      "destination": "/api/admin/settings?action=:action"
+      "source": "/admin",
+      "destination": "/admin/index.html"
     },
     {
       "source": "/add/:path*",

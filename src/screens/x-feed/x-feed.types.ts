@@ -6,7 +6,7 @@ import type {
 } from "../../app.types";
 import type { MembershipCardTier } from "../../lib/membershipCardTier";
 
-export type XFeedTab = "profile" | "timeline" | "var-library";
+export type XFeedTab = "profile" | "timeline";
 
 export type AuthorProfileTab =
   | "likes"

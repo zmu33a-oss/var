@@ -15,6 +15,7 @@ export function ProfileFieldInput(props: {
     | "phone-pad"
     | "number-pad"
     | "numeric";
+  placeholder?: string;
 }) {
   const staticArabicTextStyle = getArabicFontStyle(props.arabicFontFamily);
 
@@ -29,6 +30,7 @@ export function ProfileFieldInput(props: {
         multiline={props.multiline}
         autoCapitalize={props.autoCapitalize ?? "sentences"}
         keyboardType={props.keyboardType ?? "default"}
+        placeholder={props.placeholder}
         placeholderTextColor="rgba(255,255,255,0.32)"
         style={[
           styles.fieldInput,

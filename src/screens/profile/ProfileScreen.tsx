@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useFonts } from "expo-font";
 import * as Haptics from "expo-haptics";
@@ -61,7 +61,6 @@ export default function ProfileScreen(props: ProfileScreenProps) {
   const [draftProfile, setDraftProfile] = useState<ProfileData>({
     ...profile,
   });
-  const slideSoundRef = useRef<any>(null);
   const [isProfileArabicFontLoaded] = useFonts({
     [PROFILE_ARABIC_FONT_FAMILY]: PROFILE_ARABIC_FONT,
   });
@@ -88,9 +87,7 @@ export default function ProfileScreen(props: ProfileScreenProps) {
     }
   }, [isEditModalOpen, profile]);
 
-  useEffect(() => {
-    // Sound loading disabled due to expo-av deprecation causing web bundler TDZ loop issue
-  }, []);
+
 
   const clubName = profile.association?.trim() || DEFAULT_CLUB_NAME;
   const totalPosts = posts.length;
@@ -122,21 +119,7 @@ export default function ProfileScreen(props: ProfileScreenProps) {
   const profileAvatarUri = resolveProfileAvatarUri(profile.avatarUri);
   const idCardWidth = Math.min(Math.max(viewportWidth - 24, 320), 440);
 
-  const playSlideSound = async () => {
-    const sound = slideSoundRef.current;
 
-    if (!sound) {
-      return;
-    }
-
-    try {
-      await sound.stopAsync().catch(() => undefined);
-      await sound.setPositionAsync(0);
-      await sound.playAsync();
-    } catch {
-      // Ignore audio playback failures and keep the UI flow intact.
-    }
-  };
 
   const handleAddToWallet = async () => {
     if (isWalletBusy) {
@@ -283,16 +266,16 @@ export default function ProfileScreen(props: ProfileScreenProps) {
       displayName: nextDisplayName || profile.displayName,
       nationality: nextNationality || profile.nationality,
       association: nextAssociation,
+      leagueClub: draftProfile.leagueClub?.trim() || profile.leagueClub || "",
       displayVarId: nextDisplayVarId,
     });
     setIsEditModalOpen(false);
     setMessage("تم حفظ تعديل الملف الشخصي.");
   };
 
-  // Triple tap must resolve first, otherwise the double tap would fire too early.
   const portraitTapGesture = Gesture.Exclusive(
     Gesture.Tap()
-      .numberOfTaps(3)
+      .numberOfTaps(2)
       .maxDelay(280)
       .maxDistance(12)
       .runOnJS(true)
@@ -302,7 +285,7 @@ export default function ProfileScreen(props: ProfileScreenProps) {
         }
       }),
     Gesture.Tap()
-      .numberOfTaps(2)
+      .numberOfTaps(1)
       .maxDelay(280)
       .maxDistance(12)
       .runOnJS(true)
@@ -337,22 +320,34 @@ export default function ProfileScreen(props: ProfileScreenProps) {
         refreshing={props.isRefreshing}
         onRefresh={props.onRefresh}
       >
+        <View style={styles.cardTopActions}>
+          <Pressable
+            style={styles.cardTopButton}
+            onPress={() => setMessage("قريباً: شراء التوثيق وVAR ID مميز")}
+          >
+            <Ionicons name="shield-checkmark" size={16} color="#F4C565" />
+            <Text style={styles.cardTopButtonText}>التوثيق</Text>
+          </Pressable>
+        </View>
+
         <GestureDetector gesture={portraitTapGesture}>
           <View collapsable={false}>
             <VarIdentityCard
               width={idCardWidth}
-              avatarUri={profileAvatarUri}
-              displayName={profile.displayName}
               displayVarId={displayVarId}
-              association={clubName}
-              joinDate={profile.joinDate}
-              nationalityArabic={nationalityLabels.arabic}
-              nationalityEnglish={nationalityLabels.english}
               arabicFontFamily={profileArabicFontFamily}
               cardTier={profile.cardTier}
+              onWalletSwipe={handleAddToWallet}
             />
           </View>
         </GestureDetector>
+
+        <View style={styles.gestureHintPanel}>
+          <Ionicons name="finger-print" size={16} color="#F4C565" />
+          <Text style={styles.gestureHintText}>
+            اضغط على البطاقة مرة لمعاينة البروفايل، واضغط مرتين لتعديل الملف الشخصي.
+          </Text>
+        </View>
 
         <ProfileCardConnectPanel
           arabicFontFamily={profileArabicFontFamily}
@@ -361,14 +356,6 @@ export default function ProfileScreen(props: ProfileScreenProps) {
           displayVarId={displayVarId}
           onAddUserByDisplayVarId={props.onAddUserByDisplayVarId}
         />
-
-        <View style={styles.gestureHintPanel}>
-          <Ionicons name="finger-print" size={16} color="#F4C565" />
-          <Text style={styles.gestureHintText}>
-            اضغط ضغطتين لمعاينة البروفايل، واضغط ثلاث ضغطات لتعديل الملف الشخصي
-            من الهوية كاملة.
-          </Text>
-        </View>
 
         {props.canOpenAdmin ? (
           <View style={styles.adminConsoleCard}>
@@ -420,18 +407,22 @@ export default function ProfileScreen(props: ProfileScreenProps) {
 
         <View style={styles.slidersStack}>
           <SwipeActionControl
-            label="اسحب لإضافة الهوية إلى Wallet"
-            completedLabel="تمت إضافة الهوية إلى Wallet"
-            busy={isWalletBusy}
-            completed={walletReady}
-            onReachedEnd={playSlideSound}
-            onComplete={handleAddToWallet}
+            label="اسحب للدعم السريع عبر واتساب"
+            completedLabel="جارٍ فتح واتساب"
+            iconName="logo-whatsapp"
+            iconColor="#FFFFFF"
+            resetAfterComplete
+            resetDelayMs={30000}
+            onComplete={() => {
+              const whatsappUrl = "https://wa.me/966547778281?text=مرحباً%20VAR%20لدي%20استفسار";
+              void Linking.openURL(whatsappUrl);
+            }}
           />
 
           <SwipeActionControl
             label="اسحب لتسجيل الخروج"
             completedLabel="جارٍ تسجيل الخروج"
-            onReachedEnd={playSlideSound}
+            iconName="log-out-outline"
             onComplete={handleSignOut}
           />
         </View>

@@ -47,6 +47,8 @@ export const COLLECTION_DEFAULTS: AppwriteCollectionIds = {
   varLibraryCollectionId:
     process.env.EXPO_PUBLIC_APPWRITE_VAR_LIBRARY_COLLECTION_ID?.trim() ||
     "var_library",
+  fansPostsCollectionId:
+    process.env.EXPO_PUBLIC_APPWRITE_FANS_POSTS_COLLECTION_ID?.trim() || "",
 };
 
 export function hasAppwriteVarLibraryConfig() {

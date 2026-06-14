@@ -38,7 +38,7 @@ function readKeywordList() {
 
   return raw
     .split(/[,;\n]/)
-    .map((item) => item.trim())
+    .map((item: string) => item.trim())
     .filter(Boolean);
 }
 

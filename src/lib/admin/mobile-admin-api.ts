@@ -247,6 +247,19 @@ export async function setMobileAdminUserRole(
   });
 }
 
+export async function setMobileAdminUserDisplayVarId(
+  currentDisplayVarId: string,
+  newDisplayVarId: string,
+) {
+  return adminFetch<{ ok: true; displayVarId: string }>(
+    "/api/admin/users/display-var-id",
+    {
+      method: "POST",
+      body: JSON.stringify({ currentDisplayVarId, newDisplayVarId }),
+    },
+  );
+}
+
 export async function listMobileAdminPosts() {
   const payload = await adminFetch<{ ok: true; posts: AdminPostSummary[] }>(
     "/api/admin/posts/list",

@@ -53,7 +53,28 @@ export function PullToRefreshScrollView(props: PullToRefreshScrollViewProps) {
   } = props;
   const scrollOffsetYRef = useRef(0);
   const pullStartYRef = useRef<number | null>(null);
+  const pullDistanceRef = useRef(0);
+  const refreshRequestInFlightRef = useRef(false);
   const [pullDistance, setPullDistance] = useState(0);
+
+  const updatePullDistance = (distance: number) => {
+    pullDistanceRef.current = distance;
+    setPullDistance(distance);
+  };
+
+  const requestRefresh = async () => {
+    if (refreshing || refreshRequestInFlightRef.current) {
+      return;
+    }
+
+    refreshRequestInFlightRef.current = true;
+
+    try {
+      await Promise.resolve(onRefresh());
+    } finally {
+      refreshRequestInFlightRef.current = false;
+    }
+  };
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollOffsetYRef.current = event.nativeEvent.contentOffset.y;
@@ -63,7 +84,11 @@ export function PullToRefreshScrollView(props: PullToRefreshScrollViewProps) {
   const handleTouchStart = (event: GestureResponderEvent) => {
     onTouchStart?.(event);
 
-    if (Platform.OS !== "web" || refreshing) {
+    if (
+      Platform.OS !== "web" ||
+      refreshing ||
+      refreshRequestInFlightRef.current
+    ) {
       return;
     }
 
@@ -78,7 +103,11 @@ export function PullToRefreshScrollView(props: PullToRefreshScrollViewProps) {
   const handleTouchMove = (event: GestureResponderEvent) => {
     onTouchMove?.(event);
 
-    if (Platform.OS !== "web" || refreshing) {
+    if (
+      Platform.OS !== "web" ||
+      refreshing ||
+      refreshRequestInFlightRef.current
+    ) {
       return;
     }
 
@@ -90,12 +119,12 @@ export function PullToRefreshScrollView(props: PullToRefreshScrollViewProps) {
     }
 
     if (scrollOffsetYRef.current > 1) {
-      setPullDistance(0);
+      updatePullDistance(0);
       pullStartYRef.current = null;
       return;
     }
 
-    setPullDistance(
+    updatePullDistance(
       Math.min(Math.max(0, currentY - startY), PULL_MAX_DISTANCE),
     );
   };
@@ -103,14 +132,15 @@ export function PullToRefreshScrollView(props: PullToRefreshScrollViewProps) {
   const finishWebPull = (event: GestureResponderEvent) => {
     const shouldRefresh =
       Platform.OS === "web" &&
-      pullDistance >= PULL_TRIGGER_DISTANCE &&
-      !refreshing;
+      pullDistanceRef.current >= PULL_TRIGGER_DISTANCE &&
+      !refreshing &&
+      !refreshRequestInFlightRef.current;
 
     pullStartYRef.current = null;
-    setPullDistance(0);
+    updatePullDistance(0);
 
     if (shouldRefresh) {
-      void onRefresh();
+      void requestRefresh();
     }
 
     return event;
@@ -159,7 +189,7 @@ export function PullToRefreshScrollView(props: PullToRefreshScrollViewProps) {
       <ScrollView
         {...scrollViewProps}
         style={[styles.scrollView, style]}
-        scrollEventThrottle={scrollEventThrottle ?? 320}
+        scrollEventThrottle={scrollEventThrottle ?? 16}
         onScroll={handleScroll}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -169,7 +199,7 @@ export function PullToRefreshScrollView(props: PullToRefreshScrollViewProps) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => {
-              void onRefresh();
+              void requestRefresh();
             }}
             tintColor="#FFFFFF"
             colors={["#1D9BF0"]}

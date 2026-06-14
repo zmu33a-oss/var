@@ -28,7 +28,6 @@ import type {
   Post,
   Video,
 } from "../app.types";
-import type { VarLibraryPublishInput } from "./x-feed/varPlayerLibrary.constants";
 import type { XFeedTab } from "./x-feed/x-feed.types";
 
 const TIKTOK_HANDLE_WIDTH = 30;
@@ -84,9 +83,6 @@ type HomeScreenProps = {
   onDeletePost: (postId: number) => void;
   onUpdatePostContent: (postId: number, content: string) => void;
   onReportPost: (postId: number) => void;
-  onPublishLibraryPost: (input: VarLibraryPublishInput) => Promise<boolean>;
-  isPublishingLibraryPost: boolean;
-  canManageVarLibrary?: boolean;
   onXFeedTabChange?: (tab: XFeedTab) => void;
   onToggleVideoLike: (videoId: number) => void;
   onToggleVideoSave: (videoId: number) => void;
@@ -137,9 +133,6 @@ export default function HomeScreen(props: HomeScreenProps) {
     onDeletePost,
     onUpdatePostContent,
     onReportPost,
-    onPublishLibraryPost,
-    isPublishingLibraryPost,
-    canManageVarLibrary,
     onXFeedTabChange,
     onToggleVideoLike,
     onToggleVideoSave,
@@ -170,7 +163,9 @@ export default function HomeScreen(props: HomeScreenProps) {
           refreshControl={
             <RefreshControl
               refreshing={isRefreshingPosts}
-              onRefresh={onRefreshPosts}
+              onRefresh={() => {
+                void Promise.resolve(onRefreshPosts());
+              }}
               tintColor="#FFFFFF"
               colors={["#1D9BF0"]}
             />
@@ -236,9 +231,6 @@ export default function HomeScreen(props: HomeScreenProps) {
         onDeletePost={onDeletePost}
         onUpdatePostContent={onUpdatePostContent}
         onReportPost={onReportPost}
-        onPublishLibraryPost={onPublishLibraryPost}
-        isPublishingLibraryPost={isPublishingLibraryPost}
-        canManageVarLibrary={canManageVarLibrary}
         onActiveTabChange={onXFeedTabChange}
       />
     </View>

@@ -227,6 +227,8 @@ export function toAppwriteProfilePrefs(
       typeof prefs.nationality === "string" ? prefs.nationality.trim() : "",
     association:
       typeof prefs.association === "string" ? prefs.association.trim() : "",
+    leagueClub:
+      typeof prefs.leagueClub === "string" ? prefs.leagueClub.trim() : "",
     avatarUri: resolveAppwriteAvatarUrl(prefs.avatarUri, prefs.avatarUrl),
     avatarUrl: resolveAppwriteAvatarUrl(prefs.avatarUrl, prefs.avatarUri),
     role:
@@ -366,6 +368,7 @@ export function toAppwriteAuthUser(
     birthDate: prefs.birthDate || "",
     nationality: prefs.nationality || "",
     association: prefs.association || "",
+    leagueClub: prefs.leagueClub || "",
     avatarUri: prefs.avatarUri || "",
     role: resolvedRole,
     adminLabel: resolvedRole === "admin" ? prefs.adminLabel || "VAR" : "",

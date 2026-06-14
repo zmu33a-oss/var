@@ -69,12 +69,6 @@ import { XNotificationsScreen } from "./x-feed/XMessagesScreen";
 import { XHashtagTrendCard } from "./x-feed/XHashtagDirectory";
 import { XProfileHub } from "./x-feed/XProfileHub";
 import { XAuthorProfileScreen } from "./x-feed/XAuthorProfileScreen";
-import { VarPlayerLibrary } from "./x-feed/VarPlayerLibrary";
-import type { VarLibraryPublishInput } from "./x-feed/varPlayerLibrary.constants";
-import {
-  getAppwriteProfileImagesBucketConfigurationError,
-  hasAppwriteProfileImagesBucketConfig,
-} from "../lib/appwrite";
 import { XPostActionsModal } from "./x-feed/XPostActionsModal";
 import { styles } from "./x-feed/x-feed.styles";
 import ChatOverlay from "./ChatOverlay";
@@ -116,7 +110,7 @@ type XFeedScreenProps = {
   resumeReplyPostId: number | null;
   onReplyIntentConsumed: () => void;
   onShowNotice?: (message: string) => void;
-  onRefreshPosts: () => void;
+  onRefreshPosts: () => void | Promise<void>;
   onLoadMorePosts: () => void;
   isRefreshingPosts: boolean;
   isLoadingMorePosts: boolean;
@@ -124,9 +118,6 @@ type XFeedScreenProps = {
   onDeletePost: (postId: number) => void;
   onUpdatePostContent: (postId: number, content: string) => void;
   onReportPost: (postId: number) => void;
-  onPublishLibraryPost: (input: VarLibraryPublishInput) => Promise<boolean>;
-  isPublishingLibraryPost: boolean;
-  canManageVarLibrary?: boolean;
   onActiveTabChange?: (tab: XFeedTab) => void;
 };
 
@@ -176,9 +167,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     onDeletePost,
     onUpdatePostContent,
     onReportPost,
-    onPublishLibraryPost,
-    isPublishingLibraryPost,
-    canManageVarLibrary = false,
     onActiveTabChange,
   } = props;
   const normalizedCurrentUserVarId = normalizeAuthorId(currentUserVarId);
@@ -205,16 +193,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     onActiveTabChange?.(activeTab);
   }, [activeTab, onActiveTabChange]);
 
-  const handlePublishLibraryPost = useCallback(
-    async (input: VarLibraryPublishInput) => {
-      const published = await onPublishLibraryPost(input);
-      if (published) {
-        setActiveTab("timeline");
-      }
-      return published;
-    },
-    [onPublishLibraryPost],
-  );
   const [replyDraft, setReplyDraft] = useState("");
   const [replyTargetPost, setReplyTargetPost] = useState<Post | null>(null);
   const [openedPost, setOpenedPost] = useState<Post | null>(null);
@@ -273,6 +251,36 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   const hashtagArrowTranslateY = useRef(new Animated.Value(0)).current;
   const swipeSoundRef = useRef<WebAudioInstance | null>(null);
   const [webPullDistance, setWebPullDistance] = useState(0);
+  const webPullDistanceRef = useRef(0);
+  const feedRefreshActiveRef = useRef(false);
+  const [feedRefreshActive, setFeedRefreshActive] = useState(false);
+
+  const updateWebPullDistance = useCallback((distance: number) => {
+    webPullDistanceRef.current = distance;
+    setWebPullDistance(distance);
+  }, []);
+
+  const triggerFeedRefresh = useCallback(() => {
+    if (feedRefreshActiveRef.current) {
+      return;
+    }
+
+    feedRefreshActiveRef.current = true;
+    setFeedRefreshActive(true);
+
+    const safetyTimer = setTimeout(() => {
+      feedRefreshActiveRef.current = false;
+      setFeedRefreshActive(false);
+    }, 4500);
+
+    void Promise.resolve(onRefreshPosts()).finally(() => {
+      clearTimeout(safetyTimer);
+      feedRefreshActiveRef.current = false;
+      setFeedRefreshActive(false);
+    });
+  }, [onRefreshPosts]);
+
+  const showFeedRefreshing = feedRefreshActive || isRefreshingPosts;
   const clickSoundUri = useMemo(() => {
     try {
       const resolvedSource = Image.resolveAssetSource(CLICK_SOUND);
@@ -628,6 +636,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
             username: profile.username,
             avatarUri: profile.avatarUri,
             role: profile.role,
+            cardTier: profile.cardTier,
           };
 
           return currentMap;
@@ -765,6 +774,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
                       username: p.username,
                       avatarUri: p.avatarUri,
                       role: p.role,
+                      cardTier: p.cardTier,
                     };
                   }
                   return acc;
@@ -1945,6 +1955,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       username: currentUserUsername?.trim() || "",
       joinDate: currentUserJoinDate,
       nationality: currentUserNationality,
+      cardTier: currentUserCardTier,
     });
   };
 
@@ -1963,6 +1974,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       username: profileIndex.username,
       avatarUri: profileIndex.avatarUri,
       role: profileIndex.role,
+      cardTier: profileIndex.cardTier,
     } satisfies FollowingProfileCard;
   };
 
@@ -2047,6 +2059,9 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         : matchingFollowedProfile?.username?.trim() || "",
       joinDate: isCurrentUser ? currentUserJoinDate : undefined,
       nationality: isCurrentUser ? currentUserNationality : undefined,
+      cardTier: isCurrentUser
+        ? currentUserCardTier
+        : matchingFollowedProfile?.cardTier,
     });
   };
 
@@ -2113,7 +2128,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   };
 
   const handleWebPullStart = (event: GestureResponderEvent) => {
-    if (Platform.OS !== "web" || isRefreshingPosts) {
+    if (Platform.OS !== "web" || showFeedRefreshing) {
       return;
     }
 
@@ -2126,7 +2141,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   };
 
   const handleWebPullMove = (event: GestureResponderEvent) => {
-    if (Platform.OS !== "web" || isRefreshingPosts) {
+    if (Platform.OS !== "web" || showFeedRefreshing) {
       return;
     }
 
@@ -2138,13 +2153,15 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     }
 
     if (feedScrollOffsetYRef.current > 1) {
-      setWebPullDistance(0);
+      updateWebPullDistance(0);
       webPullStartYRef.current = null;
       return;
     }
 
     const nextDistance = Math.max(0, currentY - startY);
-    setWebPullDistance(Math.min(nextDistance, WEB_PULL_REFRESH_MAX_DISTANCE));
+    updateWebPullDistance(
+      Math.min(nextDistance, WEB_PULL_REFRESH_MAX_DISTANCE),
+    );
   };
 
   const handleWebPullEnd = () => {
@@ -2153,14 +2170,14 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     }
 
     const shouldRefresh =
-      webPullDistance >= WEB_PULL_REFRESH_TRIGGER_DISTANCE &&
-      !isRefreshingPosts;
+      webPullDistanceRef.current >= WEB_PULL_REFRESH_TRIGGER_DISTANCE &&
+      !showFeedRefreshing;
 
     webPullStartYRef.current = null;
-    setWebPullDistance(0);
+    updateWebPullDistance(0);
 
     if (shouldRefresh) {
-      onRefreshPosts();
+      triggerFeedRefresh();
     }
   };
 
@@ -2195,13 +2212,13 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       onTouchEnd={handleWebPullEnd}
       onTouchCancel={handleWebPullEnd}
     >
-      {Platform.OS === "web" && (webPullDistance > 0 || isRefreshingPosts) ? (
+      {Platform.OS === "web" && (webPullDistance > 0 || showFeedRefreshing) ? (
         <View
           pointerEvents="none"
           style={[
             styles.xWebRefreshIndicator,
             {
-              opacity: isRefreshingPosts
+              opacity: showFeedRefreshing
                 ? 1
                 : Math.min(
                     1,
@@ -2209,7 +2226,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
                   ),
               transform: [
                 {
-                  translateY: isRefreshingPosts
+                  translateY: showFeedRefreshing
                     ? 8
                     : Math.max(-42, webPullDistance - 62),
                 },
@@ -2218,12 +2235,12 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           ]}
         >
           <Ionicons
-            name={isRefreshingPosts ? "sync" : "arrow-down"}
+            name={showFeedRefreshing ? "sync" : "arrow-down"}
             size={16}
             color="#FFFFFF"
           />
           <Text style={styles.xWebRefreshText}>
-            {isRefreshingPosts ? "جارٍ التحديث" : "اسحب للتحديث"}
+            {showFeedRefreshing ? "جارٍ التحديث" : "اسحب للتحديث"}
           </Text>
         </View>
       ) : null}
@@ -2234,12 +2251,12 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           styles.xScreenContent,
           { paddingBottom: xScreenBottomPadding },
         ]}
-        scrollEventThrottle={320}
+        scrollEventThrottle={16}
         onScroll={handleFeedScroll}
         refreshControl={
           <RefreshControl
-            refreshing={isRefreshingPosts}
-            onRefresh={onRefreshPosts}
+            refreshing={showFeedRefreshing}
+            onRefresh={triggerFeedRefresh}
             tintColor="#FFFFFF"
             colors={["#1D9BF0"]}
           />
@@ -2252,6 +2269,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           notificationCount={unreadNotificationCount}
           notificationsActive={isNotificationsOpen}
           onOpenNotifications={openNotifications}
+          onOpenProfile={() => setActiveTab("profile")}
         />
 
         {activeTab === "profile" ? (
@@ -2312,18 +2330,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
               </View>
             ) : null}
           </>
-        ) : activeTab === "var-library" ? (
-          <VarPlayerLibrary
-            isLoggedIn={isLoggedIn}
-            isPublishing={isPublishingLibraryPost}
-            canPublishWithImage={hasAppwriteProfileImagesBucketConfig()}
-            canManageLibrary={canManageVarLibrary}
-            managerVarId={currentUserVarId}
-            imagePublishSetupMessage={getAppwriteProfileImagesBucketConfigurationError()}
-            onRequireAuth={(message) => onRequireAuth(message)}
-            onPublishLibraryPost={handlePublishLibraryPost}
-            onShowNotice={(message) => onShowNotice?.(message)}
-          />
         ) : null}
       </ScrollView>
 

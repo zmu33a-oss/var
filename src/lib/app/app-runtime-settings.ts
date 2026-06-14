@@ -36,7 +36,11 @@ export function resolvePublicApiBase() {
     return `${protocol}//${hostname}${port ? `:${port}` : ""}`;
   }
 
-  return "http://localhost:3000";
+  const productionFallback =
+    process.env.EXPO_PUBLIC_VERCEL_URL?.trim() ||
+    "https://var-gold.vercel.app";
+
+  return productionFallback.replace(/\/+$/, "");
 }
 
 function normalizeHomeMode(value: unknown): HomeMode {
@@ -62,14 +66,35 @@ function readBool(value: unknown, fallback: boolean) {
   return fallback;
 }
 
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit = {},
+  timeoutMs = 8000,
+) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function fetchAppRuntimeSettings(): Promise<AppRuntimeSettings> {
   try {
-    const response = await fetch(`${resolvePublicApiBase()}/api/app/settings`, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
+    const response = await fetchWithTimeout(
+      `${resolvePublicApiBase()}/api/app/settings`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
       },
-    });
+    );
     const payload = (await response.json().catch(() => ({}))) as {
       settings?: Record<string, unknown>;
     };

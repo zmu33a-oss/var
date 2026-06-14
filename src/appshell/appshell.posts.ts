@@ -64,8 +64,6 @@ import {
 
 
 
-const POST_COMPOSER_DEFAULT_TITLE = "رسالة عامة";
-
 const POSTS_POLL_INTERVAL_MS = 60_000;
 
 export const POSTS_PAGE_SIZE = 20;
@@ -780,14 +778,6 @@ export function useAppwritePostsSync(options: UseAppwritePostsOptions) {
 
       const reset = options?.reset ?? false;
 
-      if (!hasAppwritePostsConfig()) {
-
-        return;
-
-      }
-
-
-
       if (append) {
 
         setIsLoadingMorePosts(true);
@@ -801,6 +791,18 @@ export function useAppwritePostsSync(options: UseAppwritePostsOptions) {
 
 
       try {
+
+        if (!hasAppwritePostsConfig()) {
+
+          return {
+
+            total: 0,
+
+            loadedCount: loadedCountRef.current,
+
+          };
+
+        }
 
         const offset = append ? loadedCountRef.current : 0;
 
@@ -1000,6 +1002,8 @@ export function useAppwritePostsSync(options: UseAppwritePostsOptions) {
 
     refreshPosts: () => runSync({ quiet: false, reset: true }),
 
+    syncPostsQuiet: () => runSync({ quiet: true, reset: true }),
+
     loadMorePosts: () => {
 
       if (!hasMorePosts || isLoadingMorePosts) {
@@ -1094,7 +1098,7 @@ export async function publishAppwritePost(options: {
 
 
 
-  const trimmedTitle = postTitle.trim() || POST_COMPOSER_DEFAULT_TITLE;
+  const trimmedTitle = postTitle.trim();
 
   const trimmedContent = postContent.trim();
 

@@ -33,7 +33,6 @@ export function XProfileHub(props: XProfileHubProps) {
       <View style={styles.root}>
         <Pressable style={styles.backRow} onPress={() => setPanel("hub")}>
           <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-          <Text style={styles.backRowText}>ملفك</Text>
         </Pressable>
 
         <XMessagesScreen

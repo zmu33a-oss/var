@@ -515,6 +515,12 @@ export function mergeProfileWithAuthUser(
         currentProfile.association,
         INITIAL_PROFILE.association,
       ),
+    leagueClub:
+      authUser.leagueClub ||
+      getProfileFallbackValue(
+        currentProfile.leagueClub,
+        INITIAL_PROFILE.leagueClub,
+      ),
     avatarUri:
       authUser.avatarUri ||
       currentProfile.avatarUri ||
@@ -824,6 +830,7 @@ export function buildFollowingProfileCard(
     username: profileIndex?.username?.trim() || "",
     avatarUri: profileIndex?.avatarUri?.trim() || "",
     role: profileIndex?.role === "admin" ? "admin" : "member",
+    cardTier: normalizeMembershipCardTier(profileIndex?.cardTier),
   };
 }
 

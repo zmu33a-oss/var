@@ -89,7 +89,12 @@ function useKeepInputFocusOnWeb() {
 function MessageBubble({ msg }: { msg: DisplayMessage }) {
   return (
     <View style={[styles.bubbleRow, msg.mine ? styles.rowMe : styles.rowPeer]}>
-      <View style={[styles.bubble, msg.mine ? styles.bubbleMe : styles.bubblePeer]}>
+      <View
+        style={[
+          msg.mine ? styles.bubblePlain : styles.bubble,
+          !msg.mine ? styles.bubblePeer : null,
+        ]}
+      >
         <Text style={[styles.bubbleText, msg.mine ? styles.textMe : styles.textPeer]}>
           {msg.content}
         </Text>
@@ -393,9 +398,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  bubbleMe: {
-    backgroundColor: "#1D4ED8",
-    borderBottomRightRadius: 4,
+  bubblePlain: {
+    maxWidth: "78%",
+    paddingHorizontal: 2,
+    paddingVertical: 2,
   },
   bubblePeer: {
     backgroundColor: "#141414",

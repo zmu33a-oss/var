@@ -1,13 +1,10 @@
 export const SLIDE_HORIZONTAL_PADDING = 8;
 export const SLIDE_THUMB_SIZE = 64;
-export const SLIDE_THRESHOLD = 0.72;
-export const PORTRAIT_MULTI_TAP_DELAY = 280;
-export const PORTRAIT_TAP_MAX_DISTANCE = 12;
+export const SLIDE_THRESHOLD = 0.58;
 export const DEFAULT_CLUB_NAME = "الهلال";
 export const DEFAULT_PLAYER_AVATAR_URI =
   "https://api.dicebear.com/9.x/personas/png?seed=alhilal-player&backgroundColor=c0d7ff,dbeafe,e2e8f0";
 export const KSA_EMBLEM = require("../../../assets/icons/ksa.png");
-export const SLIDE_SOUND = require("../../../assets/audio/click.mp3.mp3");
 export const PROFILE_ARABIC_FONT_FAMILY = "ProfileArabic";
 export const PROFILE_ARABIC_FONT = require("../../../assets/images/alfont_com_zainpcv2mob600-zainpcv2.ttf");
 export const ARABIC_TEXT_PATTERN = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
@@ -100,8 +97,11 @@ export type SwipeActionControlProps = {
   busy?: boolean;
   completed?: boolean;
   resetAfterComplete?: boolean;
+  resetDelayMs?: number;
+  iconName?: "logo-apple" | "logo-whatsapp" | "log-out-outline";
+  iconColor?: string;
   onComplete: () => void | Promise<void>;
-  onReachedEnd: () => void | Promise<void>;
+  onReachedEnd?: () => void | Promise<void>;
 };
 
 export type ProfileFieldKey =
@@ -109,6 +109,9 @@ export type ProfileFieldKey =
   | "displayVarId"
   | "nationality"
   | "association"
+  | "leagueClub"
+  | "email"
+  | "phoneNumber"
   | "avatarUri";
 
 export const NATIONALITY_LABELS: Record<

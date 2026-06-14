@@ -21,6 +21,7 @@ import {
   listMobileAdminUsers,
   setMobileAdminPostHidden,
   setMobileAdminUserCardTier,
+  setMobileAdminUserDisplayVarId,
   setMobileAdminUserRole,
   setMobileAdminUserStatus,
   setMobileAdminUserVerification,
@@ -374,6 +375,7 @@ export function AdminUserModerationBar(props: {
   onUpdated: (message: string) => void;
 }) {
   const [isBusy, setIsBusy] = useState(false);
+  const [newVarId, setNewVarId] = useState("");
 
   const runAction = async (task: () => Promise<unknown>, success: string) => {
     setIsBusy(true);
@@ -386,6 +388,18 @@ export function AdminUserModerationBar(props: {
     } finally {
       setIsBusy(false);
     }
+  };
+
+  const handleUpdateVarId = () => {
+    const trimmed = newVarId.trim();
+    if (!trimmed || trimmed === props.displayVarId) {
+      props.onUpdated("لم يتم تغيير VAR ID.");
+      return;
+    }
+    void runAction(
+      () => setMobileAdminUserDisplayVarId(props.displayVarId, trimmed),
+      `تم تغيير VAR ID إلى ${trimmed}.`,
+    );
   };
 
   return (
@@ -479,6 +493,25 @@ export function AdminUserModerationBar(props: {
           <Text style={styles.moderationButtonText}>
             {props.role === "admin" ? "تخفيض" : "ترقية"}
           </Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.varIdEditRow}>
+        <Text style={styles.varIdEditLabel}>VAR ID:</Text>
+        <TextInput
+          style={styles.varIdInput}
+          value={newVarId}
+          onChangeText={setNewVarId}
+          placeholder={props.displayVarId}
+          placeholderTextColor="rgba(255,255,255,0.35)"
+          autoCapitalize="characters"
+        />
+        <Pressable
+          disabled={isBusy || !newVarId.trim()}
+          style={[styles.varIdButton, (!newVarId.trim() || newVarId.trim() === props.displayVarId) && styles.varIdButtonDisabled]}
+          onPress={handleUpdateVarId}
+        >
+          <Text style={styles.varIdButtonText}>تحديث</Text>
         </Pressable>
       </View>
 
@@ -776,5 +809,46 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "right",
     marginTop: 10,
+  },
+  varIdEditRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.10)",
+  },
+  varIdEditLabel: {
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  varIdInput: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    color: "#FFFFFF",
+    backgroundColor: "rgba(0,0,0,0.28)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+    textAlign: "right",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  varIdButton: {
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: "#F4C565",
+  },
+  varIdButtonDisabled: {
+    backgroundColor: "rgba(244,197,101,0.35)",
+  },
+  varIdButtonText: {
+    color: "#09111C",
+    fontSize: 12,
+    fontWeight: "900",
   },
 });

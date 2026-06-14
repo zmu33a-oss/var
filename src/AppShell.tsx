@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { StatusBar } from "expo-status-bar";
@@ -30,6 +30,8 @@ import ProfileScreen from "./screens/profile";
 import AdminDashboardScreen from "./screens/AdminDashboardScreen";
 import { fetchAppRuntimeSettings } from "./lib/app/app-runtime-settings";
 import FloatingThemeSwitch from "./components/FloatingThemeSwitch";
+import FloatingProfileArrow from "./components/FloatingProfileArrow";
+import ProfileSheetModal from "./components/ProfileSheetModal";
 import LogoutFarewellOverlay from "./components/LogoutFarewellOverlay";
 import BottomNav from "./components/BottomNav";
 import {
@@ -75,9 +77,6 @@ import {
   useAppwritePostsSync,
   publishAppwritePost,
 } from "./appshell/appshell.posts";
-import { getAppwriteProfileImagesBucketConfigurationError } from "./lib/appwrite";
-import type { VarLibraryPublishInput } from "./screens/x-feed/varPlayerLibrary.constants";
-import { composeVarLibraryPostImage } from "./screens/x-feed/varPlayerLibrary.utils";
 import {
   useAppwriteVarProfile,
   makeTrackVarInteraction,
@@ -85,7 +84,7 @@ import {
 import { lockMatchPrediction } from "./appshell/appshell.predictions";
 import type { MatchPredictionLockInput } from "./lib/predictions/matchPrediction.utils";
 
-const POST_COMPOSER_DEFAULT_TITLE = "رسالة عامة";
+const POST_COMPOSER_DEFAULT_TITLE = "";
 const LOGOUT_FAREWELL_MS = 3000;
 const INITIAL_NOTICE = hasAppwriteProjectConfig()
   ? "تم تجهيز الواجهة وربط Appwrite الأساسي."
@@ -132,10 +131,48 @@ function clearHandledAddRouteFromUrl() {
   }
 }
 
+const HOME_MODE_STORAGE_KEY = "var.homeMode";
+
+function readStoredHomeMode(): HomeMode | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(HOME_MODE_STORAGE_KEY)?.trim();
+    return stored === "x" || stored === "tiktok" ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistHomeMode(mode: HomeMode) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(HOME_MODE_STORAGE_KEY, mode);
+  } catch {
+    // Ignore storage failures and keep the in-memory choice.
+  }
+}
+
 export default function AppShell() {
   const { height, width } = useWindowDimensions();
   const [currentTab, setCurrentTab] = useState<MainTab>("home");
-  const [homeMode, setHomeMode] = useState<HomeMode>("tiktok");
+  const [homeMode, setHomeModeState] = useState<HomeMode>(
+    () => readStoredHomeMode() ?? "tiktok",
+  );
+  const hasLockedHomeModeRef = useRef(Boolean(readStoredHomeMode()));
+  const setHomeMode = useCallback((mode: HomeMode) => {
+    persistHomeMode(mode);
+    hasLockedHomeModeRef.current = true;
+    // Use startTransition to avoid UI freeze during mode switch
+    startTransition(() => {
+      setHomeModeState(mode);
+    });
+  }, []);
   const [xFeedActiveTab, setXFeedActiveTab] = useState<XFeedTab>("timeline");
   const [appRuntimeSettings, setAppRuntimeSettings] = useState({
     richIconsEnabled: true,
@@ -169,8 +206,8 @@ export default function AppShell() {
   );
   const [isPublishingPost, setIsPublishingPost] = useState(false);
   const [postComposerNotice, setPostComposerNotice] = useState("");
-  const [isRefreshingVisibleAppData, setIsRefreshingVisibleAppData] =
-    useState(false);
+  const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+  const refreshInFlightRef = useRef(false);
   const [pendingAuthIntent, setPendingAuthIntent] =
     useState<PendingAuthIntent | null>(null);
   const [pendingAddDisplayVarId, setPendingAddDisplayVarId] = useState(
@@ -183,6 +220,7 @@ export default function AppShell() {
     null,
   );
   const [isLogoutFarewellVisible, setIsLogoutFarewellVisible] = useState(false);
+  const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
   const layoutWidth = Math.min(width, SHELL_WIDTH);
   const chromeScale = Math.max(0.84, Math.min(1, layoutWidth / SHELL_WIDTH));
   const themeSwitchTopInset = Math.round(9.5 * chromeScale);
@@ -381,9 +419,8 @@ export default function AppShell() {
   }, [followedAuthorIds, isLoggedIn]);
 
   const {
-    refreshPosts,
+    syncPostsQuiet,
     loadMorePosts,
-    isRefreshingPosts,
     isLoadingMorePosts,
     hasMorePosts,
   } = useAppwritePostsSync({
@@ -394,17 +431,29 @@ export default function AppShell() {
     setNotice,
   });
 
-  const isRefreshingAnyAppData =
-    isRefreshingPosts || isRefreshingVisibleAppData;
-
   const syncAppRuntimeSettings = useCallback(async () => {
     const settings = await fetchAppRuntimeSettings();
-    setAppRuntimeSettings({
-      richIconsEnabled: settings.richIconsEnabled,
-      gpuAccelerationEnabled: settings.gpuAccelerationEnabled,
-      updatedAt: settings.updatedAt,
+    
+    // Only update state if values actually changed to avoid re-renders
+    setAppRuntimeSettings((prev) => {
+      if (
+        prev.richIconsEnabled === settings.richIconsEnabled &&
+        prev.gpuAccelerationEnabled === settings.gpuAccelerationEnabled &&
+        prev.updatedAt === settings.updatedAt
+      ) {
+        return prev; // Return same reference to prevent re-render
+      }
+      return {
+        richIconsEnabled: settings.richIconsEnabled,
+        gpuAccelerationEnabled: settings.gpuAccelerationEnabled,
+        updatedAt: settings.updatedAt,
+      };
     });
-    setHomeMode(settings.uiMode);
+
+    if (!hasLockedHomeModeRef.current) {
+      setHomeModeState(settings.uiMode);
+      hasLockedHomeModeRef.current = true;
+    }
   }, []);
 
   useEffect(() => {
@@ -418,25 +467,66 @@ export default function AppShell() {
     };
   }, [syncAppRuntimeSettings]);
 
-  const refreshVisibleAppData = async () => {
-    if (isRefreshingAnyAppData) {
+  const withTimeout = useCallback(
+    async <T,>(promise: Promise<T>, timeoutMs: number, fallback: T) => {
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+      try {
+        return await Promise.race([
+          promise,
+          new Promise<T>((resolve) => {
+            timeoutId = setTimeout(() => resolve(fallback), timeoutMs);
+          }),
+        ]);
+      } finally {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      }
+    },
+    [],
+  );
+
+  const refreshVisibleAppData = useCallback(async () => {
+    if (refreshInFlightRef.current) {
       return;
     }
 
-    setIsRefreshingVisibleAppData(true);
+    refreshInFlightRef.current = true;
+    setIsPullRefreshing(true);
+
+    const finishRefresh = () => {
+      refreshInFlightRef.current = false;
+      setIsPullRefreshing(false);
+    };
+
+    const safetyTimer = setTimeout(finishRefresh, 4500);
 
     try {
-      await Promise.all([
-        refreshPosts(),
-        syncAppRuntimeSettings(),
+      await Promise.allSettled([
+        withTimeout(syncPostsQuiet(), 3500, undefined),
+        withTimeout(syncAppRuntimeSettings(), 2500, undefined),
         appwriteUser?.varId
-          ? refreshVarProfile(appwriteUser.varId, true)
+          ? withTimeout(
+              refreshVarProfile(appwriteUser.varId, true),
+              3500,
+              undefined,
+            )
           : Promise.resolve(),
       ]);
+    } catch {
+      // Pull refresh should never block the UI on partial failures.
     } finally {
-      setIsRefreshingVisibleAppData(false);
+      clearTimeout(safetyTimer);
+      finishRefresh();
     }
-  };
+  }, [
+    appwriteUser?.varId,
+    refreshVarProfile,
+    syncAppRuntimeSettings,
+    syncPostsQuiet,
+    withTimeout,
+  ]);
 
   const canAccessAdminPanel = useMemo(
     () => resolveCanAccessAdminPanel(appwriteUser, profile),
@@ -670,54 +760,6 @@ export default function AppShell() {
       onClose: closePostComposer,
       trackVarInteraction,
     });
-  };
-
-  const handlePublishLibraryPost = async (
-    input: VarLibraryPublishInput,
-  ): Promise<boolean> => {
-    if (!isLoggedIn) {
-      requireAuth("سجّل الدخول لنشر من مكتبة فار على حسابك.");
-      return false;
-    }
-
-    const bucketConfigurationError =
-      getAppwriteProfileImagesBucketConfigurationError();
-
-    if (bucketConfigurationError) {
-      setNotice(bucketConfigurationError);
-      return false;
-    }
-
-    let mediaUri = input.imageUri;
-
-    try {
-      mediaUri = await composeVarLibraryPostImage(input);
-    } catch {
-      mediaUri = input.imageUri;
-    }
-
-    let published = false;
-
-    await publishAppwritePost({
-      postTitle: POST_COMPOSER_DEFAULT_TITLE,
-      postContent: input.caption.trim(),
-      postMediaUri: mediaUri,
-      fromVarLibrary: true,
-      postAuthorId: getDefaultComposerAuthorId(),
-      appwriteUser,
-      profile,
-      onPublished: (post) => {
-        published = true;
-        prependPost({ ...post, fromVarLibrary: true });
-        setCurrentTab("home");
-      },
-      setIsPublishingPost,
-      setNotice,
-      onClose: () => {},
-      trackVarInteraction,
-    });
-
-    return published;
   };
 
   const handleHomeAction = () => {
@@ -1112,25 +1154,32 @@ export default function AppShell() {
   }, [isLoggedIn, pendingAddDisplayVarId]);
 
   const applySupportToggle = (clubId: FanClubId) => {
-    const alreadySupported = supportedTeams.includes(clubId);
+    setSupportedTeams((currentTeams) => {
+      const alreadySupported = currentTeams.includes(clubId);
 
-    setSupportedTeams((currentTeams) =>
-      alreadySupported
-        ? currentTeams.filter((teamId) => teamId !== clubId)
-        : [...currentTeams, clubId],
-    );
-    setSupporters((currentCounts) => ({
-      ...currentCounts,
-      [clubId]: Math.max(
-        0,
-        currentCounts[clubId] + (alreadySupported ? -1 : 1),
-      ),
-    }));
-    setNotice(
-      alreadySupported
-        ? "تمت إزالة الدعم من الرابطة."
-        : "تم تسجيل دعمك للرابطة.",
-    );
+      setSupporters((currentCounts) => ({
+        ...currentCounts,
+        [clubId]: Math.max(
+          0,
+          (currentCounts[clubId] ?? 0) + (alreadySupported ? -1 : 1),
+        ),
+      }));
+      setNotice(
+        alreadySupported
+          ? "تمت إزالة الدعم من الرابطة."
+          : "تم تسجيل دعمك للرابطة.",
+      );
+
+      if (alreadySupported) {
+        return currentTeams.filter((teamId) => teamId !== clubId);
+      }
+
+      if (currentTeams.includes(clubId)) {
+        return currentTeams;
+      }
+
+      return [...currentTeams, clubId];
+    });
   };
 
   const submitPostReply = (postId: number, reply: string) => {
@@ -1622,7 +1671,9 @@ export default function AppShell() {
   const showThemeSwitch =
     visibleTab === "home" &&
     !isVideoFullscreen &&
-    (homeMode === "tiktok" || xFeedActiveTab === "timeline");
+    (homeMode === "tiktok" ||
+      xFeedActiveTab === "timeline" ||
+      xFeedActiveTab === "profile");
 
   switch (visibleTab) {
     case "home":
@@ -1672,15 +1723,12 @@ export default function AppShell() {
           onShowNotice={setNotice}
           onRefreshPosts={refreshVisibleAppData}
           onLoadMorePosts={loadMorePosts}
-          isRefreshingPosts={isRefreshingAnyAppData}
+          isRefreshingPosts={isPullRefreshing}
           isLoadingMorePosts={isLoadingMorePosts}
           hasMorePosts={hasMorePosts}
           onDeletePost={deletePost}
           onUpdatePostContent={updatePostContent}
           onReportPost={reportPost}
-          onPublishLibraryPost={handlePublishLibraryPost}
-          isPublishingLibraryPost={isPublishingPost}
-          canManageVarLibrary={canAccessAdminPanel}
           onXFeedTabChange={setXFeedActiveTab}
           onToggleVideoLike={toggleVideoLike}
           onToggleVideoSave={toggleVideoSave}
@@ -1698,10 +1746,15 @@ export default function AppShell() {
           isLoggedIn={isLoggedIn}
           supporters={supporters}
           supportedTeams={supportedTeams}
+          userLeagueClub={profile.leagueClub || ""}
+          userDisplayName={profile.displayName}
+          userVarId={profile.displayVarId}
+          userAvatarUri={profile.avatarUri}
+          userIsVerified={profile.isVerified}
           onRequireAuth={requireAuth}
           onToggleSupport={toggleSupport}
           onRefresh={refreshVisibleAppData}
-          isRefreshing={isRefreshingAnyAppData}
+          isRefreshing={isPullRefreshing}
         />
       );
       break;
@@ -1710,7 +1763,7 @@ export default function AppShell() {
         <LeaguesScreen
           posts={posts}
           onRefresh={refreshVisibleAppData}
-          isRefreshing={isRefreshingAnyAppData}
+          isRefreshing={isPullRefreshing}
           onLockMatchPrediction={handleLockMatchPrediction}
         />
       );
@@ -1740,7 +1793,7 @@ export default function AppShell() {
           profile={profile}
           followedProfiles={followedProfiles}
           onRefresh={refreshVisibleAppData}
-          isRefreshing={isRefreshingAnyAppData}
+          isRefreshing={isPullRefreshing}
           onSaveProfile={(nextProfile) => {
             void persistAppwriteProfile(nextProfile, appwriteUser).then(
               (savedUser) => {
@@ -1761,7 +1814,7 @@ export default function AppShell() {
           onChangeMode={setAuthMode}
           onStartGoogleLogin={writeStoredGoogleAuthSnapshot}
           onRefresh={refreshVisibleAppData}
-          isRefreshing={isRefreshingAnyAppData}
+          isRefreshing={isPullRefreshing}
           onSuccess={completeAuthFlow}
         />
       );
@@ -1815,7 +1868,45 @@ export default function AppShell() {
               />
             </View>
           ) : null}
+
+          {showThemeSwitch ? (
+            <View
+              style={[
+                styles.themeSwitchLayer,
+                {
+                  top: themeSwitchTopInset,
+                  left: "50%",
+                  marginLeft: -22,
+                  width: 44,
+                  alignItems: "center",
+                },
+              ]}
+            >
+              <FloatingProfileArrow onOpen={() => setIsProfileSheetOpen(true)} />
+            </View>
+          ) : null}
         </View>
+
+        <ProfileSheetModal
+          visible={isProfileSheetOpen}
+          onClose={() => setIsProfileSheetOpen(false)}
+          isLoggedIn={isLoggedIn}
+          displayName={profile.displayName || appwriteUser?.name || ""}
+          displayVarId={profile.displayVarId || appwriteUser?.displayVarId || ""}
+          avatarUri={profile.avatarUri || appwriteUser?.avatarUri || ""}
+          isVerified={profile.isVerified}
+          role={
+            appwriteUser?.role === "admin" || profile.isVerified ? "admin" : "member"
+          }
+          followedProfiles={followedProfiles}
+          messageThreads={[]}
+          unreadMessageCount={0}
+          onRequireAuth={() => requireAuth("سجل الدخول لعرض ملفك.")}
+          onOpenPublicProfile={() => setIsProfileSheetOpen(false)}
+          onOpenThread={() => {}}
+          onComposeLookup={async () => null}
+          onOpenNewThread={() => {}}
+        />
 
         {!isVideoFullscreen && !isLogoutFarewellVisible ? (
           <View

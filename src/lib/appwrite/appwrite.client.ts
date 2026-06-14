@@ -202,6 +202,7 @@ type AppwriteDatabasesBridge = {
     collectionId: string,
     documentId: string,
     data: Record<string, unknown>,
+    permissions?: string[],
   ) => Promise<unknown>;
   updateDocument: (
     databaseId: string,

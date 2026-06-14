@@ -80,15 +80,7 @@ export function XAuthorProfileScreen(props: {
       >
         <VarIdentityCard
           width={cardWidth}
-          avatarUri={resolveProfileAvatarUri(props.profile.avatarUri)}
-          displayName={props.profile.displayName}
           displayVarId={displayVarId}
-          association={
-            props.profile.association?.trim() || DEFAULT_CLUB_NAME
-          }
-          joinDate={props.profile.joinDate || ""}
-          nationalityArabic={nationalityLabels.arabic}
-          nationalityEnglish={nationalityLabels.english}
           cardTier={normalizeMembershipCardTier(props.profile.cardTier)}
         />
       </ScrollView>

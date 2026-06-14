@@ -457,6 +457,172 @@ export async function requireAdminSession(
   } satisfies AdminActor;
 }
 
+export type AppUserActor = {
+  id: string;
+  email: string;
+  varId: string;
+  displayVarId: string;
+  session: string;
+};
+
+export async function requireAppUserSession(
+  request: { headers?: Record<string, string | string[] | undefined> },
+  config: AdminConfig,
+) {
+  const auth = readAuthHeader(request);
+
+  if (!auth) {
+    throw new Error("MISSING_AUTH");
+  }
+
+  if (!config.projectId) {
+    throw new Error("MISSING_PROJECT");
+  }
+
+  const account = new Account(createAuthClient(config, auth));
+  const user = await account.get();
+  const prefs = (user.prefs ?? {}) as Record<string, unknown>;
+
+  return {
+    id: user.$id,
+    email: (user.email ?? "").trim().toLowerCase(),
+    varId: readPrefString(prefs, "varId"),
+    displayVarId: readPrefString(prefs, "displayVarId"),
+    session: auth.token,
+  } satisfies AppUserActor;
+}
+
+function normalizeVarIdForMatch(value: string) {
+  const normalized = value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, "");
+
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized.startsWith("VAR-") ? normalized : `VAR-${normalized}`;
+}
+
+function collectUserVarIdCandidates(user: AppUserActor) {
+  return [
+    normalizeVarIdForMatch(user.varId),
+    normalizeVarIdForMatch(user.displayVarId),
+    normalizeVarIdForMatch(user.id),
+  ].filter(Boolean);
+}
+
+function isPostOwnedByUser(
+  document: Record<string, unknown>,
+  user: AppUserActor,
+) {
+  const authorId =
+    typeof document.authorId === "string" ? document.authorId.trim() : "";
+  const postVarId =
+    typeof document.varId === "string" ? document.varId.trim() : "";
+  const normalizedAuthor = normalizeVarIdForMatch(authorId || postVarId);
+  const candidates = collectUserVarIdCandidates(user);
+
+  return Boolean(
+    normalizedAuthor && candidates.some((candidate) => candidate === normalizedAuthor),
+  );
+}
+
+export async function deleteOwnedPost(
+  config: AdminConfig,
+  postId: string,
+  user: AppUserActor,
+) {
+  requireServerKey(config);
+
+  const trimmedPostId = postId.trim();
+
+  if (!trimmedPostId) {
+    throw new Error("MISSING_POST_ID");
+  }
+
+  const databases = new Databases(createServerClient(config));
+  const document = (await databases.getDocument(
+    config.databaseId,
+    config.postsCollectionId,
+    trimmedPostId,
+  )) as Record<string, unknown>;
+
+  if (!isPostOwnedByUser(document, user)) {
+    throw new Error("NOT_POST_OWNER");
+  }
+
+  await databases.deleteDocument(
+    config.databaseId,
+    config.postsCollectionId,
+    trimmedPostId,
+  );
+
+  return trimmedPostId;
+}
+
+export function mapAppPostDeleteError(error: unknown) {
+  const message = error instanceof Error ? error.message : "UNKNOWN";
+
+  if (message === "MISSING_AUTH") {
+    return {
+      status: 401,
+      code: "MISSING_AUTH",
+      error: "سجّل الدخول ثم أعد المحاولة.",
+    };
+  }
+
+  if (message === "MISSING_POST_ID") {
+    return {
+      status: 400,
+      code: "MISSING_POST_ID",
+      error: "معرّف المنشور مطلوب.",
+    };
+  }
+
+  if (message === "NOT_POST_OWNER") {
+    return {
+      status: 403,
+      code: "NOT_POST_OWNER",
+      error: "لا يمكنك حذف منشور لا يخصك.",
+    };
+  }
+
+  if (message === "MISSING_API_KEY") {
+    return {
+      status: 503,
+      code: "MISSING_API_KEY",
+      error: "السيرفر غير مهيأ لحذف المنشورات.",
+    };
+  }
+
+  if (message === "MISSING_PROJECT") {
+    return {
+      status: 500,
+      code: "MISSING_PROJECT",
+      error: "إعدادات Appwrite ناقصة على السيرفر.",
+    };
+  }
+
+  if (
+    message.includes("Document with the requested ID could not be found") ||
+    message.includes("could not be found")
+  ) {
+    return {
+      status: 404,
+      code: "POST_NOT_FOUND",
+      error: "المنشور غير موجود.",
+    };
+  }
+
+  return {
+    status: 500,
+    code: "DELETE_FAILED",
+    error: "تعذر حذف المنشور.",
+  };
+}
+
 type AppwriteJwt = {
   jwt?: string;
 };
@@ -658,11 +824,17 @@ export function mapLoginError(error: unknown) {
 }
 
 export function readJsonBody(request: {
-  body?: string | Record<string, unknown>;
+  body?: string | Record<string, unknown> | Buffer | unknown;
 }) {
   try {
     if (!request.body) {
       return {};
+    }
+
+    if (Buffer.isBuffer(request.body)) {
+      const str = request.body.toString("utf8").trim();
+      if (!str) return {};
+      return JSON.parse(str) as Record<string, unknown>;
     }
 
     if (typeof request.body === "string") {
@@ -674,7 +846,11 @@ export function readJsonBody(request: {
       return JSON.parse(trimmed) as Record<string, unknown>;
     }
 
-    return request.body as Record<string, unknown>;
+    if (typeof request.body === "object") {
+      return request.body as Record<string, unknown>;
+    }
+
+    return {};
   } catch {
     throw new Error("INVALID_BODY");
   }

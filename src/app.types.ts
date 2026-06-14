@@ -7,7 +7,18 @@ export type Tab = MainTab;
 export type HomeMode = "tiktok" | "x";
 export type AuthMode = "login" | "signup";
 export type LeagueTab = "events" | "lineup" | "predictions" | "live" | null;
-export type FanClubId = "hilal" | "nassr" | "ittihad";
+export type FanClubId =
+  | "hilal" | "nassr" | "ittihad" | "ahli" | "shabab"
+  | "ittefaq" | "qadisiyah" | "raed" | "fayha" | "damak" | "tai" | "khaleej" | "abha" | "taawun" | "fateh" | "wehda"
+  | "mancity" | "manutd" | "liverpool" | "chelsea" | "arsenal" | "tottenham" | "newcastle" | "astonvilla"
+  | "westham" | "brighton" | "bournemouth" | "leicester" | "everton" | "wolves" | "crystalpalace" | "nottingham"
+  | "fulham" | "brentford" | "southampton" | "ipswich"
+  | "realmadrid" | "barcelona" | "atletico" | "sevilla" | "villarreal" | "betis" | "sociedad" | "athleticbilbao"
+  | "valencia" | "osasuna" | "alaves" | "mallorca" | "celtavigo" | "leganes" | "getafe" | "espanyol"
+  | "rayo" | "valladolid" | "laspalmas" | "girona"
+  | "psg" | "marseille" | "monaco" | "lyon" | "lille" | "nice" | "rennes" | "strasbourg"
+  | "montpellier" | "nantes" | "bordeaux" | "lens" | "toulouse" | "angers" | "reims" | "clermont"
+  | "auxerre" | "brest" | "lehavre" | "saintetienne";
 export type MembershipCardTier = "classic" | "gold" | "platinum";
 export type IconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -104,10 +115,12 @@ export type FollowingProfileCard = {
   username: string;
   avatarUri: string;
   role: "admin" | "member";
+  cardTier?: "classic" | "gold" | "platinum";
 };
 
 export type FanClub = {
   id: FanClubId;
+  leagueId: string;
   title: string;
   crowdLabel: string;
   summary: string;
@@ -185,6 +198,7 @@ export type ProfileData = {
   birthDate: string;
   nationality: string;
   association: string;
+  leagueClub: string;
   joinDate: string;
   avatarUri: string;
   avatarFrameEnabled: boolean;
