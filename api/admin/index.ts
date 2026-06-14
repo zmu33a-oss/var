@@ -54,6 +54,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return (await import("./_settings")).default(req, res);
     case "users":
       return (await import("./_users")).default(req, res);
+    case "debug":
+      return (await import("./_debug")).default(req, res);
     default:
       res.status(404).json({ error: "Unknown route" });
   }
