@@ -7,7 +7,12 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFonts } from "expo-font";
 import { createCompatStyleSheet } from "../../lib/crossPlatformStyles";
+import {
+  LEAGUE_HEADER_ARABIC_FONT,
+  LEAGUE_HEADER_ARABIC_FONT_FAMILY,
+} from "../leagues/leagues.constants";
 
 export type LeagueInfo = {
   id: string;
@@ -110,6 +115,10 @@ interface FansLeaguesGridProps {
 }
 
 export default function FansLeaguesGrid({ onLeaguePress }: FansLeaguesGridProps) {
+  const [fontsLoaded] = useFonts({
+    [LEAGUE_HEADER_ARABIC_FONT_FAMILY]: LEAGUE_HEADER_ARABIC_FONT,
+  });
+
   const handlePress = (leagueId: string) => {
     onLeaguePress?.(leagueId);
   };
@@ -159,7 +168,7 @@ const styles = createCompatStyleSheet({
     fontWeight: "900",
     marginBottom: 8,
     textAlign: "center",
-    fontFamily: "alfont_com_KA-Hand-Naskh",
+    fontFamily: "LeagueHeaderArabic",
     letterSpacing: 2,
   },
   headerSubtitle: {
@@ -231,7 +240,7 @@ const styles = createCompatStyleSheet({
     textShadowRadius: 4,
     marginBottom: 12,
     textAlign: "center",
-    fontFamily: "alfont_com_KA-Hand-Naskh",
+    fontFamily: "LeagueHeaderArabic",
   },
   badge: {
     paddingHorizontal: 12,
@@ -243,7 +252,7 @@ const styles = createCompatStyleSheet({
     fontSize: 13,
     fontWeight: "900",
     color: "#000000",
-    fontFamily: "alfont_com_KA-Hand-Naskh",
+    fontFamily: "LeagueHeaderArabic",
   },
 });
 
