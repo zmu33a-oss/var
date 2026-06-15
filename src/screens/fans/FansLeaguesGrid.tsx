@@ -28,8 +28,8 @@ const LEAGUES_DATA: LeagueInfo[] = [
     id: "saudi",
     name: "الدوري السعودي",
     shortName: "RSL",
-    imageUrl: "https://images.unsplash.com/photo-1522778119026-d647f0565c6a?w=800&auto=format&fit=crop",
-    accentColor: "#FF6B35",
+    imageUrl: "https://images.unsplash.com/photo-1518091043644-c1d4457512c6?w=800&auto=format&fit=crop&q=80",
+    accentColor: "#165DFF",
   },
   {
     id: "premier",
@@ -191,15 +191,12 @@ const styles = createCompatStyleSheet({
     paddingBottom: 20,
   },
   card: {
-    borderRadius: 20,
+    borderRadius: 16,
     overflow: "hidden",
     height: 140,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
   },
   firstCard: {
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.5)",
+    // بدون حواف مميزة
   },
   cardBackground: {
     flex: 1,
@@ -212,14 +209,7 @@ const styles = createCompatStyleSheet({
     paddingHorizontal: 20,
   },
   borderOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
+    // تم حذف الحواف
   },
   cardPressed: {
     opacity: 0.85,

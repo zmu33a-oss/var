@@ -163,6 +163,7 @@ const FansSupportTongue = forwardRef<
         };
       })
       .sort((left, right) => right.count - left.count)
+      .slice(0, 3)
       .map((entry, index) => ({
         ...entry,
         rank: index + 1,

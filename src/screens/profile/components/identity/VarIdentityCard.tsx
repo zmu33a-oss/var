@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { TouchableOpacity } from "react-native-gesture-handler";
 import QRCode from "react-native-qrcode-svg";
-import type { MembershipCardTier } from "../../../../lib/membershipCardTier";
+import type { MembershipCardTier, MembershipCardTheme } from "../../../../lib/membershipCardTier";
 import {
   getMembershipCardTheme,
   getMembershipCardTierLabel,
@@ -25,7 +25,12 @@ import {
   scaleVarQrDisplaySize,
 } from "../../profileCardConnect.utils";
 
-const WALLET_SLIDE_THUMB_SIZE = 49;
+const WALLET_SLIDE_TRACK_HEIGHT = 38;
+const WALLET_SLIDE_TRACK_WIDTH = 138;
+const WALLET_SLIDE_TRACK_BORDER = 1;
+const WALLET_SLIDE_THUMB_SIZE = 48;
+const WALLET_SLIDE_THUMB_HEIGHT =
+  WALLET_SLIDE_TRACK_HEIGHT - WALLET_SLIDE_TRACK_BORDER * 2;
 const WALLET_SLIDE_PADDING = 0;
 const WALLET_SLIDE_THRESHOLD = 0.72;
 
@@ -156,7 +161,6 @@ function CardFront(props: {
   const compact = props.width < 360;
   const qrPayload = buildVarQrPayload(props.displayVarId);
   const tierLabel = getMembershipCardTierLabel(props.cardTier);
-  const showIdBadge = props.cardTier === "classic";
 
   return (
     <LinearGradient
@@ -185,27 +189,27 @@ function CardFront(props: {
         </Text>
       </View>
 
-      <View style={styles.topLeftContainer}>
+      <View style={styles.topHeaderRow}>
         <Text style={[styles.tierText, { color: theme.primaryText }]}>
           {tierLabel}
         </Text>
-      </View>
 
-      {props.onSharePress ? (
-        <TouchableOpacity
-          accessibilityLabel="مشاركة بطاقة VAR"
-          activeOpacity={0.72}
-          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
-          onPress={props.onSharePress}
-          style={styles.shareCornerButton}
-        >
-          <Ionicons
-            color={theme.primaryText}
-            name="share-outline"
-            size={17}
-          />
-        </TouchableOpacity>
-      ) : null}
+        {props.onSharePress ? (
+          <TouchableOpacity
+            accessibilityLabel="مشاركة بطاقة VAR"
+            activeOpacity={0.72}
+            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+            onPress={props.onSharePress}
+            style={styles.shareCornerButton}
+          >
+            <Ionicons
+              color={theme.primaryText}
+              name="share-outline"
+              size={17}
+            />
+          </TouchableOpacity>
+        ) : null}
+      </View>
 
       <View style={styles.logoRow}>
         <View style={styles.logoContainer}>
@@ -228,38 +232,26 @@ function CardFront(props: {
 
       <View style={styles.footerRow}>
         <View style={styles.footerRight}>
-          {showIdBadge ? (
-            <View
-              style={[
-                styles.idBadge,
-                { backgroundColor: theme.idBadgeBackground },
-              ]}
-            >
-              <Text style={[styles.idBadgeText, { color: theme.idBadgeText }]}>
-                {props.displayVarId || "VAR-0000000"}
-              </Text>
-            </View>
-          ) : (
-            <>
-              <Text style={[styles.farIdText, { color: theme.idBadgeText }]}>
-                {props.displayVarId || "VAR-0000000"}
-              </Text>
-              <Text style={[styles.idSubtitle, { color: theme.mutedText }]}>
-                VAR ID
-              </Text>
-            </>
-          )}
+          <Text style={[styles.idSubtitle, { color: theme.mutedText }]}>
+            VAR ID
+          </Text>
+          <Text style={[styles.farIdText, { color: theme.idBadgeText }]}>
+            {props.displayVarId || "VAR-0000000"}
+          </Text>
         </View>
       </View>
 
       {props.onWalletSwipe && (
-        <CardWalletSlide onComplete={props.onWalletSwipe} />
+        <CardWalletSlide onComplete={props.onWalletSwipe} theme={theme} />
       )}
     </LinearGradient>
   );
 }
 
-function CardWalletSlide(props: { onComplete: () => void }) {
+function CardWalletSlide(props: {
+  onComplete: () => void;
+  theme: MembershipCardTheme;
+}) {
   const [trackWidth, setTrackWidth] = useState(0);
   const translateX = useRef(new Animated.Value(0)).current;
 
@@ -320,14 +312,8 @@ function CardWalletSlide(props: { onComplete: () => void }) {
   return (
     <View style={styles.walletSlideTrack} onLayout={handleTrackLayout}>
       <View style={styles.walletSlideTextRow}>
-        <Ionicons name="wallet-outline" size={13} color="#F4C565" />
+        <Ionicons name="wallet-outline" size={12} color="#F4C565" />
         <Text style={styles.walletSlideText}>walIt</Text>
-      </View>
-
-      <View style={styles.walletSlideTrail}>
-        <Ionicons name="chevron-forward" size={12} color="rgba(255,255,255,0.28)" />
-        <Ionicons name="chevron-forward" size={12} color="rgba(255,255,255,0.44)" style={styles.walletSlideTrailIcon} />
-        <Ionicons name="chevron-forward" size={12} color="rgba(255,255,255,0.62)" style={styles.walletSlideTrailIcon} />
       </View>
 
       <Animated.View
@@ -336,10 +322,23 @@ function CardWalletSlide(props: { onComplete: () => void }) {
           styles.walletSlideThumb,
           {
             transform: [{ translateX }],
+            borderColor: "#FFFFFF",
+            shadowColor: props.theme.shadowColor,
           },
         ]}
       >
-        <Ionicons name="chevron-forward" size={19} color="#09111C" />
+        <LinearGradient
+          colors={props.theme.frontGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <LinearGradient
+          colors={props.theme.sheenGradient}
+          pointerEvents="none"
+          style={StyleSheet.absoluteFillObject}
+        />
+        <Ionicons name="chevron-forward" size={16} color="#FFFFFF" />
       </Animated.View>
     </View>
   );
@@ -393,21 +392,21 @@ const styles = StyleSheet.create({
     fontSize: 120,
     fontWeight: "900",
   },
-  topLeftContainer: {
+  topHeaderRow: {
     position: "absolute",
-    top: 18,
-    left: 20,
-    alignItems: "flex-start",
-    zIndex: 5,
-  },
-  shareCornerButton: {
-    position: "absolute",
-    top: 10,
-    right: 10,
+    top: 4,
+    left: 18,
+    right: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     zIndex: 30,
     elevation: 30,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+  },
+  shareCornerButton: {
+    marginRight: -2,
+    paddingHorizontal: 2,
+    paddingVertical: 4,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -451,86 +450,72 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     position: "absolute",
     bottom: 18,
-    right: 20,
+    right: 6,
   },
   footerRight: {
     alignItems: "flex-end",
-  },
-  idBadge: {
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  idBadgeText: {
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0.8,
   },
   farIdText: {
     fontSize: 12.5,
     fontWeight: "bold",
     letterSpacing: 0.8,
+    marginTop: 2,
   },
   idSubtitle: {
     fontSize: 8,
     fontWeight: "700",
-    marginTop: 2,
     letterSpacing: 0.6,
   },
   walletSlideTrack: {
     position: "absolute",
     bottom: 14,
     left: 14,
-    height: 44,
-    borderRadius: 16,
+    height: WALLET_SLIDE_TRACK_HEIGHT,
+    borderRadius: 8,
     overflow: "hidden",
     backgroundColor: "rgba(8,14,24,0.84)",
-    borderWidth: 1,
+    borderWidth: WALLET_SLIDE_TRACK_BORDER,
     borderColor: "rgba(255,255,255,0.92)",
     flexDirection: "row",
     alignItems: "center",
-    width: 152,
+    width: WALLET_SLIDE_TRACK_WIDTH,
     zIndex: 20,
     elevation: 20,
   },
   walletSlideTextRow: {
     position: "absolute",
-    left: 56,
-    right: 10,
+    right: 24,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-start",
+    justifyContent: "flex-end",
     gap: 6,
   },
   walletSlideText: {
     color: "#FFFFFF",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.5,
   },
-  walletSlideTrail: {
-    position: "absolute",
-    right: 12,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  walletSlideTrailIcon: {
-    marginLeft: -4,
-  },
   walletSlideThumb: {
     position: "absolute",
-    left: WALLET_SLIDE_PADDING,
+    left: 0,
     top: 0,
-    width: 53,
-    height: 42,
-    borderRadius: 15,
-    backgroundColor: "#FFFFFF",
+    width: WALLET_SLIDE_THUMB_SIZE,
+    height: WALLET_SLIDE_THUMB_HEIGHT,
+    borderTopLeftRadius: 7,
+    borderBottomLeftRadius: 7,
+    borderTopRightRadius: 7,
+    borderBottomRightRadius: 7,
+    overflow: "hidden",
+    borderTopWidth: 0,
+    borderLeftWidth: 0,
+    borderRightWidth: WALLET_SLIDE_TRACK_BORDER,
+    borderBottomWidth: WALLET_SLIDE_TRACK_BORDER,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
   },
 });
