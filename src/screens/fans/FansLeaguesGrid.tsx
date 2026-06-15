@@ -155,12 +155,12 @@ const styles = createCompatStyleSheet({
   },
   headerTitle: {
     color: "#FFFFFF",
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: "900",
     marginBottom: 8,
     textAlign: "center",
-    fontFamily: "Cairo_700Bold",
-    letterSpacing: 1,
+    fontFamily: "alfont_com_KA-Hand-Naskh",
+    letterSpacing: 2,
   },
   headerSubtitle: {
     color: "rgba(255,255,255,0.8)",
@@ -224,14 +224,14 @@ const styles = createCompatStyleSheet({
   },
   leagueName: {
     color: "#FFFFFF",
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "800",
     textShadowColor: "rgba(0,0,0,0.8)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
     marginBottom: 12,
     textAlign: "center",
-    fontFamily: "Cairo_700Bold",
+    fontFamily: "alfont_com_KA-Hand-Naskh",
   },
   badge: {
     paddingHorizontal: 12,
@@ -243,6 +243,7 @@ const styles = createCompatStyleSheet({
     fontSize: 13,
     fontWeight: "900",
     color: "#000000",
+    fontFamily: "alfont_com_KA-Hand-Naskh",
   },
 });
 
