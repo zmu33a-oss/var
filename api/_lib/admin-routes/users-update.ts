@@ -8,7 +8,7 @@ import {
   sendJson,
   updateAdminUserDetails,
   writeAdminAuditLog,
-} from "../admin-shared.js";
+} from "../admin-shared";
 
 function readBodyString(body: Record<string, unknown>, key: string) {
   return typeof body[key] === "string" ? body[key].trim() : undefined;

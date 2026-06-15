@@ -1,7 +1,7 @@
-import { sendJson } from "../_lib/admin-shared.js";
-import { handler as postsListHandler } from "../_lib/admin-routes/posts-list.js";
-import { handler as postsHideHandler } from "../_lib/admin-routes/posts-hide.js";
-import { handler as postsDeleteHandler } from "../_lib/admin-routes/posts-delete.js";
+import { sendJson } from "../_lib/admin-shared";
+import { handler as postsListHandler } from "../_lib/admin-routes/posts-list";
+import { handler as postsHideHandler } from "../_lib/admin-routes/posts-hide";
+import { handler as postsDeleteHandler } from "../_lib/admin-routes/posts-delete";
 
 type AdminHandler = (request: any, response: any) => Promise<void> | void;
 

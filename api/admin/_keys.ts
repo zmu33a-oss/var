@@ -1,8 +1,8 @@
-import { sendJson } from "../_lib/admin-shared.js";
-import { handler as keysListHandler } from "../_lib/admin-routes/keys-list.js";
-import { handler as keysCreateHandler } from "../_lib/admin-routes/keys-create.js";
-import { handler as keysRevokeHandler } from "../_lib/admin-routes/keys-revoke.js";
-import { handler as keysDeleteHandler } from "../_lib/admin-routes/keys-delete.js";
+import { sendJson } from "../_lib/admin-shared";
+import { handler as keysListHandler } from "../_lib/admin-routes/keys-list";
+import { handler as keysCreateHandler } from "../_lib/admin-routes/keys-create";
+import { handler as keysRevokeHandler } from "../_lib/admin-routes/keys-revoke";
+import { handler as keysDeleteHandler } from "../_lib/admin-routes/keys-delete";
 
 function readAction(request: any) {
   const rawAction = request.query?.action;

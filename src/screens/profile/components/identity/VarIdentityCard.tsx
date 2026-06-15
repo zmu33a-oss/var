@@ -11,6 +11,7 @@ import {
   View,
   type LayoutChangeEvent,
 } from "react-native";
+import { TouchableOpacity } from "react-native-gesture-handler";
 import QRCode from "react-native-qrcode-svg";
 import type { MembershipCardTier } from "../../../../lib/membershipCardTier";
 import {
@@ -36,6 +37,7 @@ type VarIdentityCardProps = {
   arabicFontFamily?: string;
   cardTier?: MembershipCardTier;
   onWalletSwipe?: () => void;
+  onSharePress?: () => void;
 };
 
 function resolveQrRenderLightColor(
@@ -147,6 +149,7 @@ function CardFront(props: {
   displayVarId: string;
   cardTier: MembershipCardTier;
   onWalletSwipe?: () => void;
+  onSharePress?: () => void;
 }) {
   const theme = getMembershipCardTheme(props.cardTier);
   const cardHeight = props.width * CARD_ASPECT_RATIO;
@@ -187,6 +190,22 @@ function CardFront(props: {
           {tierLabel}
         </Text>
       </View>
+
+      {props.onSharePress ? (
+        <TouchableOpacity
+          accessibilityLabel="مشاركة بطاقة VAR"
+          activeOpacity={0.72}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+          onPress={props.onSharePress}
+          style={styles.shareCornerButton}
+        >
+          <Ionicons
+            color={theme.primaryText}
+            name="share-outline"
+            size={17}
+          />
+        </TouchableOpacity>
+      ) : null}
 
       <View style={styles.logoRow}>
         <View style={styles.logoContainer}>
@@ -338,6 +357,7 @@ export function VarIdentityCard(props: VarIdentityCardProps) {
           displayVarId={props.displayVarId}
           cardTier={cardTier}
           onWalletSwipe={props.onWalletSwipe}
+          onSharePress={props.onSharePress}
         />
       </View>
     </View>
@@ -378,6 +398,18 @@ const styles = StyleSheet.create({
     top: 18,
     left: 20,
     alignItems: "flex-start",
+    zIndex: 5,
+  },
+  shareCornerButton: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    zIndex: 30,
+    elevation: 30,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   tierText: {
     fontSize: 12,

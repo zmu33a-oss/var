@@ -58,7 +58,7 @@ function HeroClubLogo(props: {
       <Image
         source={props.emblem}
         resizeMode="contain"
-        style={[styles.clubLogoImage, { tintColor: "#FFFFFF" }]}
+        style={styles.clubLogoImage}
       />
     );
   }

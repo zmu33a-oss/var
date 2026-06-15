@@ -1,15 +1,8 @@
 import { FAN_CLUBS } from "../../app.data";
 import type { FanClub, FanClubId } from "../../app.types";
+import { getSaudiClubEmblem } from "./clubEmblems";
 
-const HILAL_ICON = require("../../../assets/icons/alhilal.png.png");
-const NASSR_ICON = require("../../../assets/icons/alnassr.png.png");
-
-const CLUB_EMBLEMS: Partial<Record<FanClubId, number>> = {
-  hilal: HILAL_ICON,
-  nassr: NASSR_ICON,
-};
-
-export const CLUB_ASSOCIATION_VAR_IDS: Record<FanClubId, string> = {
+export const CLUB_ASSOCIATION_VAR_IDS: Partial<Record<FanClubId, string>> = {
   hilal: "VAR-44441",
   nassr: "VAR-33820",
   ittihad: "VAR-29106",
@@ -40,7 +33,7 @@ export function resolveLeadingFanClub(
       club,
       count: supporters[club.id] ?? 0,
       digits: digitsForSupporterCount(supporters[club.id] ?? 0),
-      emblem: CLUB_EMBLEMS[club.id],
+      emblem: getSaudiClubEmblem(club.id),
     }))
     .sort((left, right) => right.count - left.count);
 

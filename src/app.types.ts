@@ -18,7 +18,10 @@ export type FanClubId =
   | "rayo" | "valladolid" | "laspalmas" | "girona"
   | "psg" | "marseille" | "monaco" | "lyon" | "lille" | "nice" | "rennes" | "strasbourg"
   | "montpellier" | "nantes" | "bordeaux" | "lens" | "toulouse" | "angers" | "reims" | "clermont"
-  | "auxerre" | "brest" | "lehavre" | "saintetienne";
+  | "auxerre" | "brest" | "lehavre" | "saintetienne"
+  | "juventus" | "milan" | "intermilan" | "napoli" | "roma" | "lazio" | "fiorentina" | "atalanta"
+  | "torino" | "bologna" | "sassuolo" | "udinese" | "monza" | "empoli" | "lecce" | "verona"
+  | "cagliari" | "genoa" | "frosinone" | "como";
 export type MembershipCardTier = "classic" | "gold" | "platinum";
 export type IconName = ComponentProps<typeof Ionicons>["name"];
 

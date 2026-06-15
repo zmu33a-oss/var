@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { FAN_CLUBS } from "../../app.data";
 import type { FanClubId } from "../../app.types";
+import type { FansCommunityPost } from "./FansCommunityFeed";
 import { createCompatStyleSheet } from "../../lib/crossPlatformStyles";
 import FansCommunityComposer from "./FansCommunityComposer";
 import FansCommunityFeed from "./FansCommunityFeed";
@@ -76,7 +77,7 @@ export default function FansClubRoomScreen(props: FansClubRoomScreenProps) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <FansCommunityFeed canInteract={canPost} />
+        <FansCommunityFeed canInteract={canPost} clubId={props.clubId} posts={[]} />
       </ScrollView>
 
       <FansCommunityComposer
@@ -84,6 +85,9 @@ export default function FansClubRoomScreen(props: FansClubRoomScreenProps) {
         canPost={canPost}
         activeClubTitle={club.title}
         onRequireAuth={props.onRequireAuth}
+        onSend={(text: string) => {
+          console.log("[FansClubRoom] Send:", text);
+        }}
       />
     </View>
   );

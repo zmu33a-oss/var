@@ -1,14 +1,14 @@
-import { sendJson } from "../_lib/admin-shared.js";
-import { handler as reportsListHandler } from "../_lib/admin-routes/moderation-reports-list.js";
-import { handler as reportsReviewHandler } from "../_lib/admin-routes/moderation-reports-review.js";
-import { handler as flaggedPostsHandler } from "../_lib/admin-routes/moderation-flagged-posts.js";
-import { handler as aiFlagHandler } from "../_lib/admin-routes/moderation-ai-flag.js";
-import { handler as commentsListHandler } from "../_lib/admin-routes/moderation-comments-list.js";
-import { handler as commentsHideHandler } from "../_lib/admin-routes/moderation-comments-hide.js";
-import { handler as commentsDeleteHandler } from "../_lib/admin-routes/moderation-comments-delete.js";
-import { handler as reportsDetailHandler } from "../_lib/admin-routes/moderation-reports-detail.js";
-import { handler as aiSettingsHandler } from "../_lib/admin-routes/moderation-ai-settings.js";
-import { handler as aiScanHandler } from "../_lib/admin-routes/moderation-ai-scan.js";
+import { sendJson } from "../_lib/admin-shared";
+import { handler as reportsListHandler } from "../_lib/admin-routes/moderation-reports-list";
+import { handler as reportsReviewHandler } from "../_lib/admin-routes/moderation-reports-review";
+import { handler as flaggedPostsHandler } from "../_lib/admin-routes/moderation-flagged-posts";
+import { handler as aiFlagHandler } from "../_lib/admin-routes/moderation-ai-flag";
+import { handler as commentsListHandler } from "../_lib/admin-routes/moderation-comments-list";
+import { handler as commentsHideHandler } from "../_lib/admin-routes/moderation-comments-hide";
+import { handler as commentsDeleteHandler } from "../_lib/admin-routes/moderation-comments-delete";
+import { handler as reportsDetailHandler } from "../_lib/admin-routes/moderation-reports-detail";
+import { handler as aiSettingsHandler } from "../_lib/admin-routes/moderation-ai-settings";
+import { handler as aiScanHandler } from "../_lib/admin-routes/moderation-ai-scan";
 
 type AdminHandler = (request: any, response: any) => Promise<void> | void;
 

@@ -198,6 +198,26 @@ export const FAN_CLUBS: FanClub[] = [
   { id: "brest",        leagueId: "ligue1",  title: "بريست",               crowdLabel: "جمهور بريست",               summary: "نادي الميناء الصاعد.",            trendLabel: "صاعد",            gradient: ["#C8102E", "#30040B"], icon: "boat" },
   { id: "lehavre",      leagueId: "ligue1",  title: "لوهافر",              crowdLabel: "جمهور لوهافر",              summary: "روح ساحلية قوية.",                trendLabel: "قوي",             gradient: ["#1D439C", "#070F2C"], icon: "water" },
   { id: "saintetienne", leagueId: "ligue1",  title: "سانت إيتيان",         crowdLabel: "جمهور سانت إيتيان",         summary: "أسطورة الدوري الفرنسي.",          trendLabel: "أسطوري",          gradient: ["#2E7D32", "#0B1F0C"], icon: "trophy" },
+  { id: "juventus",     leagueId: "seriea",  title: "يوفنتوس",             crowdLabel: "جمهور يوفنتوس",             summary: "سيدة إيطاليا الكبرى.",             trendLabel: "الأكثر تفاعلًا",  gradient: ["#000000", "#FFFFFF"], icon: "star" },
+  { id: "milan",          leagueId: "seriea",  title: "ميلان",               crowdLabel: "جمهور ميلان",               summary: "روسونيري الأسطوري.",               trendLabel: "ترند صاعد",       gradient: ["#FB090B", "#000000"], icon: "flame" },
+  { id: "intermilan",     leagueId: "seriea",  title: "إنتر ميلان",          crowdLabel: "جمهور الإنتر",              summary: "نيرازوري الأزرق والأسود.",         trendLabel: "ثبات قوي",        gradient: ["#010E80", "#000000"], icon: "shield" },
+  { id: "napoli",         leagueId: "seriea",  title: "نابولي",              crowdLabel: "جمهور نابولي",              summary: "شغف جنوب إيطاليا.",               trendLabel: "صعود جماهيري",    gradient: ["#12A4D9", "#FFFFFF"], icon: "heart" },
+  { id: "roma",           leagueId: "seriea",  title: "روما",                crowdLabel: "جمهور روما",                summary: "ذئاب العاصمة الإيطالية.",         trendLabel: "زخم مستقر",       gradient: ["#8E1F2F", "#F0B41C"], icon: "moon" },
+  { id: "lazio",          leagueId: "seriea",  title: "لاتسيو",              crowdLabel: "جمهور لاتسيو",              summary: "النسور الزرقاء العاصمية.",        trendLabel: "ثبات",            gradient: ["#FFFFFF", "#65D0F7"], icon: "airplane" },
+  { id: "fiorentina",     leagueId: "seriea",  title: "فيورنتينا",           crowdLabel: "جمهور فيورنتينا",           summary: "البنفسجي الفلورنسي.",              trendLabel: "نشاط جيد",        gradient: ["#482E92", "#FFFFFF"], icon: "leaf" },
+  { id: "atalanta",       leagueId: "seriea",  title: "أتالانتا",            crowdLabel: "جمهور أتالانتا",            summary: "الغربان الإيطالية.",              trendLabel: "صاعد",            gradient: ["#1E71B8", "#000000"], icon: "flash" },
+  { id: "torino",         leagueId: "seriea",  title: "تورينو",              crowdLabel: "جمهور تورينو",              summary: "ثور تورينو التاريخي.",           trendLabel: "تاريخي",          gradient: ["#8E1F2F", "#FFFFFF"], icon: "trophy" },
+  { id: "bologna",        leagueId: "seriea",  title: "بولونيا",             crowdLabel: "جمهور بولونيا",             summary: "روسوبلو البولوني.",               trendLabel: "منتظم",           gradient: ["#A21C26", "#1A3155"], icon: "flag" },
+  { id: "sassuolo",       leagueId: "seriea",  title: "ساسولو",              crowdLabel: "جمهور ساسولو",              summary: "النيروفيردي الساسولي.",          trendLabel: "موسمي",           gradient: ["#008000", "#000000"], icon: "star" },
+  { id: "udinese",        leagueId: "seriea",  title: "أودينيزي",            crowdLabel: "جمهور أودينيزي",            summary: "الزيبريتي الأودينيزي.",           trendLabel: "نامٍ",            gradient: ["#FFFFFF", "#000000"], icon: "paw" },
+  { id: "monza",          leagueId: "seriea",  title: "مونزا",               crowdLabel: "جمهور مونزا",               summary: "الفارس الأحمر الإيطالي.",          trendLabel: "مستقر",           gradient: ["#E32219", "#FFFFFF"], icon: "trophy" },
+  { id: "empoli",         leagueId: "seriea",  title: "إمبولي",              crowdLabel: "جمهور إمبولي",              summary: "الأزوري الإمبولي.",               trendLabel: "وفيّ",            gradient: ["#0067A5", "#FFFFFF"], icon: "water" },
+  { id: "lecce",          leagueId: "seriea",  title: "ليتشي",               crowdLabel: "جمهور ليتشي",               summary: "الذئاب الليتشية.",               trendLabel: "حار",             gradient: ["#E32219", "#FFEF00"], icon: "sunny" },
+  { id: "verona",         leagueId: "seriea",  title: "فيرونا",              crowdLabel: "جمهور فيرونا",              summary: "الماستيفي الإيطالي.",             trendLabel: "فخور",            gradient: ["#FEDD33", "#003395"], icon: "shield" },
+  { id: "cagliari",       leagueId: "seriea",  title: "كالياري",             crowdLabel: "جمهور كالياري",             summary: "الأحمر والأزرق السرديني.",        trendLabel: "مخلص",            gradient: ["#B30000", "#FFFFFF"], icon: "globe" },
+  { id: "genoa",          leagueId: "seriea",  title: "جنوى",                crowdLabel: "جمهور جنوى",                summary: "الجريفوني الإيطالي.",             trendLabel: "شعبي",            gradient: ["#FFFFFF", "#B30000"], icon: "boat" },
+  { id: "frosinone",      leagueId: "seriea",  title: "فروسينوني",           crowdLabel: "جمهور فروسينوني",           summary: "كاناري الصعود الإيطالي.",         trendLabel: "عائد",            gradient: ["#FFEF00", "#006FB9"], icon: "trending-up" },
+  { id: "como",           leagueId: "seriea",  title: "كومو",                crowdLabel: "جمهور كومو",                summary: "الأزرق الكومي الصاعد.",          trendLabel: "صاعد",            gradient: ["#006FB9", "#FFFFFF"], icon: "water" },
 ];
 
 export type LeagueData = {
@@ -249,6 +269,17 @@ export const LEAGUES: LeagueData[] = [
       "أوكسير", "بريست", "لوهافر", "سانت إيتيان",
     ],
   },
+  {
+    id: "seriea",
+    name: "الدوري الإيطالي",
+    clubs: [
+      "يوفنتوس", "ميلان", "إنتر ميلان", "نابولي",
+      "روما", "لاتسيو", "فيورنتينا", "أتالانتا",
+      "تورينو", "بولونيا", "مونزا", "أودينيزي",
+      "ساسولو", "إمبولي", "ليتشي", "فيرونا",
+      "كالياري", "فروسينوني", "جنوى", "كومو",
+    ],
+  },
 ];
 
 export const INITIAL_SUPPORTERS: Record<FanClubId, number> = {
@@ -268,6 +299,10 @@ export const INITIAL_SUPPORTERS: Record<FanClubId, number> = {
   nice: 867, rennes: 756, strasbourg: 698, montpellier: 645, nantes: 612,
   bordeaux: 589, lens: 567, toulouse: 534, angers: 498, reims: 467,
   clermont: 423, auxerre: 398, brest: 376, lehavre: 354, saintetienne: 332,
+  juventus: 1887, milan: 1756, intermilan: 1698, napoli: 1434, roma: 1321,
+  lazio: 1098, fiorentina: 987, atalanta: 876, torino: 745, bologna: 678,
+  sassuolo: 567, udinese: 534, monza: 487, empoli: 445, lecce: 412,
+  verona: 389, cagliari: 367, genoa: 345, frosinone: 298, como: 276,
 };
 
 export const MATCH_NEWS: NewsItem[] = [

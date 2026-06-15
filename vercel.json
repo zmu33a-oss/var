@@ -19,7 +19,7 @@
       "destination": "/api/admin/index?section=:section"
     },
     {
-      "source": "/admin",
+      "source": "/admin/:path*",
       "destination": "/admin/index.html"
     },
     {

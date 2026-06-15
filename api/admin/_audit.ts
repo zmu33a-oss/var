@@ -1,5 +1,5 @@
-import { sendJson } from "../_lib/admin-shared.js";
-import { handler as auditListHandler } from "../_lib/admin-routes/audit-list.js";
+import { sendJson } from "../_lib/admin-shared";
+import { handler as auditListHandler } from "../_lib/admin-routes/audit-list";
 
 function readAction(request: any) {
   const rawAction = request.query?.action;

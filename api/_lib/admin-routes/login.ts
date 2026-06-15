@@ -7,7 +7,7 @@ import {
   readJsonBody,
   requireAdminSession,
   sendJson,
-} from "../admin-shared.js";
+} from "../admin-shared";
 
 function buildAuthHeader(token: string) {
   return token.startsWith("eyJ")

@@ -1,14 +1,14 @@
-import { sendJson } from "../_lib/admin-shared.js";
-import { handler as usersListHandler } from "../_lib/admin-routes/users-list.js";
-import { handler as usersLookupHandler } from "../_lib/admin-routes/users-lookup.js";
-import { handler as usersRoleHandler } from "../_lib/admin-routes/users-role.js";
-import { handler as usersDeleteHandler } from "../_lib/admin-routes/users-delete.js";
-import { handler as usersVerificationHandler } from "../_lib/admin-routes/users-verification.js";
-import { handler as usersCardTierHandler } from "../_lib/admin-routes/users-card-tier.js";
-import { handler as usersMigrateCardTiersHandler } from "../_lib/admin-routes/users-migrate-card-tiers.js";
-import { handler as usersStatusHandler } from "../_lib/admin-routes/users-status.js";
-import { handler as usersDetailsHandler } from "../_lib/admin-routes/users-details.js";
-import { handler as usersUpdateHandler } from "../_lib/admin-routes/users-update.js";
+import { sendJson } from "../_lib/admin-shared";
+import { handler as usersListHandler } from "../_lib/admin-routes/users-list";
+import { handler as usersLookupHandler } from "../_lib/admin-routes/users-lookup";
+import { handler as usersRoleHandler } from "../_lib/admin-routes/users-role";
+import { handler as usersDeleteHandler } from "../_lib/admin-routes/users-delete";
+import { handler as usersVerificationHandler } from "../_lib/admin-routes/users-verification";
+import { handler as usersCardTierHandler } from "../_lib/admin-routes/users-card-tier";
+import { handler as usersMigrateCardTiersHandler } from "../_lib/admin-routes/users-migrate-card-tiers";
+import { handler as usersStatusHandler } from "../_lib/admin-routes/users-status";
+import { handler as usersDetailsHandler } from "../_lib/admin-routes/users-details";
+import { handler as usersUpdateHandler } from "../_lib/admin-routes/users-update";
 
 type AdminHandler = (request: any, response: any) => Promise<void> | void;
 

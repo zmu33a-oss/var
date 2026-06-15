@@ -1,6 +1,6 @@
-import { sendJson } from "../_lib/admin-shared.js";
-import { handler as settingsGetHandler } from "../_lib/admin-routes/settings-get.js";
-import { handler as settingsUpdateHandler } from "../_lib/admin-routes/settings-update.js";
+import { sendJson } from "../_lib/admin-shared";
+import { handler as settingsGetHandler } from "../_lib/admin-routes/settings-get";
+import { handler as settingsUpdateHandler } from "../_lib/admin-routes/settings-update";
 
 function readAction(request: any) {
   const rawAction = request.query?.action;

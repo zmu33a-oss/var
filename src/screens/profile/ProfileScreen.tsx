@@ -40,8 +40,8 @@ import type { ProfileFieldKey, ProfileScreenProps } from "./profile.constants";
 import { SwipeActionControl } from "./components/SwipeActionControl";
 import { ProfileUserPreviewScreen } from "./components/ProfileUserPreviewScreen";
 import { ProfileEditModal } from "./components/ProfileEditModal";
-import { ProfileCardConnectPanel } from "./components/ProfileCardConnectPanel";
 import { VarIdentityCard } from "./components/identity";
+import { shareVarIdentityCard } from "./profileCardShare.actions";
 
 export default function ProfileScreen(props: ProfileScreenProps) {
   const {
@@ -177,6 +177,18 @@ export default function ProfileScreen(props: ProfileScreenProps) {
     setMessage("");
     setIsEditModalOpen(false);
     setIsPreviewModalOpen(true);
+  };
+
+  const handleShareCard = async () => {
+    const result = await shareVarIdentityCard({
+      displayVarId,
+      cardTier: profile.cardTier ?? "classic",
+      cardWidth: idCardWidth,
+    });
+
+    if (result.message) {
+      setMessage(result.message);
+    }
   };
 
   const handleEditProfileTap = async () => {
@@ -338,6 +350,7 @@ export default function ProfileScreen(props: ProfileScreenProps) {
               arabicFontFamily={profileArabicFontFamily}
               cardTier={profile.cardTier}
               onWalletSwipe={handleAddToWallet}
+              onSharePress={() => void handleShareCard()}
             />
           </View>
         </GestureDetector>
@@ -348,14 +361,6 @@ export default function ProfileScreen(props: ProfileScreenProps) {
             اضغط على البطاقة مرة لمعاينة البروفايل، واضغط مرتين لتعديل الملف الشخصي.
           </Text>
         </View>
-
-        <ProfileCardConnectPanel
-          arabicFontFamily={profileArabicFontFamily}
-          cardTier={profile.cardTier}
-          cardWidth={idCardWidth}
-          displayVarId={displayVarId}
-          onAddUserByDisplayVarId={props.onAddUserByDisplayVarId}
-        />
 
         {props.canOpenAdmin ? (
           <View style={styles.adminConsoleCard}>

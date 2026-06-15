@@ -16,7 +16,7 @@ import {
   sendJson,
   updatePostVisibility,
   writeAdminAuditLog,
-} from "../admin-shared.js";
+} from "../admin-shared";
 
 type ScanResultItem = {
   postId: string;

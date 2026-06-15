@@ -30,6 +30,7 @@ import {
 import { FAN_CLUBS } from "../../app.data";
 import type { FanClub, FanClubId } from "../../app.types";
 import { createCompatStyleSheet, createShadowStyle } from "../../lib/crossPlatformStyles";
+import { getSaudiClubEmblem } from "./clubEmblems";
 import FansCounterDigits from "./FansCounterDigits";
 import {
   FANS_STICKY_HEADER_TOP,
@@ -49,13 +50,6 @@ const TONGUE_COUNTER_FONT_FALLBACK =
       ? "sans-serif-condensed"
       : "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const TONGUE_FONT = require("../../../assets/images/alfont_com_zainpcv2mob600-zainpcv2.ttf");
-const HILAL_ICON = require("../../../assets/icons/alhilal.png.png");
-const NASSR_ICON = require("../../../assets/icons/alnassr.png.png");
-
-const CLUB_EMBLEMS: Partial<Record<FanClubId, number>> = {
-  hilal: HILAL_ICON,
-  nassr: NASSR_ICON,
-};
 
 const RANK_LABELS: Record<number, string> = {
   1: "المركز الاول",
@@ -164,7 +158,7 @@ const FansSupportTongue = forwardRef<
           club,
           count,
           digits: digitsForCount(count),
-          emblem: CLUB_EMBLEMS[club.id],
+          emblem: getSaudiClubEmblem(club.id),
           rank: 0,
         };
       })
@@ -533,21 +527,20 @@ function TongueClubLogo(props: {
 }) {
   const plainColor = props.tintColor ?? "#FFFFFF";
 
-  if (props.plain) {
-    if (props.emblem) {
-      return (
-        <Image
-          source={props.emblem}
-          resizeMode="contain"
-          style={{
-            width: props.size,
-            height: props.size,
-            tintColor: plainColor,
-          }}
-        />
-      );
-    }
+  if (props.emblem) {
+    return (
+      <Image
+        source={props.emblem}
+        resizeMode="contain"
+        style={{
+          width: props.size,
+          height: props.size,
+        }}
+      />
+    );
+  }
 
+  if (props.plain) {
     return (
       <Ionicons
         name={props.club.icon as IoniconName}
@@ -570,34 +563,22 @@ function TongueClubLogo(props: {
         },
       ]}
     >
-      {props.emblem ? (
-        <Image
-          source={props.emblem}
-          resizeMode="contain"
-          style={{
+      <View
+        style={[
+          styles.tongueClubLogoFallback,
+          {
             width: props.size,
             height: props.size,
-            tintColor: "#FFFFFF",
-          }}
+            borderRadius: radius,
+          },
+        ]}
+      >
+        <Ionicons
+          name={props.club.icon as IoniconName}
+          size={Math.max(18, props.size * 0.42)}
+          color="#FFFFFF"
         />
-      ) : (
-        <View
-          style={[
-            styles.tongueClubLogoFallback,
-            {
-              width: props.size,
-              height: props.size,
-              borderRadius: radius,
-            },
-          ]}
-        >
-          <Ionicons
-            name={props.club.icon as IoniconName}
-            size={Math.max(18, props.size * 0.42)}
-            color="#FFFFFF"
-          />
-        </View>
-      )}
+      </View>
     </View>
   );
 }

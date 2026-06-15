@@ -15,6 +15,7 @@ import { createCompatStyleSheet } from "../lib/crossPlatformStyles";
 import FansAssociationHero from "./fans/FansAssociationHero";
 import FansCommunityComposer from "./fans/FansCommunityComposer";
 import FansCommunityFeed from "./fans/FansCommunityFeed";
+import FansLeaguesGrid from "./fans/FansLeaguesGrid";
 import { resolveLeadingFanClub } from "./fans/fans.leader";
 import {
   FANS_FEED_TOP_PADDING,
@@ -246,6 +247,12 @@ export default function FansScreen(props: FansScreenProps) {
         refreshing={props.isRefreshing}
         onRefresh={props.onRefresh}
       >
+        <FansLeaguesGrid
+          onLeaguePress={(leagueId) => {
+            setActiveLeagueId(leagueId);
+            setActiveClubId(null);
+          }}
+        />
         <FansCommunityFeed
           canInteract={canInteractInFeed}
           clubId={displayClubId}

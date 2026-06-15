@@ -10,7 +10,7 @@ import {
   requireAdminSession,
   requireServerKey,
   sendJson,
-} from "../admin-shared.js";
+} from "../admin-shared";
 
 export async function handler(request: any, response: any) {
   if (handleOptions(request, response)) {
