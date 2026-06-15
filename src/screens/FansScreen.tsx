@@ -13,7 +13,6 @@ import { FAN_CLUBS, LEAGUES } from "../app.data";
 import { PullToRefreshScrollView } from "../components/PullToRefreshScrollView";
 import { createCompatStyleSheet } from "../lib/crossPlatformStyles";
 import FansAssociationHero from "./fans/FansAssociationHero";
-import FansCommunityComposer from "./fans/FansCommunityComposer";
 import FansCommunityFeed from "./fans/FansCommunityFeed";
 import FansLeaguesGrid from "./fans/FansLeaguesGrid";
 import { resolveLeadingFanClub } from "./fans/fans.leader";
@@ -253,11 +252,7 @@ export default function FansScreen(props: FansScreenProps) {
             setActiveClubId(null);
           }}
         />
-        <FansCommunityFeed
-          canInteract={canInteractInFeed}
-          clubId={displayClubId}
-          posts={communityPosts}
-        />
+        {/* FansCommunityFeed مخفية في الصفحة الرئيسية - تظهر في صفحة الرابطة فقط */}
       </PullToRefreshScrollView>
 
       {isTongueExpanded ? (
@@ -269,50 +264,53 @@ export default function FansScreen(props: FansScreenProps) {
         />
       ) : null}
 
-      <View
-        style={[
-          styles.stickyHeaderHost,
-          isTongueExpanded ? styles.stickyHeaderHostExpanded : null,
-        ]}
-        pointerEvents="box-none"
-      >
-        <View style={styles.heroHost}>
-          <FansAssociationHero
-            supporters={props.supporters}
-            supportedTeams={props.supportedTeams}
-            isLoggedIn={props.isLoggedIn}
-            onRequireAuth={props.onRequireAuth}
-            onToggleSupport={props.onToggleSupport}
-            overrideClubId={displayClubId ?? undefined}
-            onTitlePress={myRoomClubs.length > 0 && props.isLoggedIn ? () => setShowMyRooms((v) => !v) : undefined}
-            onDotsPress={() => setShowLeagueMenu((v) => !v)}
-          />
-          {isTongueExpanded ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="إغلاق قائمة الأندية"
-              style={styles.heroDismissOverlay}
-              onPress={() => tongueRef.current?.collapse()}
-            />
-          ) : null}
-        </View>
-
-        {FANS_TONGUE_ENABLED ? (
-          <View style={styles.tongueHost} pointerEvents="box-none">
-            <FansSupportTongue
-              ref={tongueRef}
+      {/* الهيدر الثابت (رابطة الهلال + شجع + اللوقو) مخفي في الصفحة الرئيسية - يظهر في صفحة الرابطة فقط */}
+      {false && (
+        <View
+          style={[
+            styles.stickyHeaderHost,
+            isTongueExpanded ? styles.stickyHeaderHostExpanded : null,
+          ]}
+          pointerEvents="box-none"
+        >
+          <View style={styles.heroHost}>
+            <FansAssociationHero
               supporters={props.supporters}
               supportedTeams={props.supportedTeams}
               isLoggedIn={props.isLoggedIn}
               onRequireAuth={props.onRequireAuth}
               onToggleSupport={props.onToggleSupport}
-              activeLeagueId={activeLeagueId}
-              onEnterClub={handleEnterClub}
-              onExpandedChange={setIsTongueExpanded}
+              overrideClubId={displayClubId ?? undefined}
+              onTitlePress={myRoomClubs.length > 0 && props.isLoggedIn ? () => setShowMyRooms((v) => !v) : undefined}
+              onDotsPress={() => setShowLeagueMenu((v) => !v)}
             />
+            {isTongueExpanded ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="إغلاق قائمة الأندية"
+                style={styles.heroDismissOverlay}
+                onPress={() => tongueRef.current?.collapse()}
+              />
+            ) : null}
           </View>
-        ) : null}
-      </View>
+
+          {FANS_TONGUE_ENABLED ? (
+            <View style={styles.tongueHost} pointerEvents="box-none">
+              <FansSupportTongue
+                ref={tongueRef}
+                supporters={props.supporters}
+                supportedTeams={props.supportedTeams}
+                isLoggedIn={props.isLoggedIn}
+                onRequireAuth={props.onRequireAuth}
+                onToggleSupport={props.onToggleSupport}
+                activeLeagueId={activeLeagueId}
+                onEnterClub={handleEnterClub}
+                onExpandedChange={setIsTongueExpanded}
+              />
+            </View>
+          ) : null}
+        </View>
+      )}
 
       {showLeagueMenu ? (
         <Pressable
@@ -368,13 +366,7 @@ export default function FansScreen(props: FansScreenProps) {
         </Pressable>
       ) : null}
 
-      <FansCommunityComposer
-        isLoggedIn={props.isLoggedIn}
-        canPost={canInteractInFeed}
-        activeClubTitle={activeClubTitle}
-        onRequireAuth={props.onRequireAuth}
-        onSend={handleSend}
-      />
+      {/* مربع الدردشة المحذوف - سيعاد في صفحة الرابطة الداخلية */}
     </View>
   );
 }
@@ -432,8 +424,8 @@ const styles = createCompatStyleSheet({
   },
   screenContent: {
     paddingHorizontal: 0,
-    paddingTop: FANS_FEED_TOP_PADDING,
-    paddingBottom: FANS_SCROLL_BOTTOM_PADDING,
+    paddingTop: 20,
+    paddingBottom: 40,
     backgroundColor: "#000000",
   },
   leagueMenuBackdrop: {
