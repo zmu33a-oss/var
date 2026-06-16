@@ -106,6 +106,7 @@ function TongueText(props: TextProps) {
 
 export type FansSupportTongueHandle = {
   collapse: () => void;
+  expand: () => void;
 };
 
 export type FansSupportTongueProps = {
@@ -233,6 +234,7 @@ const FansSupportTongue = forwardRef<
 
   useImperativeHandle(ref, () => ({
     collapse: handleCollapse,
+    expand: handleExpand,
   }));
 
   if (!leader) {

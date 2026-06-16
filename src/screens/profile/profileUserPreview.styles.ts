@@ -137,7 +137,7 @@ export const styles = createCompatStyleSheet({
     letterSpacing: 0.3,
   },
   identityRewardsTracker: {
-    marginTop: 16,
+    marginTop: 14,
     width: "100%",
   },
   profileMetricGroupsGrid: {

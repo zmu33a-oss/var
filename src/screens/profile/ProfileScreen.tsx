@@ -42,6 +42,7 @@ import { ProfileUserPreviewScreen } from "./components/ProfileUserPreviewScreen"
 import { ProfileEditModal } from "./components/ProfileEditModal";
 import { VarIdentityCard } from "./components/identity";
 import { shareVarIdentityCard } from "./profileCardShare.actions";
+import { openVarSupportWhatsApp } from "./profile.support.utils";
 
 export default function ProfileScreen(props: ProfileScreenProps) {
   const {
@@ -418,9 +419,12 @@ export default function ProfileScreen(props: ProfileScreenProps) {
             iconColor="#FFFFFF"
             resetAfterComplete
             resetDelayMs={30000}
-            onComplete={() => {
-              const whatsappUrl = "https://wa.me/966547778281?text=مرحباً%20VAR%20لدي%20استفسار";
-              void Linking.openURL(whatsappUrl);
+            onComplete={async () => {
+              const result = await openVarSupportWhatsApp();
+
+              if (result.message) {
+                setMessage(result.message);
+              }
             }}
           />
 

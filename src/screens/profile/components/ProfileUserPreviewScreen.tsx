@@ -4,7 +4,6 @@ import {
   Image,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -425,6 +424,7 @@ export function ProfileUserPreviewScreen(props: {
             points={earnedPoints}
             showControls={false}
             style={styles.identityRewardsTracker}
+            titleTextStyle={titleArabicTextStyle}
           />
         </LinearGradient>
 
@@ -439,56 +439,6 @@ export function ProfileUserPreviewScreen(props: {
               title={metricGroup.title}
             />
           ))}
-        </View>
-
-        <View style={styles.followedPreviewSection}>
-          <View style={styles.followedPreviewHeader}>
-            <View style={styles.followedPreviewIconWrap}>
-              <Ionicons name="football" size={18} color="#F4C565" />
-            </View>
-            <View style={styles.followedPreviewHeaderCopy}>
-              <Text style={[styles.followedPreviewTitle, titleArabicTextStyle]}>
-                أندية الدوريات
-              </Text>
-              <Text style={styles.followedPreviewHint}>
-                {leagueClubEntries.length
-                  ? `${leagueClubEntries.length} ${leagueClubEntries.length === 1 ? "نادي مختار" : "أندية مختارة"}`
-                  : "لم يتم اختيار أي نادٍ بعد"}
-              </Text>
-            </View>
-          </View>
-
-          {leagueClubEntries.length ? (
-            <View style={styles.followedPreviewList}>
-              {leagueClubEntries.map((entry) => (
-                <View key={entry.leagueId} style={styles.followedPreviewCard}>
-                  <View style={[styles.followedPreviewAvatarWrap, previewStyles.leagueIconWrap]}>
-                    <Ionicons name="football-outline" size={20} color="#F4C565" />
-                  </View>
-                  <View style={styles.followedPreviewCardCopy}>
-                    <Text
-                      numberOfLines={1}
-                      style={[
-                        styles.followedPreviewName,
-                        getArabicFontStyle(props.arabicFontFamily, entry.club),
-                      ]}
-                    >
-                      {entry.club}
-                    </Text>
-                    <Text numberOfLines={1} style={styles.followedPreviewVarId}>
-                      {entry.leagueName}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <View style={styles.followedPreviewEmptyCard}>
-              <Text style={styles.followedPreviewEmptyText}>
-                اختر أنديتك المفضلة من كل دوري في صفحة تعديل البروفايل.
-              </Text>
-            </View>
-          )}
         </View>
 
         <View style={styles.showcaseSection}>
@@ -542,11 +492,3 @@ export function ProfileUserPreviewScreen(props: {
     </View>
   );
 }
-
-const previewStyles = StyleSheet.create({
-  leagueIconWrap: {
-    backgroundColor: "rgba(244,197,101,0.12)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-});

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import type { TextStyle, ViewStyle } from "react-native";
 import {
   Animated,
@@ -13,19 +14,28 @@ import {
 import Svg, {
   Circle,
   Defs,
-  LinearGradient,
+  LinearGradient as SvgLinearGradient,
   Path,
   Stop,
 } from "react-native-svg";
 
 const MAX_POINTS = 300;
 const POINTER_WIDTH = 58;
-const COMPACT_TRACK_TOP = 54;
-const COMPACT_TRACK_HEIGHT = 14;
-const COMPACT_BADGE_SIZE = 32;
-const COMPACT_CHECK_SIZE = 17;
-const COMPACT_CHECK_TOP =
-  COMPACT_TRACK_TOP + COMPACT_TRACK_HEIGHT / 2 - COMPACT_CHECK_SIZE / 2;
+const COMPACT_CONNECTOR_HEIGHT = 2;
+const COMPACT_BADGE_SIZE = 34;
+const COMPACT_CHECK_SIZE = 18;
+const COMPACT_MILESTONE_EDGE_INSET = COMPACT_BADGE_SIZE / 2 + 4;
+const COMPACT_GOLD_OFFSET = 8;
+const COMPACT_MILESTONE_TRACK_PROGRESS: Record<string, number> = {
+  silver: 0.72,
+  bronze: 0.44,
+};
+const COMPACT_MEDAL_TOP = 22;
+const COMPACT_CHECK_TOP = COMPACT_MEDAL_TOP + COMPACT_BADGE_SIZE + 5;
+const COMPACT_CONNECTOR_TOP =
+  COMPACT_CHECK_TOP + (COMPACT_CHECK_SIZE - COMPACT_CONNECTOR_HEIGHT) / 2;
+const COMPACT_META_TOP = COMPACT_CHECK_TOP + COMPACT_CHECK_SIZE + 8;
+const COMPACT_TRACK_DARK = "#FFFFFF";
 
 type RewardTone = "bronze" | "silver" | "gold";
 
@@ -74,6 +84,79 @@ function resolveSlotLeft(
     0,
     Math.max(0, trackWidth - slotWidth),
   );
+}
+
+function resolveCompactMilestoneCenterX(trackWidth: number, milestoneId: string) {
+  if (milestoneId === "gold") {
+    return COMPACT_BADGE_SIZE / 2 + COMPACT_GOLD_OFFSET;
+  }
+
+  const usable = Math.max(0, trackWidth - COMPACT_MILESTONE_EDGE_INSET * 2);
+  const progress = COMPACT_MILESTONE_TRACK_PROGRESS[milestoneId] ?? 0;
+
+  return trackWidth - COMPACT_MILESTONE_EDGE_INSET - progress * usable;
+}
+
+function resolveCompactStartCenterX(trackWidth: number) {
+  return trackWidth - COMPACT_CHECK_SIZE / 2 - 4;
+}
+
+function resolveCompactSlotLeft(
+  trackWidth: number,
+  milestoneId: string,
+  slotWidth: number,
+) {
+  return resolveCompactMilestoneCenterX(trackWidth, milestoneId) - slotWidth / 2;
+}
+
+type CompactConnectorSegment = {
+  left: number;
+  width: number;
+};
+
+function buildCompactConnectorSegments(trackWidth: number): CompactConnectorSegment[] {
+  const goldX = resolveCompactMilestoneCenterX(trackWidth, "gold");
+  const silverX = resolveCompactMilestoneCenterX(trackWidth, "silver");
+  const bronzeX = resolveCompactMilestoneCenterX(trackWidth, "bronze");
+  const startX = resolveCompactStartCenterX(trackWidth);
+  const gap = COMPACT_CHECK_SIZE / 2 + 2;
+
+  return [
+    {
+      left: goldX + gap,
+      width: Math.max(0, silverX - goldX - gap * 2),
+    },
+    {
+      left: silverX + gap,
+      width: Math.max(0, bronzeX - silverX - gap * 2),
+    },
+    {
+      left: bronzeX + gap,
+      width: Math.max(0, startX - bronzeX - gap * 2),
+    },
+  ].filter((segment) => segment.width > 0);
+}
+
+function resolveSegmentFillWidths(
+  segments: CompactConnectorSegment[],
+  progressRatio: number,
+) {
+  const total = segments.reduce((sum, segment) => sum + segment.width, 0);
+
+  if (total <= 0) {
+    return segments.map(() => 0);
+  }
+
+  let remaining = total * clamp(progressRatio, 0, 1);
+
+  return [...segments]
+    .reverse()
+    .map((segment) => {
+      const filled = Math.min(segment.width, remaining);
+      remaining -= filled;
+      return filled;
+    })
+    .reverse();
 }
 
 const MEDAL_PALETTES: Record<
@@ -126,7 +209,7 @@ function RewardBadge(props: {
   compact?: boolean;
   milestone: RewardMilestone;
 }) {
-  const compactBadgeSize = 32;
+  const compactBadgeSize = COMPACT_BADGE_SIZE;
   const size = props.compact
     ? compactBadgeSize
     : props.milestone.tone === "gold"
@@ -161,15 +244,15 @@ function MedalBadge(props: {
   return (
     <Svg width={props.size} height={props.size} viewBox="0 0 96 96">
       <Defs>
-        <LinearGradient id={fillId} x1="24" y1="24" x2="72" y2="82">
+        <SvgLinearGradient id={fillId} x1="24" y1="24" x2="72" y2="82">
           <Stop offset="0" stopColor={palette.fillTop} />
           <Stop offset="0.55" stopColor={palette.fillMid} />
           <Stop offset="1" stopColor={palette.fillBottom} />
-        </LinearGradient>
-        <LinearGradient id={ribbonId} x1="30" y1="8" x2="66" y2="28">
+        </SvgLinearGradient>
+        <SvgLinearGradient id={ribbonId} x1="30" y1="8" x2="66" y2="28">
           <Stop offset="0" stopColor={palette.ribbon} />
           <Stop offset="1" stopColor={palette.ribbonDark} />
-        </LinearGradient>
+        </SvgLinearGradient>
       </Defs>
 
       <Path
@@ -223,9 +306,41 @@ function MedalBadge(props: {
   );
 }
 
-function MilestoneTrackCheck(props: { compact?: boolean; unlocked: boolean }) {
+function MilestoneTrackCheck(props: {
+  compact?: boolean;
+  unlocked: boolean;
+  active?: boolean;
+}) {
   const size = props.compact ? COMPACT_CHECK_SIZE : 20;
   const iconSize = props.compact ? 11 : 13;
+
+  if (props.compact) {
+    return (
+      <View
+        style={[
+          styles.trackCheckCompactGhost,
+          props.active ? styles.trackCheckCompactActive : null,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+          },
+        ]}
+      >
+        <Ionicons
+          name="checkmark"
+          size={iconSize}
+          color={
+            props.active
+              ? "#FFFFFF"
+              : props.unlocked
+                ? "rgba(255,255,255,0.55)"
+                : "rgba(255,255,255,0.22)"
+          }
+        />
+      </View>
+    );
+  }
 
   return (
     <View
@@ -267,6 +382,7 @@ export function MilestoneProgressBar(props: MilestoneProgressBarProps) {
   );
   const currentPoints = clamp(externalPoints ?? internalPoints, 0, MAX_POINTS);
   const [trackWidth, setTrackWidth] = useState(0);
+  const [animatedPoints, setAnimatedPoints] = useState(currentPoints);
   const progressAnim = useRef(new Animated.Value(currentPoints)).current;
   const badgeScales = useRef(
     REWARD_MILESTONES.map(() => new Animated.Value(1)),
@@ -278,6 +394,16 @@ export function MilestoneProgressBar(props: MilestoneProgressBarProps) {
   const maxWidth = useMemo(
     () => Math.min(720, Math.max(300, windowWidth - 28)),
     [windowWidth],
+  );
+
+  const compactSegments = useMemo(
+    () => (trackWidth > 0 ? buildCompactConnectorSegments(trackWidth) : []),
+    [trackWidth],
+  );
+
+  const compactSegmentFills = useMemo(
+    () => resolveSegmentFillWidths(compactSegments, animatedPoints / MAX_POINTS),
+    [animatedPoints, compactSegments],
   );
 
   const fillWidth = progressAnim.interpolate({
@@ -293,6 +419,12 @@ export function MilestoneProgressBar(props: MilestoneProgressBarProps) {
   });
 
   useEffect(() => {
+    setAnimatedPoints(currentPoints);
+
+    const listenerId = progressAnim.addListener(({ value }) => {
+      setAnimatedPoints(value);
+    });
+
     Animated.timing(progressAnim, {
       toValue: currentPoints,
       duration: 650,
@@ -326,6 +458,10 @@ export function MilestoneProgressBar(props: MilestoneProgressBarProps) {
     unlockedSnapshot.current = REWARD_MILESTONES.map(
       (milestone) => currentPoints >= milestone.points,
     );
+
+    return () => {
+      progressAnim.removeListener(listenerId);
+    };
   }, [badgeScales, currentPoints, progressAnim]);
 
   const setPoints = (nextPoints: number) => {
@@ -356,18 +492,34 @@ export function MilestoneProgressBar(props: MilestoneProgressBarProps) {
       >
         {isCompactProfile ? (
           <View style={styles.compactProfileSection}>
-            <View style={styles.compactProfileDivider} />
+            <LinearGradient
+              colors={[
+                "rgba(244,197,101,0.22)",
+                "rgba(244,197,101,0.04)",
+                "transparent",
+              ]}
+              start={{ x: 1, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.compactProfileDivider}
+            />
             <View style={styles.compactProfileHeader}>
               <View style={styles.compactProfilePointsChip}>
                 <Text style={styles.compactProfilePointsValue}>
                   {currentPoints}
                 </Text>
-                <Text style={styles.compactProfilePointsLabel}>نقطة</Text>
+                <Text style={styles.compactProfilePointsLabel}>
+                  / {MAX_POINTS} نقطة
+                </Text>
               </View>
               <View style={styles.compactProfileHeaderCopy}>
-                <Text style={styles.compactProfileEyebrow}>REWARDS TRACK</Text>
-                <Text style={[styles.compactProfileTitle, titleTextStyle]}>
-                  الجوائز والمكافآت
+                <View style={styles.compactProfileTitleRow}>
+                  <Ionicons name="ribbon" size={15} color="#F4C565" />
+                  <Text style={[styles.compactProfileTitle, titleTextStyle]}>
+                    الجوائز والمكافآت
+                  </Text>
+                </View>
+                <Text style={[styles.compactProfileSubtitle, titleTextStyle]}>
+                  اجمع النقاط وافتح أوسمة برونزي وفضي وذهبي
                 </Text>
               </View>
             </View>
@@ -396,47 +548,96 @@ export function MilestoneProgressBar(props: MilestoneProgressBarProps) {
           ]}
           onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}
         >
-          <View
-            style={[
-              styles.trackOuter,
-              isCompactProfile ? styles.trackOuterCompactProfile : null,
-            ]}
-          >
-            <Animated.View
-              style={[
-                styles.trackFill,
-                isCompactProfile ? styles.trackFillCompactProfile : null,
-                { width: fillWidth },
-              ]}
-            />
+          {isCompactProfile
+            ? compactSegments.map((segment, segmentIndex) => (
+                <View
+                  key={`compact-connector-${segmentIndex}`}
+                  style={[
+                    styles.compactConnectorShell,
+                    {
+                      left: segment.left,
+                      width: segment.width,
+                      top: COMPACT_CONNECTOR_TOP,
+                    },
+                  ]}
+                >
+                  <View style={styles.compactConnectorBase} />
+                  <View
+                    style={[
+                      styles.compactConnectorFill,
+                      { width: compactSegmentFills[segmentIndex] ?? 0 },
+                    ]}
+                  />
+                </View>
+              ))
+            : (
+            <View style={styles.trackOuter}>
+              <Animated.View style={[styles.trackFill, { width: fillWidth }]} />
+              <View style={styles.trackHighlight} />
+              <Animated.View
+                style={[
+                  styles.pointer,
+                  { right: pointerRight, width: pointerWidth },
+                ]}
+              >
+                <Text style={styles.pointerText}>{currentPoints} نقطة</Text>
+              </Animated.View>
+            </View>
+          )}
+
+          {isCompactProfile && trackWidth > 0 ? (
             <View
               style={[
-                styles.trackHighlight,
-                isCompactProfile ? styles.trackHighlightCompactProfile : null,
-              ]}
-            />
-            <Animated.View
-              style={[
-                styles.pointer,
-                isCompactProfile ? styles.pointerCompactProfile : null,
-                { right: pointerRight, width: pointerWidth },
+                styles.milestoneSlot,
+                styles.milestoneSlotCompactProfile,
+                styles.compactStartSlot,
+                {
+                  left:
+                    resolveCompactStartCenterX(trackWidth) -
+                    (COMPACT_BADGE_SIZE + 8) / 2,
+                  width: COMPACT_BADGE_SIZE + 8,
+                },
               ]}
             >
-              {isCompactProfile ? null : (
-                <Text style={styles.pointerText}>{currentPoints} نقطة</Text>
-              )}
-            </Animated.View>
-          </View>
+              <View style={styles.trackCheckAnchorCompactProfile}>
+                <MilestoneTrackCheck compact active unlocked />
+              </View>
+              <View style={styles.milestoneMetaCompactProfile}>
+                <Text
+                  style={[
+                    styles.milestoneLabel,
+                    styles.milestoneLabelCompactProfile,
+                    styles.milestoneStartLabel,
+                    titleTextStyle,
+                  ]}
+                >
+                  ابدا
+                </Text>
+              </View>
+            </View>
+          ) : null}
 
           {trackWidth > 0
-            ? REWARD_MILESTONES.map((milestone, index) => {
-                const isUnlocked = currentPoints >= milestone.points;
-                const slotWidth = isCompactProfile ? 50 : milestone.tone === "gold" ? 112 : 94;
-                const slotLeft = resolveSlotLeft(
-                  trackWidth,
-                  milestone.points,
-                  slotWidth,
+            ? (isCompactProfile
+                ? [...REWARD_MILESTONES].sort(
+                    (a, b) =>
+                      (COMPACT_MILESTONE_TRACK_PROGRESS[b.id] ?? 1) -
+                      (COMPACT_MILESTONE_TRACK_PROGRESS[a.id] ?? 1),
+                  )
+                : REWARD_MILESTONES
+              ).map((milestone) => {
+                const index = REWARD_MILESTONES.findIndex(
+                  (item) => item.id === milestone.id,
                 );
+                const isUnlocked = currentPoints >= milestone.points;
+                const slotWidth = isCompactProfile ? COMPACT_BADGE_SIZE + 8 : milestone.tone === "gold" ? 112 : 94;
+                const slotLeft = isCompactProfile
+                  ? resolveCompactSlotLeft(
+                      trackWidth,
+                      milestone.id,
+                      slotWidth,
+                    )
+                  : resolveSlotLeft(trackWidth, milestone.points, slotWidth);
 
                 return (
                   <View
@@ -489,6 +690,9 @@ export function MilestoneProgressBar(props: MilestoneProgressBarProps) {
                             ? styles.milestoneLabelCompactProfile
                             : null,
                           isUnlocked ? styles.milestoneLabelUnlocked : null,
+                          isCompactProfile && isUnlocked
+                            ? styles.milestoneLabelCompactUnlocked
+                            : null,
                         ]}
                       >
                         {milestone.label}
@@ -600,59 +804,72 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   compactProfileSection: {
-    marginBottom: 12,
+    marginBottom: 14,
   },
   compactProfileDivider: {
     height: 1,
     borderRadius: 999,
     marginBottom: 14,
-    backgroundColor: "rgba(255,255,255,0.10)",
   },
   compactProfileHeader: {
     flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 10,
+    alignItems: "flex-start",
+    gap: 12,
   },
   compactProfileHeaderCopy: {
     flex: 1,
     minWidth: 0,
     alignItems: "flex-end",
+    gap: 4,
   },
-  compactProfileEyebrow: {
-    color: "rgba(244,197,101,0.78)",
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.2,
+  compactProfileTitleRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
   },
   compactProfileTitle: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "900",
-    marginTop: 3,
+    textAlign: "right",
+    writingDirection: "rtl",
+  },
+  compactProfileSubtitle: {
+    color: "rgba(255,255,255,0.56)",
+    fontSize: 10,
+    fontWeight: "700",
+    lineHeight: 15,
     textAlign: "right",
     writingDirection: "rtl",
   },
   compactProfilePointsChip: {
-    minWidth: 54,
-    height: 48,
+    minWidth: 58,
+    minHeight: 52,
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 10,
-    backgroundColor: "rgba(244,197,101,0.12)",
+    paddingVertical: 8,
+    backgroundColor: "rgba(244,197,101,0.10)",
     borderWidth: 1,
-    borderColor: "rgba(244,197,101,0.32)",
+    borderColor: "rgba(244,197,101,0.34)",
+    shadowColor: "#F4C565",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 4,
   },
   compactProfilePointsValue: {
-    color: "#F4C565",
-    fontSize: 18,
+    color: "#FDE68A",
+    fontSize: 20,
     fontWeight: "900",
-    lineHeight: 20,
+    lineHeight: 22,
   },
   compactProfilePointsLabel: {
-    color: "rgba(255,255,255,0.58)",
-    fontSize: 9,
+    color: "rgba(255,255,255,0.52)",
+    fontSize: 8,
     fontWeight: "800",
+    marginTop: 2,
     writingDirection: "rtl",
   },
   headerRow: {
@@ -720,6 +937,24 @@ const styles = StyleSheet.create({
   timelineCompactProfile: {
     height: 108,
   },
+  compactConnectorShell: {
+    position: "absolute",
+    height: COMPACT_CONNECTOR_HEIGHT,
+    zIndex: 1,
+  },
+  compactConnectorBase: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    borderRadius: 999,
+  },
+  compactConnectorFill: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    height: COMPACT_CONNECTOR_HEIGHT,
+    backgroundColor: COMPACT_TRACK_DARK,
+    borderRadius: 999,
+  },
   trackOuter: {
     position: "absolute",
     top: 78,
@@ -731,12 +966,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.16)",
-  },
-  trackOuterCompactProfile: {
-    top: 54,
-    height: 14,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderColor: "rgba(255,255,255,0.12)",
   },
   trackFill: {
     position: "absolute",
@@ -750,12 +979,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.65,
     shadowRadius: 14,
   },
-  trackFillCompactProfile: {
-    backgroundColor: "#F4C565",
-    shadowColor: "#F4C565",
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-  },
   trackHighlight: {
     position: "absolute",
     top: 3,
@@ -764,13 +987,6 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 999,
     backgroundColor: "rgba(255,255,255,0.26)",
-  },
-  trackHighlightCompactProfile: {
-    top: 2,
-    right: 6,
-    left: 6,
-    height: 3,
-    backgroundColor: "rgba(255,255,255,0.22)",
   },
   pointer: {
     position: "absolute",
@@ -789,18 +1005,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
-  pointerCompactProfile: {
-    top: 1,
-    height: 12,
-    borderRadius: 999,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 2,
-    borderColor: "#F4C565",
-    shadowColor: "#F4C565",
-    shadowOpacity: 0.55,
-    shadowRadius: 8,
-    elevation: 6,
-  },
   pointerText: {
     color: "#241900",
     fontSize: 8,
@@ -815,15 +1019,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   milestoneSlotCompactProfile: {
-    minHeight: 108,
+    minHeight: 116,
+    zIndex: 4,
+  },
+  compactStartSlot: {
+    zIndex: 9,
   },
   medalAnchorCompactProfile: {
     position: "absolute",
-    top: 6,
+    top: COMPACT_MEDAL_TOP,
     left: 0,
     right: 0,
     alignItems: "center",
-    zIndex: 2,
+    zIndex: 6,
   },
   trackCheckAnchorCompactProfile: {
     position: "absolute",
@@ -831,7 +1039,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: "center",
-    zIndex: 4,
+    zIndex: 8,
   },
   trackCheckAnchorDefault: {
     alignItems: "center",
@@ -839,7 +1047,7 @@ const styles = StyleSheet.create({
   },
   milestoneMetaCompactProfile: {
     position: "absolute",
-    top: COMPACT_TRACK_TOP + COMPACT_TRACK_HEIGHT + 8,
+    top: COMPACT_META_TOP,
     left: 0,
     right: 0,
     alignItems: "center",
@@ -859,17 +1067,33 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.22)",
   },
   trackCheckCompact: {
-    backgroundColor: "rgba(0,0,0,0.55)",
-    borderColor: "rgba(255,255,255,0.28)",
+    backgroundColor: "rgba(0,0,0,0.62)",
+    borderColor: "rgba(255,255,255,0.24)",
+  },
+  trackCheckCompactGhost: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#000000",
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+  },
+  trackCheckCompactActive: {
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    shadowColor: "#FFFFFF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 6,
+    elevation: 6,
   },
   trackCheckUnlocked: {
     backgroundColor: "#22C55E",
-    borderColor: "#BBF7D0",
+    borderColor: "#DCFCE7",
     borderWidth: 2,
     shadowColor: "#22C55E",
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.85,
-    shadowRadius: 8,
+    shadowOpacity: 0.9,
+    shadowRadius: 10,
     elevation: 10,
   },
   milestoneLabel: {
@@ -882,12 +1106,20 @@ const styles = StyleSheet.create({
     writingDirection: "rtl",
   },
   milestoneLabelCompactProfile: {
-    fontSize: 8,
-    fontWeight: "800",
+    fontSize: 9,
+    fontWeight: "900",
     marginTop: 0,
+    letterSpacing: 0.2,
   },
   milestoneLabelUnlocked: {
     color: "#FFFFFF",
+  },
+  milestoneLabelCompactUnlocked: {
+    color: "#FDE68A",
+  },
+  milestoneStartLabel: {
+    color: "#FFFFFF",
+    fontWeight: "900",
   },
   milestonePoints: {
     color: "rgba(255,255,255,0.44)",
@@ -898,10 +1130,10 @@ const styles = StyleSheet.create({
     writingDirection: "rtl",
   },
   milestonePointsCompactProfile: {
-    color: "rgba(244,197,101,0.72)",
-    fontSize: 7,
+    color: "rgba(255,255,255,0.46)",
+    fontSize: 8,
     fontWeight: "900",
-    marginTop: 1,
+    marginTop: 2,
   },
   controlsRow: {
     flexDirection: "row-reverse",

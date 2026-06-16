@@ -1755,6 +1755,15 @@ export default function AppShell() {
           onToggleSupport={toggleSupport}
           onRefresh={refreshVisibleAppData}
           isRefreshing={isPullRefreshing}
+          posts={posts}
+          onTogglePostLike={togglePostLike}
+          onTogglePostRepost={togglePostRepost}
+          onSharePost={sharePost}
+          onSubmitPostReply={submitPostReply}
+          onCreatePost={openPostComposer}
+          currentUserVarId={profile.varId || appwriteUser?.varId || ""}
+          currentUserDisplayName={profile.displayName || appwriteUser?.name || ""}
+          currentUserAvatarUri={profile.avatarUri || appwriteUser?.avatarUri || ""}
         />
       );
       break;

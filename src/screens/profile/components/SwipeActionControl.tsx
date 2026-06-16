@@ -110,13 +110,13 @@ export function SwipeActionControl(props: SwipeActionControlProps) {
       const nextOffset = Math.max(0, Math.min(maxOffset, gestureState.dx));
 
       if (nextOffset >= maxOffset * SLIDE_THRESHOLD) {
+        void completeSlide();
+
         Animated.timing(translateX, {
           toValue: maxOffset,
           duration: 170,
           useNativeDriver: false,
-        }).start(() => {
-          void completeSlide();
-        });
+        }).start();
         return;
       }
 
