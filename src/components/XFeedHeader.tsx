@@ -1,6 +1,8 @@
 import { useFonts } from "expo-font";
 import { useMemo } from "react";
+import type { ReactNode } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import type { XFeedTab } from "../screens/x-feed/x-feed.types";
 import {
@@ -21,6 +23,13 @@ type XFeedHeaderProps = {
   notificationsActive?: boolean;
   onOpenNotifications?: () => void;
   onOpenProfile?: () => void;
+  customTabLabel?: string;
+  showTabChevron?: boolean;
+  onTabPress?: () => void;
+  leftElement?: ReactNode;
+  avatarUri?: string;
+  onOpenAvatar?: () => void;
+  onAvatarLayout?: (y: number, height: number) => void;
 };
 
 export default function XFeedHeader(props: XFeedHeaderProps) {
@@ -68,7 +77,9 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
             styles.xTopBarSpacer,
             { width: metrics.xTopBarItemSize, height: metrics.xTopBarItemSize },
           ]}
-        />
+        >
+          {props.leftElement ?? null}
+        </View>
 
         <View style={styles.xTopBarCenter}>
           <Image
@@ -84,48 +95,67 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
           />
         </View>
 
-        <Pressable
-          style={[
-            styles.xTopBarChatButton,
-            isNotificationButtonActive ? styles.xTopBarChatButtonActive : null,
-            { width: metrics.xTopBarItemSize, height: metrics.xTopBarItemSize },
-          ]}
-          onPress={
-            props.onOpenNotifications ? props.onOpenNotifications : undefined
-          }
-          disabled={!props.onOpenNotifications}
-        >
-          <Image
-            source={VAR_CHAT_ICON}
-            resizeMode="contain"
-            style={{
-              width: metrics.xTopBarChatIconSize,
-              height: metrics.xTopBarChatIconSize,
+        {props.avatarUri ? (
+          <Pressable
+            style={[
+              styles.xTopBarAvatarButton,
+              { width: metrics.xTopBarItemSize, height: metrics.xTopBarItemSize },
+            ]}
+            onPress={props.onOpenAvatar}
+            onLayout={(e) => {
+              const { y, height } = e.nativeEvent.layout;
+              props.onAvatarLayout?.(y, height);
             }}
-          />
-
-          {normalizedNotificationCount ? (
+          >
             <Image
-              source={VAR_CHAT_UNREAD_INDICATOR}
-              resizeMode="contain"
-              style={[
-                styles.xTopBarUnreadIndicator,
-                {
-                  width: metrics.xTopBarUnreadIndicatorSize,
-                  height: metrics.xTopBarUnreadIndicatorSize,
-                },
-              ]}
+              source={{ uri: props.avatarUri }}
+              resizeMode="cover"
+              style={styles.xTopBarAvatar}
             />
-          ) : null}
-        </Pressable>
+          </Pressable>
+        ) : (
+          <Pressable
+            style={[
+              styles.xTopBarChatButton,
+              isNotificationButtonActive ? styles.xTopBarChatButtonActive : null,
+              { width: metrics.xTopBarItemSize, height: metrics.xTopBarItemSize },
+            ]}
+            onPress={
+              props.onOpenNotifications ? props.onOpenNotifications : undefined
+            }
+            disabled={!props.onOpenNotifications}
+          >
+            <Image
+              source={VAR_CHAT_ICON}
+              resizeMode="contain"
+              style={{
+                width: metrics.xTopBarChatIconSize,
+                height: metrics.xTopBarChatIconSize,
+              }}
+            />
+            {normalizedNotificationCount ? (
+              <Image
+                source={VAR_CHAT_UNREAD_INDICATOR}
+                resizeMode="contain"
+                style={[
+                  styles.xTopBarUnreadIndicator,
+                  {
+                    width: metrics.xTopBarUnreadIndicatorSize,
+                    height: metrics.xTopBarUnreadIndicatorSize,
+                  },
+                ]}
+              />
+            ) : null}
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.xTabsBar}>
         <Pressable
           style={styles.xTabsInnerCentered}
-          onPress={() => props.onChangeTab("timeline")}
+          onPress={props.onTabPress ?? (() => props.onChangeTab("timeline"))}
           accessibilityRole="button"
-          accessibilityLabel="تايم لاين"
+          accessibilityLabel={props.customTabLabel ?? "تايم لاين"}
         >
           <View style={styles.xHomeTabLabelRow}>
             <View style={styles.xHomeTabLiveDot} />
@@ -136,8 +166,11 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
                 isTimelineActive ? styles.xHomeTabTextActive : null,
               ]}
             >
-              تايم لاين
+              {props.customTabLabel ?? "تايم لاين"}
             </Text>
+            {props.showTabChevron ? (
+              <Ionicons name="chevron-down" size={14} color="rgba(255,255,255,0.7)" style={{ marginRight: 4 }} />
+            ) : null}
           </View>
         </Pressable>
       </View>
@@ -161,6 +194,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+  },
+  xTopBarAvatarButton: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  xTopBarAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.25)",
   },
   xTopBarChatButton: {
     alignItems: "center",
