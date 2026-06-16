@@ -152,9 +152,9 @@ export const styles = createCompatStyleSheet({
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(255,255,255,0.12)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+    borderColor: "rgba(255,255,255,0.20)",
   },
   profileMetricGroupHeader: {
     flexDirection: "row-reverse",

@@ -1306,7 +1306,7 @@ export default function AuthScreen(props: AuthScreenProps) {
             style={styles.terminalLinesBlock}
           >
             <TerminalLine
-              text="Route /auth/login initialized"
+              text="Abdullah Anitsack Ballodha"
               startDelay={0}
             />
             <TerminalLine text="Neon gateway ready" startDelay={260} />
@@ -1867,7 +1867,7 @@ function TerminalLine(props: { text: string; startDelay?: number }) {
     setVisibleText("");
     setCursorVisible(true);
 
-    const typingStep = 34;
+    const typingStep = 12;
     const holdDuration = 900;
     const clearDuration = 220;
     const typingDuration = props.text.length * typingStep;

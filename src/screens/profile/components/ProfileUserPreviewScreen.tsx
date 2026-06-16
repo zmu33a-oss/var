@@ -1,10 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useState } from "react";
 import {
+  Animated,
   Image,
+  Modal,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import type {
@@ -176,47 +181,129 @@ function PredictionShowcaseCard(props: {
   );
 }
 
+function PredictionsBar(props: {
+  earnedPoints: number;
+  predictionsCount: number;
+  wonPredictions: number;
+  predictions: LockedPredictionSummary[];
+  arabicFontFamily?: string;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [expandAnim] = useState(() => new Animated.Value(0));
+  const titleStyle = getArabicFontStyle(props.arabicFontFamily, "التوقعات");
+
+  const toggleExpand = () => {
+    if (isExpanded) {
+      Animated.timing(expandAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start(() => setIsExpanded(false));
+    } else {
+      setIsExpanded(true);
+      Animated.spring(expandAnim, {
+        toValue: 1,
+        damping: 20,
+        stiffness: 300,
+        useNativeDriver: false,
+      }).start();
+    }
+  };
+
+  return (
+    <View style={localStyles.predictionsWrapper}>
+      <Text style={[localStyles.predictionsTitle, titleStyle]}>التوقعات</Text>
+      <Pressable style={localStyles.predictionsBar} onPress={toggleExpand}>
+        <View style={localStyles.predictionsBarRow}>
+          <View style={localStyles.predictionsBarItem}>
+            <Text style={localStyles.predictionsBarLabel}>نقاط فار</Text>
+            <Text style={localStyles.predictionsBarValue}>{props.earnedPoints}</Text>
+          </View>
+          <View style={localStyles.predictionsBarDivider} />
+          <View style={localStyles.predictionsBarItem}>
+            <Text style={localStyles.predictionsBarLabel}>توقعات</Text>
+            <Text style={localStyles.predictionsBarValue}>{props.predictionsCount}</Text>
+          </View>
+          <View style={localStyles.predictionsBarDivider} />
+          <View style={localStyles.predictionsBarItem}>
+            <Text style={localStyles.predictionsBarLabel}>فوز</Text>
+            <Text style={localStyles.predictionsBarValue}>{props.wonPredictions}</Text>
+          </View>
+        </View>
+
+        {isExpanded && (
+          <Animated.View
+            style={[
+              localStyles.expandedContent,
+              {
+                opacity: expandAnim,
+                maxHeight: expandAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 500],
+                }),
+              },
+            ]}
+          >
+            <View style={localStyles.expandedDivider} />
+            <Text style={localStyles.expandedTitle}>سجل التوقعات</Text>
+            {props.predictions.length === 0 ? (
+              <Text style={localStyles.expandedEmpty}>لا توجد توقعات مقفلة بعد</Text>
+            ) : (
+              props.predictions.map((pred) => (
+                <View key={pred.id} style={localStyles.expandedItem}>
+                  <Text style={localStyles.expandedItemTitle}>{pred.title}</Text>
+                  <Text style={localStyles.expandedItemMeta}>
+                    {pred.lockedAt} · {pred.pointsAwarded > 0 ? `+${pred.pointsAwarded} نقطة` : "بانتظار النتيجة"}
+                  </Text>
+                </View>
+              ))
+            )}
+          </Animated.View>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
 function ProfileMetricGroupCard(props: {
   accentColor: string;
   arabicFontFamily?: string;
   iconName: IconName;
   items: { id: string; label: string; value: string }[];
   title: string;
+  onPress?: () => void;
 }) {
-  const titleTextStyle = getArabicFontStyle(
-    props.arabicFontFamily,
-    props.title,
-  );
+  const titleTextStyle = getArabicFontStyle(props.arabicFontFamily, props.title);
 
-  return (
-    <View style={styles.profileMetricGroupCard}>
+  const CardContent = () => (
+    <>
       <View style={styles.profileMetricGroupHeader}>
-        <View
-          style={[
-            styles.profileMetricGroupIcon,
-            { backgroundColor: `${props.accentColor}24` },
-          ]}
-        >
+        <View style={[styles.profileMetricGroupIcon, { backgroundColor: `${props.accentColor}24` }]}>
           <Ionicons name={props.iconName} size={18} color={props.accentColor} />
         </View>
-
-        <Text style={[styles.profileMetricGroupTitle, titleTextStyle]}>
-          {props.title}
-        </Text>
+        <Text style={[styles.profileMetricGroupTitle, titleTextStyle]}>{props.title}</Text>
       </View>
-
       <View style={styles.profileMetricGroupBody}>
         {props.items.map((item) => (
           <View key={item.id} style={styles.profileMetricCell}>
-            <Text numberOfLines={1} style={styles.profileMetricCellValue}>
-              {item.value}
-            </Text>
-            <Text numberOfLines={1} style={styles.profileMetricCellLabel}>
-              {item.label}
-            </Text>
+            <Text numberOfLines={1} style={styles.profileMetricCellValue}>{item.value}</Text>
+            <Text numberOfLines={1} style={styles.profileMetricCellLabel}>{item.label}</Text>
           </View>
         ))}
       </View>
+    </>
+  );
+
+  if (props.onPress) {
+    return (
+      <Pressable style={styles.profileMetricGroupCard} onPress={props.onPress}>
+        <CardContent />
+      </Pressable>
+    );
+  }
+  return (
+    <View style={styles.profileMetricGroupCard}>
+      <CardContent />
     </View>
   );
 }
@@ -258,6 +345,29 @@ export function ProfileUserPreviewScreen(props: {
   const wonPredictions = predictions.filter(
     (prediction) => prediction.pointsAwarded > 0,
   ).length;
+
+  const [activeSheet, setActiveSheet] = useState<string | null>(null);
+  const [sheetAnim] = useState(() => new Animated.Value(0));
+  const { height: screenHeight } = useWindowDimensions();
+
+  const openSheet = (id: string) => {
+    setActiveSheet(id);
+    Animated.spring(sheetAnim, {
+      toValue: 1,
+      damping: 22,
+      stiffness: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeSheet = () => {
+    Animated.timing(sheetAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => setActiveSheet(null));
+  };
+
   const profileMetricGroups = [
     {
       id: "predictions",
@@ -334,6 +444,17 @@ export function ProfileUserPreviewScreen(props: {
       ],
     },
   ];
+
+  const getSheetContent = () => {
+    const group = profileMetricGroups.find((g) => g.id === activeSheet);
+    if (!group) return null;
+    return {
+      title: group.title,
+      items: group.items,
+    };
+  };
+
+  const sheetContent = getSheetContent();
 
   return (
     <View style={styles.root}>
@@ -428,19 +549,6 @@ export function ProfileUserPreviewScreen(props: {
           />
         </LinearGradient>
 
-        <View style={styles.profileMetricGroupsGrid}>
-          {profileMetricGroups.map((metricGroup) => (
-            <ProfileMetricGroupCard
-              key={metricGroup.id}
-              accentColor={metricGroup.accentColor}
-              arabicFontFamily={props.arabicFontFamily}
-              iconName={metricGroup.iconName}
-              items={metricGroup.items}
-              title={metricGroup.title}
-            />
-          ))}
-        </View>
-
         <View style={styles.showcaseSection}>
           <View style={styles.showcaseHeader}>
             <View style={styles.showcaseBadge}>
@@ -488,7 +596,227 @@ export function ProfileUserPreviewScreen(props: {
             </View>
           )}
         </View>
+
+        <PredictionsBar
+          earnedPoints={earnedPoints}
+          predictionsCount={predictions.length}
+          wonPredictions={wonPredictions}
+          predictions={predictions}
+          arabicFontFamily={props.arabicFontFamily}
+        />
+
+        <View style={styles.profileMetricGroupsGrid}>
+          {profileMetricGroups
+            .filter((g) => g.id !== "predictions")
+            .map((metricGroup) => (
+              <ProfileMetricGroupCard
+                key={metricGroup.id}
+                accentColor={metricGroup.accentColor}
+                arabicFontFamily={props.arabicFontFamily}
+                iconName={metricGroup.iconName}
+                items={metricGroup.items}
+                title={metricGroup.title}
+                onPress={() => openSheet(metricGroup.id)}
+              />
+            ))}
+        </View>
       </ScrollView>
+
+      {activeSheet && (
+        <Modal
+          visible={activeSheet !== null}
+          transparent
+          animationType="none"
+          onRequestClose={closeSheet}
+        >
+          <Pressable style={localStyles.sheetBackdrop} onPress={closeSheet}>
+            <Animated.View
+              style={[
+                localStyles.sheetPanel,
+                {
+                  transform: [
+                    {
+                      translateY: sheetAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [screenHeight * 0.4, 0],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <View style={localStyles.sheetHeader}>
+                <Pressable style={localStyles.sheetCloseBtn} onPress={closeSheet}>
+                  <Ionicons name="close" size={22} color="#FFFFFF" />
+                </Pressable>
+                <Text style={localStyles.sheetTitle}>
+                  {sheetContent?.title}
+                </Text>
+              </View>
+              <ScrollView style={localStyles.sheetContent}>
+                {sheetContent?.items.map((item) => (
+                  <View key={item.id} style={localStyles.sheetItem}>
+                    <Text style={localStyles.sheetItemValue}>{item.value}</Text>
+                    <Text style={localStyles.sheetItemLabel}>{item.label}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            </Animated.View>
+          </Pressable>
+        </Modal>
+      )}
     </View>
   );
 }
+
+const localStyles = StyleSheet.create({
+  predictionsWrapper: {
+    marginHorizontal: 16,
+    marginVertical: 12,
+  },
+  predictionsTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "right",
+    marginBottom: 10,
+    marginRight: 4,
+  },
+  predictionsBar: {
+    backgroundColor: "rgba(30,30,35,0.98)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  predictionsBarRow: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  predictionsBarItem: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+  },
+  predictionsBarDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 20,
+    backgroundColor: "rgba(255,255,255,0.15)",
+  },
+  predictionsBarValue: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#F4C565",
+  },
+  predictionsBarLabel: {
+    fontSize: 13,
+    color: "#FFFFFF",
+    fontWeight: "600",
+    backgroundColor: "rgba(244,197,101,0.65)",
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  expandedContent: {
+    overflow: "hidden",
+    marginTop: 12,
+  },
+  expandedDivider: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    marginBottom: 12,
+  },
+  expandedTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#F4C565",
+    textAlign: "right",
+    marginBottom: 10,
+  },
+  expandedEmpty: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.5)",
+    textAlign: "center",
+    paddingVertical: 20,
+  },
+  expandedItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  expandedItemTitle: {
+    fontSize: 14,
+    color: "#FFFFFF",
+    textAlign: "right",
+    marginBottom: 4,
+  },
+  expandedItemMeta: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.5)",
+    textAlign: "right",
+  },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  sheetPanel: {
+    backgroundColor: "#0A0A0F",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderColor: "#FFFFFF",
+    padding: 20,
+    minHeight: 300,
+    maxHeight: "60%",
+  },
+  sheetHeader: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  sheetCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "right",
+  },
+  sheetContent: {
+    maxHeight: 300,
+  },
+  sheetItem: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  sheetItemValue: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#F4C565",
+  },
+  sheetItemLabel: {
+    fontSize: 15,
+    color: "rgba(255,255,255,0.7)",
+    textAlign: "right",
+  },
+});
