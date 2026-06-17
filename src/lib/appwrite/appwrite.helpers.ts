@@ -157,6 +157,13 @@ export function normalizeAppwriteSocialMode(
     return "profile";
   }
 
+  if (
+    normalizedValue === "notification" ||
+    normalizedValue === "x-notification"
+  ) {
+    return "notification";
+  }
+
   return "x";
 }
 
@@ -173,6 +180,10 @@ export function normalizeAppwriteSocialAction(
   if (normalizedValue === "share") return "share";
   if (normalizedValue === "save") return "save";
   if (normalizedValue === "follow") return "follow";
+  if (normalizedValue === "notify" || normalizedValue === "notification") {
+    return "notify";
+  }
+  if (normalizedValue === "reply") return "reply";
 
   return "reply";
 }
@@ -321,6 +332,12 @@ export function toAppwritePostRecord(
     document.fromVarLibrary === true ||
     document.fromVarLibrary === "true" ||
     document.fromVarLibrary === 1;
+  const feedScopeRaw =
+    typeof document.feedScope === "string" ? document.feedScope.trim() : "";
+  const feedScope =
+    feedScopeRaw === "fans" || feedScopeRaw === "x"
+      ? feedScopeRaw
+      : undefined;
 
   return {
     id: document.$id,
@@ -330,6 +347,7 @@ export function toAppwritePostRecord(
     varId,
     mediaUri: mediaUri || undefined,
     fromVarLibrary: fromVarLibrary || undefined,
+    feedScope,
     createdAt: document.$createdAt,
   };
 }
@@ -709,7 +727,8 @@ export function summarizeAppwriteSocialInteractions(
 
   for (const record of records) {
     if (!record.active) continue;
-    if (record.mode === "profile") continue;
+    if (record.mode === "profile" || record.mode === "notification") continue;
+    if (record.action === "notify" || record.action === "follow") continue;
 
     summary.totalActiveInteractions += 1;
 

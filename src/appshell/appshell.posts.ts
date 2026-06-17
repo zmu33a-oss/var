@@ -80,6 +80,8 @@ type UseAppwritePostsOptions = {
 
   setPosts: React.Dispatch<React.SetStateAction<Post[]>>;
 
+  setFansPosts?: React.Dispatch<React.SetStateAction<Post[]>>;
+
   setNotice: (msg: string) => void;
 
 };
@@ -104,6 +106,8 @@ type SyncPostsOptions = {
 
   setPosts: React.Dispatch<React.SetStateAction<Post[]>>;
 
+  setFansPosts?: React.Dispatch<React.SetStateAction<Post[]>>;
+
   setNotice: (msg: string) => void;
 
   quiet?: boolean;
@@ -115,6 +119,106 @@ type SyncPostsOptions = {
   append?: boolean;
 
 };
+
+
+
+function splitPostsByFeedScope(
+
+  records: Awaited<ReturnType<typeof listAppwritePosts>>["records"],
+
+) {
+
+  const xRecords = records.filter((record) => record.feedScope !== "fans");
+
+  const fansRecords = records.filter((record) => record.feedScope === "fans");
+
+  return { xRecords, fansRecords };
+
+}
+
+
+
+function mergeSyncedPosts(
+
+  currentPosts: Post[],
+
+  syncedPosts: Post[],
+
+  append: boolean,
+
+) {
+
+  const syncedSourceIds = new Set(
+
+    syncedPosts
+
+      .map((post) => post.sourceId?.trim())
+
+      .filter((value): value is string => Boolean(value)),
+
+  );
+
+  const syncedFeedKeys = new Set(
+
+    syncedPosts
+
+      .map((post) => post.feedKey?.trim())
+
+      .filter((value): value is string => Boolean(value)),
+
+  );
+
+  const pendingLocalPosts = currentPosts.filter((post) => {
+
+    const sourceId = post.sourceId?.trim();
+
+    const feedKey = post.feedKey?.trim();
+
+
+
+    if (feedKey) {
+
+      return !syncedFeedKeys.has(feedKey);
+
+    }
+
+
+
+    return Boolean(sourceId && !syncedSourceIds.has(sourceId));
+
+  });
+
+
+
+  if (append) {
+
+    const existingKeys = new Set(
+
+      currentPosts.map((post) => post.feedKey?.trim() || String(post.id)),
+
+    );
+
+    const nextEntries = syncedPosts.filter((post) => {
+
+      const entryKey = post.feedKey?.trim() || String(post.id);
+
+
+
+      return !existingKeys.has(entryKey);
+
+    });
+
+
+
+    return [...currentPosts, ...nextEntries, ...pendingLocalPosts];
+
+  }
+
+
+
+  return [...syncedPosts, ...pendingLocalPosts];
+
+}
 
 
 
@@ -622,6 +726,8 @@ export async function syncAppwritePostsFromCloud(
 
     setPosts,
 
+    setFansPosts,
+
     limit = POSTS_PAGE_SIZE,
 
     offset = 0,
@@ -634,6 +740,8 @@ export async function syncAppwritePostsFromCloud(
 
   const postsPage = await listAppwritePosts({ limit, offset });
 
+  const { xRecords, fansRecords } = splitPostsByFeedScope(postsPage.records);
+
   const appwriteReposts = await listAppwriteXReposts({
 
     limit: Math.max(limit, 50),
@@ -644,7 +752,7 @@ export async function syncAppwritePostsFromCloud(
 
   const syncedPosts = await buildSyncedPostsFromRecords({
 
-    appwritePosts: postsPage.records,
+    appwritePosts: xRecords,
 
     appwriteReposts,
 
@@ -658,79 +766,55 @@ export async function syncAppwritePostsFromCloud(
 
 
 
-  setPosts((currentPosts) => {
+  setPosts((currentPosts) =>
 
-    const syncedSourceIds = new Set(
+    mergeSyncedPosts(
 
-      syncedPosts
+      currentPosts.filter((post) => post.feedScope !== "fans"),
 
-        .map((post) => post.sourceId?.trim())
+      syncedPosts,
 
-        .filter((value): value is string => Boolean(value)),
+      append,
 
-    );
+    ),
 
-    const syncedFeedKeys = new Set(
-
-      syncedPosts
-
-        .map((post) => post.feedKey?.trim())
-
-        .filter((value): value is string => Boolean(value)),
-
-    );
-
-    const pendingLocalPosts = currentPosts.filter((post) => {
-
-      const sourceId = post.sourceId?.trim();
-
-      const feedKey = post.feedKey?.trim();
+  );
 
 
 
-      if (feedKey) {
+  if (setFansPosts) {
 
-        return !syncedFeedKeys.has(feedKey);
+    const syncedFansPosts = await buildSyncedPostsFromRecords({
 
-      }
+      appwritePosts: fansRecords,
 
+      appwriteReposts: [],
 
+      isLoggedIn,
 
-      return Boolean(sourceId && !syncedSourceIds.has(sourceId));
+      appwriteUser,
+
+      profile,
 
     });
 
 
 
-    if (append) {
+    setFansPosts((currentPosts) =>
 
-      const existingKeys = new Set(
+      mergeSyncedPosts(
 
-        currentPosts.map((post) => post.feedKey?.trim() || String(post.id)),
+        currentPosts.filter((post) => post.feedScope === "fans"),
 
-      );
+        syncedFansPosts,
 
-      const nextEntries = syncedPosts.filter((post) => {
+        false,
 
-        const entryKey = post.feedKey?.trim() || String(post.id);
+      ),
 
+    );
 
-
-        return !existingKeys.has(entryKey);
-
-      });
-
-
-
-      return [...currentPosts, ...nextEntries, ...pendingLocalPosts];
-
-    }
-
-
-
-    return [...syncedPosts, ...pendingLocalPosts];
-
-  });
+  }
 
 
 
@@ -748,7 +832,7 @@ export async function syncAppwritePostsFromCloud(
 
 export function useAppwritePostsSync(options: UseAppwritePostsOptions) {
 
-  const { isLoggedIn, appwriteUser, profile, setPosts, setNotice } = options;
+  const { isLoggedIn, appwriteUser, profile, setPosts, setFansPosts, setNotice } = options;
 
   const [isRefreshingPosts, setIsRefreshingPosts] = useState(false);
 
@@ -825,6 +909,8 @@ export function useAppwritePostsSync(options: UseAppwritePostsOptions) {
           profile,
 
           setPosts,
+
+          setFansPosts,
 
           setNotice,
 
@@ -923,6 +1009,8 @@ export function useAppwritePostsSync(options: UseAppwritePostsOptions) {
       setNotice,
 
       setPosts,
+
+      setFansPosts,
 
     ],
 
@@ -1042,6 +1130,8 @@ export async function publishAppwritePost(options: {
 
   fromVarLibrary?: boolean;
 
+  feedScope?: "x" | "fans";
+
   appwriteUser: AppwriteAuthUser | null;
 
   profile: ProfileData;
@@ -1079,6 +1169,8 @@ export async function publishAppwritePost(options: {
     postMediaUri,
 
     fromVarLibrary,
+
+    feedScope = "x",
 
     appwriteUser,
 
@@ -1230,6 +1322,8 @@ export async function publishAppwritePost(options: {
 
       fromVarLibrary: fromVarLibrary || undefined,
 
+      feedScope,
+
     });
 
     const createdPostIdentity = buildCurrentUserPostIdentity({
@@ -1264,7 +1358,15 @@ export async function publishAppwritePost(options: {
 
     onClose();
 
-    setNotice("تم نشر المنشور على X وحفظه في Appwrite.");
+    setNotice(
+
+      feedScope === "fans"
+
+        ? "تم نشر المنشور في الرابطة وحفظه في Appwrite."
+
+        : "تم نشر المنشور على X وحفظه في Appwrite.",
+
+    );
 
   } catch (error) {
 
@@ -1275,6 +1377,16 @@ export async function publishAppwritePost(options: {
     ) {
       setNotice(
         "مجموعة المنشورات تحتاج حقل fromVarLibrary (Boolean). شغّل: node scripts/ensure-posts-media-uri.cjs",
+      );
+
+      return;
+    }
+
+    if (
+      rawMessage.includes("feedScope")
+    ) {
+      setNotice(
+        "مجموعة المنشورات تحتاج حقل feedScope (String). شغّل: node scripts/ensure-posts-media-uri.cjs",
       );
 
       return;

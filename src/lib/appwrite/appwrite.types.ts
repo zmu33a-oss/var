@@ -14,6 +14,8 @@ export type AppwriteSocialAction =
   | "follow"
   | "notify";
 
+export type AppwritePostFeedScope = "x" | "fans";
+
 export type AppwritePostRecord = {
   id: string;
   title: string;
@@ -22,6 +24,7 @@ export type AppwritePostRecord = {
   varId: string;
   mediaUri?: string;
   fromVarLibrary?: boolean;
+  feedScope?: AppwritePostFeedScope;
   createdAt: string;
 };
 
@@ -253,6 +256,7 @@ export type AppwritePostInput = {
   varId: string;
   mediaUri?: string;
   fromVarLibrary?: boolean;
+  feedScope?: AppwritePostFeedScope;
 };
 
 export type AppwritePostDocument = {
@@ -264,6 +268,7 @@ export type AppwritePostDocument = {
   varId?: unknown;
   mediaUri?: unknown;
   fromVarLibrary?: unknown;
+  feedScope?: unknown;
   isHidden?: unknown;
   status?: unknown;
 };

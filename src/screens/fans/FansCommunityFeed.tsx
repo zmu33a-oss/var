@@ -12,6 +12,8 @@ export type FansCommunityPost = {
   replyCount: number;
   avatarUri?: string;
   verified?: boolean;
+  clubId?: string;
+  clubTitle?: string;
 };
 
 

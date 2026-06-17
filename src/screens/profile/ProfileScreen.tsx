@@ -458,8 +458,15 @@ export default function ProfileScreen(props: ProfileScreenProps) {
           arabicFontFamily={profileArabicFontFamily}
           clubName={clubName}
           followedProfiles={props.followedProfiles}
+          posts={posts}
+          fansPosts={props.fansPosts}
           profile={profile}
+          socialInteractions={props.socialInteractions}
           onClose={() => setIsPreviewModalOpen(false)}
+          onOpenFansAssociation={(options) => {
+            setIsPreviewModalOpen(false);
+            props.onOpenFansAssociation?.(options);
+          }}
         />
       </Modal>
 

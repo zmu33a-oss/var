@@ -1,25 +1,30 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Animated,
   Image,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from "react-native";
 import type {
   FollowingProfileCard,
   IconName,
   LockedPredictionSummary,
+  Post,
+  PostReply,
   ProfileData,
+  SocialInteractionRecord,
 } from "../../../app.types";
-import { LEAGUES } from "../../../app.data";
-import { buildComposerDisplayVarId } from "../../../appshell/appshell.helpers";
+import { FAN_CLUBS, LEAGUES } from "../../../app.data";
+import { listFansPostsByVarId } from "../../../lib/appwrite";
+import {
+  buildComposerDisplayVarId,
+  normalizeAuthorId,
+} from "../../../appshell/appshell.helpers";
 import { MilestoneProgressBar } from "../../../components/MilestoneProgressBar";
 import {
   getArabicFontStyle,
@@ -33,6 +38,18 @@ import {
   type PredictionVisualTone,
 } from "../profileUserPreview.helpers";
 import { styles } from "../profileUserPreview.styles";
+import {
+  ProfileXFanCommentFeed,
+  ProfileXLikedPostFeed,
+  ProfileXPostFeed,
+  ProfileXReplyFeed,
+} from "./ProfileActivityXFeed";
+import {
+  filterInteractionPosts,
+  filterProfileAuthoredPosts,
+  mergeProfileReplies,
+  mergeProfileRepostPosts,
+} from "../profileActivityPosts";
 
 const TONE_GRADIENTS: Record<
   PredictionVisualTone,
@@ -81,6 +98,8 @@ const TONE_POINTS_COLORS: Record<PredictionVisualTone, string> = {
   pending: "#F4C565",
   neutral: "#8BD6FF",
 };
+
+const PROFILE_SUB_SECTION_MAX_HEIGHT = 2400;
 
 function PredictionShowcaseCard(props: {
   arabicFontFamily?: string;
@@ -272,6 +291,7 @@ function ProfileMetricGroupCard(props: {
   items: { id: string; label: string; value: string }[];
   title: string;
   onPress?: () => void;
+  isWide?: boolean;
 }) {
   const titleTextStyle = getArabicFontStyle(props.arabicFontFamily, props.title);
 
@@ -294,26 +314,331 @@ function ProfileMetricGroupCard(props: {
     </>
   );
 
+  const cardStyle = props.isWide ? localStyles.profileMetricGroupCardWide : styles.profileMetricGroupCard;
+
   if (props.onPress) {
     return (
-      <Pressable style={styles.profileMetricGroupCard} onPress={props.onPress}>
+      <Pressable style={cardStyle} onPress={props.onPress}>
         <CardContent />
       </Pressable>
     );
   }
   return (
-    <View style={styles.profileMetricGroupCard}>
+    <View style={cardStyle}>
       <CardContent />
     </View>
   );
+}
+
+type ProfileActivityEntry = {
+  id: string;
+  typeLabel: string;
+  title: string;
+  subtitle: string;
+  content: string;
+  iconName: IconName;
+  accentColor: string;
+};
+
+function normalizeProfileActivityToken(value: string) {
+  return value.trim().replace(/^@/, "").toLowerCase();
+}
+
+function truncateActivityContent(value: string) {
+  const trimmedValue = value.trim();
+
+  if (trimmedValue.length <= 110) {
+    return trimmedValue;
+  }
+
+  return `${trimmedValue.slice(0, 107)}...`;
+}
+
+function buildProfileHandleCandidates(profile: ProfileData) {
+  return new Set(
+    [
+      profile.varId,
+      profile.displayVarId,
+      profile.username,
+      buildComposerDisplayVarId(profile.displayVarId, profile.varId),
+    ]
+      .map(normalizeProfileActivityToken)
+      .filter(Boolean),
+  );
+}
+
+function isProfilePostAuthor(
+  post: Post,
+  profile: ProfileData,
+  handleCandidates: Set<string>,
+) {
+  const normalizedProfileVarId = normalizeAuthorId(profile.varId);
+  const normalizedPostAuthorId = normalizeAuthorId(post.authorId || "");
+
+  if (
+    normalizedProfileVarId !== "local-user" &&
+    normalizedPostAuthorId === normalizedProfileVarId
+  ) {
+    return true;
+  }
+
+  const normalizedPostHandle = normalizeProfileActivityToken(post.handle);
+  const normalizedPostAuthor = normalizeProfileActivityToken(post.author);
+  const normalizedDisplayName = normalizeProfileActivityToken(
+    profile.displayName,
+  );
+
+  return (
+    handleCandidates.has(normalizedPostHandle) ||
+    Boolean(normalizedDisplayName && normalizedPostAuthor === normalizedDisplayName)
+  );
+}
+
+function isProfileReplyAuthor(
+  reply: PostReply,
+  profile: ProfileData,
+  handleCandidates: Set<string>,
+) {
+  const normalizedReplyHandle = normalizeProfileActivityToken(reply.handle);
+  const normalizedReplyAuthor = normalizeProfileActivityToken(reply.author);
+  const normalizedDisplayName = normalizeProfileActivityToken(
+    profile.displayName,
+  );
+
+  return (
+    handleCandidates.has(normalizedReplyHandle) ||
+    Boolean(normalizedDisplayName && normalizedReplyAuthor === normalizedDisplayName)
+  );
+}
+
+function buildProfileActivityEntries(
+  posts: Post[],
+  profile: ProfileData,
+  socialInteractions?: SocialInteractionRecord[],
+) {
+  const handleCandidates = buildProfileHandleCandidates(profile);
+  const normalizedProfileVarId = normalizeAuthorId(profile.varId);
+  const entries: ProfileActivityEntry[] = [];
+  const seenEntryIds = new Set<string>();
+
+  const pushEntry = (entry: ProfileActivityEntry) => {
+    if (seenEntryIds.has(entry.id)) {
+      return;
+    }
+
+    seenEntryIds.add(entry.id);
+    entries.push(entry);
+  };
+
+  // بناء Map للمنشورات للبحث السريع
+  const postsById = new Map<string, Post>();
+  posts.forEach((post) => {
+    postsById.set(String(post.id), post);
+    if (post.sourceId) {
+      postsById.set(post.sourceId, post);
+    }
+  });
+
+  // معالجة تفاعلات المستخدم من Appwrite
+  if (socialInteractions && socialInteractions.length > 0) {
+    socialInteractions.forEach((interaction) => {
+      if (!interaction.active) return;
+
+      const post = postsById.get(interaction.targetId);
+      const postContent = post
+        ? truncateActivityContent(post.content)
+        : "محتوى غير متوفر";
+      const postAuthor = post ? post.author : "مستخدم";
+      const postTime = post
+        ? post.time
+        : new Date(interaction.createdAt).toLocaleDateString("ar-SA");
+
+      switch (interaction.action) {
+        case "like":
+          pushEntry({
+            id: `like-${interaction.targetId}-${interaction.id}`,
+            typeLabel: "إعجاب",
+            title: `أعجبت بمنشور ${postAuthor}`,
+            subtitle: postTime,
+            content: postContent,
+            iconName: "heart-outline",
+            accentColor: "#FB7185",
+          });
+          break;
+        case "repost":
+          pushEntry({
+            id: `repost-${interaction.targetId}-${interaction.id}`,
+            typeLabel: "إعادة تغريد",
+            title: `أعدت تغريد ${postAuthor}`,
+            subtitle: postTime,
+            content: postContent,
+            iconName: "repeat-outline",
+            accentColor: "#8BD6FF",
+          });
+          break;
+        case "share":
+          pushEntry({
+            id: `share-${interaction.targetId}-${interaction.id}`,
+            typeLabel: "مشاركة",
+            title: `شاركت منشور ${postAuthor}`,
+            subtitle: postTime,
+            content: postContent,
+            iconName: "share-social-outline",
+            accentColor: "#8BD6FF",
+          });
+          break;
+        case "reply":
+          pushEntry({
+            id: `reply-${interaction.targetId}-${interaction.id}`,
+            typeLabel: "رد",
+            title: `رد على ${postAuthor}`,
+            subtitle: postTime,
+            content: interaction.value
+              ? truncateActivityContent(interaction.value)
+              : postContent,
+            iconName: "return-down-back-outline",
+            accentColor: "#8BD6FF",
+          });
+          break;
+      }
+    });
+  }
+
+  // معالجة المنشورات المحلية (كاحتياطي)
+  posts.forEach((post) => {
+    const postContent = truncateActivityContent(post.content);
+
+    if (!post.repostMeta && isProfilePostAuthor(post, profile, handleCandidates)) {
+      const entryId = `post-${post.id}`;
+      if (!seenEntryIds.has(entryId)) {
+        pushEntry({
+          id: entryId,
+          typeLabel: "تغريدة",
+          title: post.title?.trim() || "تغريدة منشورة",
+          subtitle: post.time,
+          content: postContent,
+          iconName: "chatbubble-ellipses-outline",
+          accentColor: "#8BD6FF",
+        });
+      }
+    }
+
+    if (
+      post.repostMeta &&
+      normalizedProfileVarId !== "local-user" &&
+      normalizeAuthorId(post.repostMeta.varId) === normalizedProfileVarId
+    ) {
+      const entryId = `repost-meta-${post.id}`;
+      if (!seenEntryIds.has(entryId)) {
+        pushEntry({
+          id: entryId,
+          typeLabel: "إعادة تغريد",
+          title: `أعدت تغريد ${post.author}`,
+          subtitle: post.repostMeta.time,
+          content: postContent,
+          iconName: "repeat-outline",
+          accentColor: "#8BD6FF",
+        });
+      }
+    }
+
+    (post.replyItems ?? []).forEach((reply) => {
+      if (!isProfileReplyAuthor(reply, profile, handleCandidates)) {
+        return;
+      }
+
+      const entryId = `reply-${post.id}-${reply.id}`;
+      if (!seenEntryIds.has(entryId)) {
+        pushEntry({
+          id: entryId,
+          typeLabel: "رد",
+          title: `رد على ${post.author}`,
+          subtitle: reply.time,
+          content: truncateActivityContent(reply.content),
+          iconName: "return-down-back-outline",
+          accentColor: "#8BD6FF",
+        });
+      }
+    });
+  });
+
+  return entries;
+}
+
+export type FansProfileSheetTab = "posts" | "comments" | "likes" | "reposts";
+
+function filterFansSocialInteractions(
+  fansPosts: Post[],
+  socialInteractions?: SocialInteractionRecord[],
+) {
+  if (!socialInteractions?.length || fansPosts.length === 0) {
+    return [];
+  }
+
+  const fansTargetIds = new Set<string>();
+  fansPosts.forEach((post) => {
+    fansTargetIds.add(String(post.id));
+    if (post.sourceId?.trim()) {
+      fansTargetIds.add(post.sourceId.trim());
+    }
+  });
+
+  return socialInteractions.filter((interaction) =>
+    fansTargetIds.has(interaction.targetId),
+  );
+}
+
+function formatFanCommentTime(iso: string) {
+  try {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "الآن";
+    if (mins < 60) return `قبل ${mins} دقيقة`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `قبل ${hrs} ساعة`;
+    return `قبل ${Math.floor(hrs / 24)} يوم`;
+  } catch {
+    return "";
+  }
+}
+
+function resolveFanClubLabel(clubId: string) {
+  const normalizedClubId = clubId.trim();
+  if (!normalizedClubId) return "رابطة غير معروفة";
+
+  const club = FAN_CLUBS.find(
+    (candidate) =>
+      candidate.id === normalizedClubId ||
+      candidate.title.trim() === normalizedClubId,
+  );
+
+  return club ? `رابطة ${club.title}` : `رابطة ${normalizedClubId}`;
+}
+
+function buildFanCommentEntries(
+  comments: { id: string; content: string; createdAt: string; clubId: string }[],
+): ProfileActivityEntry[] {
+  return comments.map((comment) => ({
+    id: `fan-comment-${comment.id}`,
+    typeLabel: "تعليق",
+    title: resolveFanClubLabel(comment.clubId),
+    subtitle: formatFanCommentTime(comment.createdAt),
+    content: truncateActivityContent(comment.content),
+    iconName: "chatbubble-outline",
+    accentColor: "#F4C565",
+  }));
 }
 
 export function ProfileUserPreviewScreen(props: {
   arabicFontFamily?: string;
   clubName: string;
   followedProfiles: FollowingProfileCard[];
+  posts: Post[];
+  fansPosts?: Post[];
   profile: ProfileData;
+  socialInteractions?: SocialInteractionRecord[];
   onClose: () => void;
+  onOpenFansAssociation?: (options?: { sheetTab?: FansProfileSheetTab }) => void;
 }) {
   const titleArabicTextStyle = getArabicFontStyle(props.arabicFontFamily);
   const sportsCardNumber = buildComposerDisplayVarId(
@@ -346,26 +671,140 @@ export function ProfileUserPreviewScreen(props: {
     (prediction) => prediction.pointsAwarded > 0,
   ).length;
 
-  const [activeSheet, setActiveSheet] = useState<string | null>(null);
-  const [sheetAnim] = useState(() => new Animated.Value(0));
-  const { height: screenHeight } = useWindowDimensions();
+  // Animation for main VAR X section
+  const [isVarSectionExpanded, setIsVarSectionExpanded] = useState(false);
+  const [varSectionAnim] = useState(() => new Animated.Value(0));
 
-  const openSheet = (id: string) => {
-    setActiveSheet(id);
-    Animated.spring(sheetAnim, {
-      toValue: 1,
-      damping: 22,
-      stiffness: 300,
-      useNativeDriver: true,
-    }).start();
+  // Animation for sub-sections inside VAR X
+  const [expandedSubSection, setExpandedSubSection] = useState<string | null>(null);
+  const [subSectionAnims] = useState<Record<string, Animated.Value>>({
+    posts: new Animated.Value(0),
+    replies: new Animated.Value(0),
+    reposts: new Animated.Value(0),
+    shares: new Animated.Value(0),
+    likes: new Animated.Value(0),
+  });
+
+  // Animation for main Fan Club section
+  const [isFanClubSectionExpanded, setIsFanClubSectionExpanded] = useState(false);
+  const [fanClubSectionAnim] = useState(() => new Animated.Value(0));
+
+  // Animation for sub-sections inside Fan Club
+  const [expandedFanClubSubSection, setExpandedFanClubSubSection] = useState<string | null>(null);
+  const [fanClubSubSectionAnims] = useState<Record<string, Animated.Value>>({
+    posts: new Animated.Value(0),
+    comments: new Animated.Value(0),
+    reposts: new Animated.Value(0),
+    shares: new Animated.Value(0),
+    likes: new Animated.Value(0),
+  });
+  const [fanCommentRecords, setFanCommentRecords] = useState<
+    { id: string; content: string; createdAt: string; clubId: string }[]
+  >([]);
+
+  const toggleVarSection = () => {
+    const isExpanding = !isVarSectionExpanded;
+    setIsVarSectionExpanded(isExpanding);
+
+    if (isExpanding) {
+      Animated.spring(varSectionAnim, {
+        toValue: 1,
+        damping: 20,
+        stiffness: 300,
+        useNativeDriver: false,
+      }).start();
+    } else {
+      // Close all subsections when closing main section
+      Animated.timing(varSectionAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start(() => {
+        setExpandedSubSection(null);
+        // Reset all subsections
+        Object.values(subSectionAnims).forEach((anim) => anim.setValue(0));
+      });
+    }
   };
 
-  const closeSheet = () => {
-    Animated.timing(sheetAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => setActiveSheet(null));
+  const toggleSubSection = (sectionId: string) => {
+    const isExpanding = expandedSubSection !== sectionId;
+
+    // Close current expanded subsection if any
+    if (expandedSubSection && expandedSubSection !== sectionId) {
+      Animated.timing(subSectionAnims[expandedSubSection], {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+
+    if (isExpanding) {
+      setExpandedSubSection(sectionId);
+      Animated.spring(subSectionAnims[sectionId], {
+        toValue: 1,
+        damping: 20,
+        stiffness: 300,
+        useNativeDriver: false,
+      }).start();
+    } else {
+      Animated.timing(subSectionAnims[sectionId], {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start(() => setExpandedSubSection(null));
+    }
+  };
+
+  const toggleFanClubSection = () => {
+    const isExpanding = !isFanClubSectionExpanded;
+    setIsFanClubSectionExpanded(isExpanding);
+
+    if (isExpanding) {
+      Animated.spring(fanClubSectionAnim, {
+        toValue: 1,
+        damping: 20,
+        stiffness: 300,
+        useNativeDriver: false,
+      }).start();
+    } else {
+      Animated.timing(fanClubSectionAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start(() => {
+        setExpandedFanClubSubSection(null);
+        Object.values(fanClubSubSectionAnims).forEach((anim) => anim.setValue(0));
+      });
+    }
+  };
+
+  const toggleFanClubSubSection = (sectionId: string) => {
+    const isExpanding = expandedFanClubSubSection !== sectionId;
+
+    if (expandedFanClubSubSection && expandedFanClubSubSection !== sectionId) {
+      Animated.timing(fanClubSubSectionAnims[expandedFanClubSubSection], {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+
+    if (isExpanding) {
+      setExpandedFanClubSubSection(sectionId);
+      Animated.spring(fanClubSubSectionAnims[sectionId], {
+        toValue: 1,
+        damping: 20,
+        stiffness: 300,
+        useNativeDriver: false,
+      }).start();
+    } else {
+      Animated.timing(fanClubSubSectionAnims[sectionId], {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start(() => setExpandedFanClubSubSection(null));
+    }
   };
 
   const profileMetricGroups = [
@@ -386,7 +825,7 @@ export function ProfileUserPreviewScreen(props: {
     },
     {
       id: "x-activity",
-      title: "التغريدات والردود",
+      title: "التغريدات والردود والمشاركات",
       iconName: "chatbubbles-outline" as const,
       accentColor: "#8BD6FF",
       items: [
@@ -405,11 +844,16 @@ export function ProfileUserPreviewScreen(props: {
           label: "ردود",
           value: String(props.profile.socialMetrics.xReplies),
         },
+        {
+          id: "shares",
+          label: "مشاركات",
+          value: String(props.profile.socialMetrics.xShares),
+        },
       ],
     },
     {
       id: "engagement",
-      title: "الإعجابات والمشاركات",
+      title: "الإعجابات",
       iconName: "heart-outline" as const,
       accentColor: "#FB7185",
       items: [
@@ -417,11 +861,6 @@ export function ProfileUserPreviewScreen(props: {
           id: "likes",
           label: "إعجابات",
           value: String(props.profile.socialMetrics.xLikes),
-        },
-        {
-          id: "shares",
-          label: "مشاركات",
-          value: String(props.profile.socialMetrics.xShares),
         },
         {
           id: "total",
@@ -445,16 +884,104 @@ export function ProfileUserPreviewScreen(props: {
     },
   ];
 
-  const getSheetContent = () => {
-    const group = profileMetricGroups.find((g) => g.id === activeSheet);
-    if (!group) return null;
-    return {
-      title: group.title,
-      items: group.items,
-    };
-  };
+  const fansPosts = props.fansPosts ?? [];
+  const fansSocialInteractions = filterFansSocialInteractions(
+    fansPosts,
+    props.socialInteractions,
+  );
 
-  const sheetContent = getSheetContent();
+  const authoredPosts = useMemo(
+    () => filterProfileAuthoredPosts(props.posts, props.profile),
+    [props.posts, props.profile],
+  );
+  const profileReplies = useMemo(
+    () =>
+      mergeProfileReplies(
+        props.posts,
+        props.profile,
+        props.socialInteractions,
+      ),
+    [props.posts, props.profile, props.socialInteractions],
+  );
+  const repostPosts = useMemo(
+    () =>
+      mergeProfileRepostPosts(
+        props.posts,
+        props.profile,
+        props.socialInteractions,
+      ),
+    [props.posts, props.profile, props.socialInteractions],
+  );
+  const sharedPosts = useMemo(
+    () =>
+      filterInteractionPosts(props.posts, props.socialInteractions, "share"),
+    [props.posts, props.socialInteractions],
+  );
+  const likedPosts = useMemo(
+    () =>
+      filterInteractionPosts(props.posts, props.socialInteractions, "like"),
+    [props.posts, props.socialInteractions],
+  );
+
+  const fanAuthoredPosts = useMemo(
+    () => filterProfileAuthoredPosts(fansPosts, props.profile),
+    [fansPosts, props.profile],
+  );
+  const fanRepostPosts = useMemo(
+    () =>
+      mergeProfileRepostPosts(
+        fansPosts,
+        props.profile,
+        fansSocialInteractions,
+      ),
+    [fansPosts, props.profile, fansSocialInteractions],
+  );
+  const fanSharedPosts = useMemo(
+    () =>
+      filterInteractionPosts(fansPosts, fansSocialInteractions, "share"),
+    [fansPosts, fansSocialInteractions],
+  );
+  const fanLikedPosts = useMemo(
+    () => filterInteractionPosts(fansPosts, fansSocialInteractions, "like"),
+    [fansPosts, fansSocialInteractions],
+  );
+  const fanCommentFeedItems = useMemo(
+    () =>
+      fanCommentRecords.map((comment) => ({
+        id: comment.id,
+        content: comment.content,
+        createdAt: comment.createdAt,
+        clubId: comment.clubId,
+        clubLabel: resolveFanClubLabel(comment.clubId),
+        timeLabel: formatFanCommentTime(comment.createdAt),
+      })),
+    [fanCommentRecords],
+  );
+
+  useEffect(() => {
+    const varIds = [props.profile.varId, props.profile.displayVarId].filter(Boolean);
+    if (varIds.length === 0) {
+      setFanCommentRecords([]);
+      return;
+    }
+
+    let cancelled = false;
+    void listFansPostsByVarId(varIds, 100).then((records) => {
+      if (cancelled) return;
+      setFanCommentRecords(
+        records.map((record) => ({
+          id: record.id,
+          content: record.content,
+          createdAt: record.createdAt,
+          clubId: record.clubId,
+        })),
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [props.profile.displayVarId, props.profile.varId]);
 
   return (
     <View style={styles.root}>
@@ -549,52 +1076,568 @@ export function ProfileUserPreviewScreen(props: {
           />
         </LinearGradient>
 
-        <View style={styles.showcaseSection}>
-          <View style={styles.showcaseHeader}>
-            <View style={styles.showcaseBadge}>
-              <Ionicons name="trophy" size={22} color="#F4C565" />
+        <View style={localStyles.sectionWrapper}>
+          <View style={localStyles.varXContainer}>
+            <View style={localStyles.profileSectionsNav}>
+              <Pressable
+                style={localStyles.profileNavItem}
+                onPress={toggleVarSection}
+              >
+                <Text style={localStyles.varXTitle}>بروفايل VAR X</Text>
+                <Animated.View
+                  style={{
+                    transform: [
+                      {
+                        rotate: varSectionAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ["0deg", "180deg"],
+                        }),
+                      },
+                    ],
+                  }}
+                >
+                  <Ionicons name="chevron-down" size={20} color="#FFFFFF" />
+                </Animated.View>
+              </Pressable>
+
+              <View style={localStyles.profileNavDivider} />
+
+              <Pressable
+                style={localStyles.profileNavItem}
+                onPress={toggleFanClubSection}
+              >
+                <Text style={localStyles.varXTitle}>بروفايل الرابطة</Text>
+                <Animated.View
+                  style={{
+                    transform: [
+                      {
+                        rotate: fanClubSectionAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ["0deg", "180deg"],
+                        }),
+                      },
+                    ],
+                  }}
+                >
+                  <Ionicons name="chevron-down" size={20} color="#FFFFFF" />
+                </Animated.View>
+              </Pressable>
             </View>
 
-            <View style={styles.showcaseHeaderCopy}>
-              <Text style={[styles.showcaseTitle, titleArabicTextStyle]}>
-                سجل التوقعات
-              </Text>
-              <Text style={styles.showcaseHint}>
-                كل توقع مقفل يظهر هنا بشكل واضح ليزيد حماسك قبل المباراة وبعدها.
-              </Text>
-            </View>
-          </View>
-
-          {predictions.length ? (
-            <View style={styles.predictionsList}>
-              {predictions.map((prediction) => (
-                <PredictionShowcaseCard
-                  key={prediction.id}
-                  arabicFontFamily={props.arabicFontFamily}
-                  prediction={prediction}
+          {/* محتوى VAR X */}
+          <Animated.View
+            style={[
+              localStyles.varXContent,
+              {
+                maxHeight: varSectionAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 1200],
+                }),
+                opacity: varSectionAnim,
+              },
+            ]}
+          >
+            {/* قسم التغريدات */}
+            <View style={localStyles.subSection}>
+              <Pressable
+                style={localStyles.subSectionHeader}
+                onPress={() => toggleSubSection("posts")}
+              >
+                <View style={localStyles.subSectionHeaderLeft}>
+                  <Text style={localStyles.subSectionTitle}>التغريدات</Text>
+                  <Ionicons name="chatbubble-ellipses-outline" size={16} color="#8BD6FF" />
+                </View>
+                <View style={localStyles.subSectionHeaderRight}>
+                  <Text style={localStyles.subSectionCount}>{authoredPosts.length}</Text>
+                  <Animated.View
+                    style={{
+                      transform: [
+                        {
+                          rotate: subSectionAnims.posts.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ["0deg", "180deg"],
+                          }),
+                        },
+                      ],
+                    }}
+                  >
+                    <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
+                  </Animated.View>
+                </View>
+              </Pressable>
+              <Animated.View
+                style={[
+                  localStyles.subSectionContent,
+                  {
+                    maxHeight: subSectionAnims.posts.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, PROFILE_SUB_SECTION_MAX_HEIGHT],
+                    }),
+                    opacity: subSectionAnims.posts,
+                  },
+                ]}
+              >
+                <ProfileXPostFeed
+                  posts={authoredPosts}
+                  profile={props.profile}
+                  emptyText="لا توجد تغريدات"
                 />
-              ))}
+              </Animated.View>
             </View>
-          ) : (
-            <View style={styles.emptyShowcaseCard}>
-              <View style={styles.emptyIconWrap}>
-                <Ionicons name="football-outline" size={28} color="#F4C565" />
-              </View>
-              <Text style={[styles.emptyTitle, titleArabicTextStyle]}>
-                لا توجد توقعات بعد
-              </Text>
-              <Text style={styles.emptyText}>
-                اقفل أول توقع من صفحة الدوريات، وستظهر هنا بطاقة حماسية تعرض
-                توقعك والنقاط ووقت القفل.
-              </Text>
-              <View style={styles.emptyCtaRow}>
-                <Ionicons name="sparkles" size={16} color="#8BD6FF" />
-                <Text style={styles.emptyCtaText}>
-                  ابدأ من تبويب التوقع داخل المباراة
-                </Text>
-              </View>
+
+            {/* قسم الردود */}
+            <View style={localStyles.subSection}>
+              <Pressable
+                style={localStyles.subSectionHeader}
+                onPress={() => toggleSubSection("replies")}
+              >
+                <View style={localStyles.subSectionHeaderLeft}>
+                  <Text style={localStyles.subSectionTitle}>الردود</Text>
+                  <Ionicons name="return-down-back-outline" size={16} color="#8BD6FF" />
+                </View>
+                <View style={localStyles.subSectionHeaderRight}>
+                  <Text style={localStyles.subSectionCount}>{profileReplies.length}</Text>
+                  <Animated.View
+                    style={{
+                      transform: [
+                        {
+                          rotate: subSectionAnims.replies.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ["0deg", "180deg"],
+                          }),
+                        },
+                      ],
+                    }}
+                  >
+                    <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
+                  </Animated.View>
+                </View>
+              </Pressable>
+              <Animated.View
+                style={[
+                  localStyles.subSectionContent,
+                  {
+                    maxHeight: subSectionAnims.replies.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, PROFILE_SUB_SECTION_MAX_HEIGHT],
+                    }),
+                    opacity: subSectionAnims.replies,
+                  },
+                ]}
+              >
+                <ProfileXReplyFeed
+                  replies={profileReplies}
+                  profile={props.profile}
+                  emptyText="لا توجد ردود"
+                />
+              </Animated.View>
             </View>
-          )}
+
+            {/* قسم إعادة التغريد */}
+            <View style={localStyles.subSection}>
+              <Pressable
+                style={localStyles.subSectionHeader}
+                onPress={() => toggleSubSection("reposts")}
+              >
+                <View style={localStyles.subSectionHeaderLeft}>
+                  <Text style={localStyles.subSectionTitle}>إعادة التغريد</Text>
+                  <Ionicons name="repeat-outline" size={16} color="#8BD6FF" />
+                </View>
+                <View style={localStyles.subSectionHeaderRight}>
+                  <Text style={localStyles.subSectionCount}>{repostPosts.length}</Text>
+                  <Animated.View
+                    style={{
+                      transform: [
+                        {
+                          rotate: subSectionAnims.reposts.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ["0deg", "180deg"],
+                          }),
+                        },
+                      ],
+                    }}
+                  >
+                    <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
+                  </Animated.View>
+                </View>
+              </Pressable>
+              <Animated.View
+                style={[
+                  localStyles.subSectionContent,
+                  {
+                    maxHeight: subSectionAnims.reposts.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, PROFILE_SUB_SECTION_MAX_HEIGHT],
+                    }),
+                    opacity: subSectionAnims.reposts,
+                  },
+                ]}
+              >
+                <ProfileXPostFeed
+                  posts={repostPosts}
+                  profile={props.profile}
+                  emptyText="لا توجد إعادات تغريد"
+                />
+              </Animated.View>
+            </View>
+
+            {/* قسم المشاركات */}
+            <View style={localStyles.subSection}>
+              <Pressable
+                style={localStyles.subSectionHeader}
+                onPress={() => toggleSubSection("shares")}
+              >
+                <View style={localStyles.subSectionHeaderLeft}>
+                  <Text style={localStyles.subSectionTitle}>المشاركات</Text>
+                  <Ionicons name="share-social-outline" size={16} color="#8BD6FF" />
+                </View>
+                <View style={localStyles.subSectionHeaderRight}>
+                  <Text style={localStyles.subSectionCount}>{sharedPosts.length}</Text>
+                  <Animated.View
+                    style={{
+                      transform: [
+                        {
+                          rotate: subSectionAnims.shares.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ["0deg", "180deg"],
+                          }),
+                        },
+                      ],
+                    }}
+                  >
+                    <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
+                  </Animated.View>
+                </View>
+              </Pressable>
+              <Animated.View
+                style={[
+                  localStyles.subSectionContent,
+                  {
+                    maxHeight: subSectionAnims.shares.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, PROFILE_SUB_SECTION_MAX_HEIGHT],
+                    }),
+                    opacity: subSectionAnims.shares,
+                  },
+                ]}
+              >
+                <ProfileXPostFeed
+                  posts={sharedPosts}
+                  profile={props.profile}
+                  useProfileAuthor={false}
+                  emptyText="لا توجد مشاركات"
+                />
+              </Animated.View>
+            </View>
+
+            {/* قسم الإعجابات */}
+            <View style={localStyles.subSection}>
+              <Pressable
+                style={localStyles.subSectionHeader}
+                onPress={() => toggleSubSection("likes")}
+              >
+                <View style={localStyles.subSectionHeaderLeft}>
+                  <Text style={localStyles.subSectionTitle}>الإعجابات</Text>
+                  <Ionicons name="heart-outline" size={16} color="#FB7185" />
+                </View>
+                <View style={localStyles.subSectionHeaderRight}>
+                  <Text style={[localStyles.subSectionCount, { color: "#FB7185" }]}>
+                    {likedPosts.length}
+                  </Text>
+                  <Animated.View
+                    style={{
+                      transform: [
+                        {
+                          rotate: subSectionAnims.likes.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ["0deg", "180deg"],
+                          }),
+                        },
+                      ],
+                    }}
+                  >
+                    <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
+                  </Animated.View>
+                </View>
+              </Pressable>
+              <Animated.View
+                style={[
+                  localStyles.subSectionContent,
+                  {
+                    maxHeight: subSectionAnims.likes.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, PROFILE_SUB_SECTION_MAX_HEIGHT],
+                    }),
+                    opacity: subSectionAnims.likes,
+                  },
+                ]}
+              >
+                <ProfileXLikedPostFeed
+                  posts={likedPosts}
+                  followedProfiles={props.followedProfiles}
+                  emptyText="لا توجد إعجابات"
+                />
+              </Animated.View>
+            </View>
+          </Animated.View>
+
+          {/* محتوى بروفايل الرابطة */}
+          <Animated.View
+            style={[
+              localStyles.varXContent,
+              {
+                maxHeight: fanClubSectionAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 1200],
+                }),
+                opacity: fanClubSectionAnim,
+              },
+            ]}
+          >
+            {/* قسم التغريدات */}
+            <View style={localStyles.subSection}>
+              <Pressable
+                style={localStyles.subSectionHeader}
+                onPress={() => toggleFanClubSubSection("posts")}
+              >
+                <View style={localStyles.subSectionHeaderLeft}>
+                  <Text style={localStyles.subSectionTitle}>التغريدات</Text>
+                  <Ionicons name="chatbubble-ellipses-outline" size={16} color="#F4C565" />
+                </View>
+                <View style={localStyles.subSectionHeaderRight}>
+                  <Text style={localStyles.subSectionCount}>{fanAuthoredPosts.length}</Text>
+                  <Animated.View
+                    style={{
+                      transform: [
+                        {
+                          rotate: fanClubSubSectionAnims.posts.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ["0deg", "180deg"],
+                          }),
+                        },
+                      ],
+                    }}
+                  >
+                    <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
+                  </Animated.View>
+                </View>
+              </Pressable>
+              <Animated.View
+                style={[
+                  localStyles.subSectionContent,
+                  {
+                    maxHeight: fanClubSubSectionAnims.posts.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, PROFILE_SUB_SECTION_MAX_HEIGHT],
+                    }),
+                    opacity: fanClubSubSectionAnims.posts,
+                  },
+                ]}
+              >
+                <ProfileXPostFeed
+                  posts={fanAuthoredPosts}
+                  profile={props.profile}
+                  emptyText="لا توجد تغريدات في الرابطة"
+                />
+              </Animated.View>
+            </View>
+
+            {/* قسم التعليقات */}
+            <View style={localStyles.subSection}>
+              <Pressable
+                style={localStyles.subSectionHeader}
+                onPress={() => toggleFanClubSubSection("comments")}
+              >
+                <View style={localStyles.subSectionHeaderLeft}>
+                  <Text style={localStyles.subSectionTitle}>التعليقات</Text>
+                  <Ionicons name="chatbubble-outline" size={16} color="#F4C565" />
+                </View>
+                <View style={localStyles.subSectionHeaderRight}>
+                  <Text style={localStyles.subSectionCount}>{fanCommentFeedItems.length}</Text>
+                  <Animated.View
+                    style={{
+                      transform: [
+                        {
+                          rotate: fanClubSubSectionAnims.comments.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ["0deg", "180deg"],
+                          }),
+                        },
+                      ],
+                    }}
+                  >
+                    <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
+                  </Animated.View>
+                </View>
+              </Pressable>
+              <Animated.View
+                style={[
+                  localStyles.subSectionContent,
+                  {
+                    maxHeight: fanClubSubSectionAnims.comments.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, PROFILE_SUB_SECTION_MAX_HEIGHT],
+                    }),
+                    opacity: fanClubSubSectionAnims.comments,
+                  },
+                ]}
+              >
+                <ProfileXFanCommentFeed
+                  comments={fanCommentFeedItems}
+                  profile={props.profile}
+                  emptyText="لا توجد تعليقات في الرابطة"
+                />
+              </Animated.View>
+            </View>
+
+            {/* قسم إعادة التغريد */}
+            <View style={localStyles.subSection}>
+              <Pressable
+                style={localStyles.subSectionHeader}
+                onPress={() => toggleFanClubSubSection("reposts")}
+              >
+                <View style={localStyles.subSectionHeaderLeft}>
+                  <Text style={localStyles.subSectionTitle}>إعادة التغريد</Text>
+                  <Ionicons name="repeat-outline" size={16} color="#F4C565" />
+                </View>
+                <View style={localStyles.subSectionHeaderRight}>
+                  <Text style={localStyles.subSectionCount}>{fanRepostPosts.length}</Text>
+                  <Animated.View
+                    style={{
+                      transform: [
+                        {
+                          rotate: fanClubSubSectionAnims.reposts.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ["0deg", "180deg"],
+                          }),
+                        },
+                      ],
+                    }}
+                  >
+                    <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
+                  </Animated.View>
+                </View>
+              </Pressable>
+              <Animated.View
+                style={[
+                  localStyles.subSectionContent,
+                  {
+                    maxHeight: fanClubSubSectionAnims.reposts.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, PROFILE_SUB_SECTION_MAX_HEIGHT],
+                    }),
+                    opacity: fanClubSubSectionAnims.reposts,
+                  },
+                ]}
+              >
+                <ProfileXPostFeed
+                  posts={fanRepostPosts}
+                  profile={props.profile}
+                  emptyText="لا توجد إعادات تغريد في الرابطة"
+                />
+              </Animated.View>
+            </View>
+
+            {/* قسم المشاركات */}
+            <View style={localStyles.subSection}>
+              <Pressable
+                style={localStyles.subSectionHeader}
+                onPress={() => toggleFanClubSubSection("shares")}
+              >
+                <View style={localStyles.subSectionHeaderLeft}>
+                  <Text style={localStyles.subSectionTitle}>المشاركات</Text>
+                  <Ionicons name="share-social-outline" size={16} color="#F4C565" />
+                </View>
+                <View style={localStyles.subSectionHeaderRight}>
+                  <Text style={localStyles.subSectionCount}>{fanSharedPosts.length}</Text>
+                  <Animated.View
+                    style={{
+                      transform: [
+                        {
+                          rotate: fanClubSubSectionAnims.shares.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ["0deg", "180deg"],
+                          }),
+                        },
+                      ],
+                    }}
+                  >
+                    <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
+                  </Animated.View>
+                </View>
+              </Pressable>
+              <Animated.View
+                style={[
+                  localStyles.subSectionContent,
+                  {
+                    maxHeight: fanClubSubSectionAnims.shares.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, PROFILE_SUB_SECTION_MAX_HEIGHT],
+                    }),
+                    opacity: fanClubSubSectionAnims.shares,
+                  },
+                ]}
+              >
+                <ProfileXPostFeed
+                  posts={fanSharedPosts}
+                  profile={props.profile}
+                  useProfileAuthor={false}
+                  emptyText="لا توجد مشاركات في الرابطة"
+                />
+              </Animated.View>
+            </View>
+
+            {/* قسم الإعجابات */}
+            <View style={localStyles.subSection}>
+              <Pressable
+                style={localStyles.subSectionHeader}
+                onPress={() => toggleFanClubSubSection("likes")}
+              >
+                <View style={localStyles.subSectionHeaderLeft}>
+                  <Text style={localStyles.subSectionTitle}>الإعجابات</Text>
+                  <Ionicons name="heart-outline" size={16} color="#FB7185" />
+                </View>
+                <View style={localStyles.subSectionHeaderRight}>
+                  <Text style={[localStyles.subSectionCount, { color: "#FB7185" }]}>
+                    {fanLikedPosts.length}
+                  </Text>
+                  <Animated.View
+                    style={{
+                      transform: [
+                        {
+                          rotate: fanClubSubSectionAnims.likes.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ["0deg", "180deg"],
+                          }),
+                        },
+                      ],
+                    }}
+                  >
+                    <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
+                  </Animated.View>
+                </View>
+              </Pressable>
+              <Animated.View
+                style={[
+                  localStyles.subSectionContent,
+                  {
+                    maxHeight: fanClubSubSectionAnims.likes.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, PROFILE_SUB_SECTION_MAX_HEIGHT],
+                    }),
+                    opacity: fanClubSubSectionAnims.likes,
+                  },
+                ]}
+              >
+                <ProfileXLikedPostFeed
+                  posts={fanLikedPosts}
+                  followedProfiles={props.followedProfiles}
+                  emptyText="لا توجد إعجابات في الرابطة"
+                />
+              </Animated.View>
+            </View>
+          </Animated.View>
+        </View>
         </View>
 
         <PredictionsBar
@@ -604,72 +1647,73 @@ export function ProfileUserPreviewScreen(props: {
           predictions={predictions}
           arabicFontFamily={props.arabicFontFamily}
         />
-
-        <View style={styles.profileMetricGroupsGrid}>
-          {profileMetricGroups
-            .filter((g) => g.id !== "predictions")
-            .map((metricGroup) => (
-              <ProfileMetricGroupCard
-                key={metricGroup.id}
-                accentColor={metricGroup.accentColor}
-                arabicFontFamily={props.arabicFontFamily}
-                iconName={metricGroup.iconName}
-                items={metricGroup.items}
-                title={metricGroup.title}
-                onPress={() => openSheet(metricGroup.id)}
-              />
-            ))}
-        </View>
       </ScrollView>
 
-      {activeSheet && (
-        <Modal
-          visible={activeSheet !== null}
-          transparent
-          animationType="none"
-          onRequestClose={closeSheet}
-        >
-          <Pressable style={localStyles.sheetBackdrop} onPress={closeSheet}>
-            <Animated.View
-              style={[
-                localStyles.sheetPanel,
-                {
-                  transform: [
-                    {
-                      translateY: sheetAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [screenHeight * 0.4, 0],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              <View style={localStyles.sheetHeader}>
-                <Pressable style={localStyles.sheetCloseBtn} onPress={closeSheet}>
-                  <Ionicons name="close" size={22} color="#FFFFFF" />
-                </Pressable>
-                <Text style={localStyles.sheetTitle}>
-                  {sheetContent?.title}
-                </Text>
-              </View>
-              <ScrollView style={localStyles.sheetContent}>
-                {sheetContent?.items.map((item) => (
-                  <View key={item.id} style={localStyles.sheetItem}>
-                    <Text style={localStyles.sheetItemValue}>{item.value}</Text>
-                    <Text style={localStyles.sheetItemLabel}>{item.label}</Text>
-                  </View>
-                ))}
-              </ScrollView>
-            </Animated.View>
-          </Pressable>
-        </Modal>
-      )}
     </View>
   );
 }
 
 const localStyles = StyleSheet.create({
+  expandableSectionsContainer: {
+    marginTop: 12,
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  expandableSection: {
+    backgroundColor: "rgba(12,12,16,0.98)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    overflow: "hidden",
+  },
+  expandableHeader: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  expandableHeaderLeft: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+  },
+  expandableHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  expandableTitle: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  expandableCount: {
+    color: "#8BD6FF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  expandableContent: {
+    overflow: "hidden",
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  emptySectionText: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 14,
+    textAlign: "center",
+    paddingVertical: 20,
+  },
+  profileMetricGroupCardWide: {
+    width: "100%",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: "rgba(12,12,16,0.98)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.20)",
+    marginBottom: 10,
+  },
   predictionsWrapper: {
     marginHorizontal: 16,
     marginVertical: 12,
@@ -683,7 +1727,7 @@ const localStyles = StyleSheet.create({
     marginRight: 4,
   },
   predictionsBar: {
-    backgroundColor: "rgba(30,30,35,0.98)",
+    backgroundColor: "rgba(12,12,16,0.98)",
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.25)",
@@ -714,7 +1758,7 @@ const localStyles = StyleSheet.create({
     fontSize: 13,
     color: "#FFFFFF",
     fontWeight: "600",
-    backgroundColor: "rgba(244,197,101,0.65)",
+    backgroundColor: "rgba(135,206,235,0.65)",
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 8,
@@ -759,64 +1803,167 @@ const localStyles = StyleSheet.create({
     color: "rgba(255,255,255,0.5)",
     textAlign: "right",
   },
-  sheetBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "flex-end",
+  activityLogSection: {
+    marginTop: 18,
+    gap: 10,
   },
-  sheetPanel: {
-    backgroundColor: "#0A0A0F",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+  activityLogTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "800",
+    textAlign: "right",
+    marginBottom: 4,
+  },
+  activityLogCard: {
+    borderRadius: 18,
+    padding: 12,
+    backgroundColor: "rgba(255,255,255,0.05)",
     borderWidth: 1,
-    borderColor: "#FFFFFF",
-    padding: 20,
-    minHeight: 300,
-    maxHeight: "60%",
+    borderColor: "rgba(255,255,255,0.10)",
+    gap: 10,
   },
-  sheetHeader: {
+  activityLogCardHeader: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.1)",
+    gap: 10,
   },
-  sheetCloseBtn: {
+  activityLogIcon: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
-  sheetTitle: {
-    fontSize: 18,
+  activityLogCopy: {
+    flex: 1,
+    alignItems: "flex-end",
+  },
+  activityLogMetaRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  activityLogType: {
+    color: "#8BD6FF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  activityLogTime: {
+    color: "rgba(255,255,255,0.48)",
+    fontSize: 11,
     fontWeight: "700",
+  },
+  activityLogItemTitle: {
     color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
     textAlign: "right",
   },
-  sheetContent: {
-    maxHeight: 300,
+  activityLogContent: {
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "right",
   },
-  sheetItem: {
+  activityLogEmptyCard: {
+    alignItems: "center",
+    borderRadius: 18,
+    paddingVertical: 22,
+    paddingHorizontal: 14,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    gap: 8,
+  },
+  activityLogEmptyTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  activityLogEmptyText: {
+    color: "rgba(255,255,255,0.56)",
+    fontSize: 12,
+    lineHeight: 19,
+    textAlign: "center",
+  },
+  sectionWrapper: {
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  varXContainer: {
+    backgroundColor: "rgba(12,12,16,0.98)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    overflow: "hidden",
+  },
+  profileSectionsNav: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  profileNavItem: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+  },
+  profileNavDivider: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    marginVertical: 4,
+  },
+  varXTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  varXContent: {
+    overflow: "hidden",
+    paddingHorizontal: 0,
+    paddingBottom: 8,
+  },
+  subSection: {
+    marginBottom: 4,
+    overflow: "hidden",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  subSectionHeader: {
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  sheetItemValue: {
-    fontSize: 20,
+  subSectionHeaderLeft: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+  },
+  subSectionHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  subSectionTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  subSectionCount: {
+    color: "#8BD6FF",
+    fontSize: 14,
     fontWeight: "700",
-    color: "#F4C565",
   },
-  sheetItemLabel: {
-    fontSize: 15,
-    color: "rgba(255,255,255,0.7)",
-    textAlign: "right",
+  subSectionContent: {
+    overflow: "hidden",
+    paddingBottom: 4,
   },
 });

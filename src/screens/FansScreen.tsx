@@ -1,24 +1,23 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import type { FanClubId, Post } from "../app.types";
+import type { FanClubId, PendingAuthIntent, Post } from "../app.types";
 import XFeedHeader from "../components/XFeedHeader";
 import { XPostCard } from "./x-feed/XPostCard";
+import { XPostDetailModal } from "./x-feed/XPostDetailModal";
+import { XPostReplyComposerModal } from "./x-feed/XPostReplyComposerModal";
 import type { FansCommunityPost } from "./fans/FansCommunityFeed";
 import {
-  createFansPost,
-  listFansPostsByClub,
-  subscribeToAppwriteCollection,
-  APPWRITE_CONFIG,
+  listFansPostsByVarId,
 } from "../lib/appwrite";
+import { buildComposerDisplayVarId, normalizeAuthorId } from "../appshell/appshell.helpers";
 import { FAN_CLUBS, LEAGUES } from "../app.data";
-import { PullToRefreshScrollView } from "../components/PullToRefreshScrollView";
 import { createCompatStyleSheet } from "../lib/crossPlatformStyles";
-import FansAssociationHero, { FansCheerSwipeButton } from "./fans/FansAssociationHero";
-import FansCommunityFeed from "./fans/FansCommunityFeed";
-import FansLeaguesGrid from "./fans/FansLeaguesGrid";
+import { FansCheerSwipeButton } from "./fans/FansAssociationHero";
 import { resolveLeadingFanClub } from "./fans/fans.leader";
 import {
+  FANS_BOTTOM_NAV_RESERVE,
+  FANS_SHEET_BOTTOM_INSET,
   FANS_FEED_TOP_PADDING,
   FANS_SCROLL_BOTTOM_PADDING,
   FANS_STICKY_HEADER_TOP,
@@ -37,7 +36,7 @@ type FansScreenProps = {
   userVarId?: string;
   userAvatarUri?: string;
   userIsVerified?: boolean;
-  onRequireAuth: (message?: string) => void;
+  onRequireAuth: (message?: string, intent?: PendingAuthIntent) => void;
   onToggleSupport: (clubId: FanClubId) => void;
   onRefresh: () => void;
   isRefreshing: boolean;
@@ -50,13 +49,17 @@ type FansScreenProps = {
   currentUserVarId?: string;
   currentUserDisplayName?: string;
   currentUserAvatarUri?: string;
+  initialProfileSheetTab?: 'posts'|'comments'|'likes'|'reposts';
+  onInitialProfileSheetHandled?: () => void;
+  resumeReplyPostId?: number | null;
+  onReplyIntentConsumed?: () => void;
 };
 
 /**
  * صفحة الرابطة:
  * 1) هيدر ثابت: اللسان + شعار/رابطة/شجع
- * 2) تعليقات تمرّر تحته وتختفي من الأسفل
- * 3) شريط الكتابة أسفل الشاشة
+ * 2) تايم لاين منشورات الرابطة (نمط X) مع إعجاب ورد وإعادة نشر
+ * 3) زر التغريدة العائم لإنشاء منشور جديد
  */
 export default function FansScreen(props: FansScreenProps) {
   const { width: windowWidth } = useWindowDimensions();
@@ -79,7 +82,7 @@ export default function FansScreen(props: FansScreenProps) {
     );
   };
   const [showProfileSheet, setShowProfileSheet] = useState(false);
-  const [activeSheetTab, setActiveSheetTab] = useState<'posts'|'likes'|'reposts'>('posts');
+  const [activeSheetTab, setActiveSheetTab] = useState<'posts'|'comments'|'likes'|'reposts'>('posts');
   const [headerHeight, setHeaderHeight] = useState(0);
   const [avatarBottom, setAvatarBottom] = useState(0);
   const sheetAnim = useRef(new Animated.Value(0)).current;
@@ -98,12 +101,26 @@ export default function FansScreen(props: FansScreenProps) {
     )).start(() => setShowAvatarMenu(false));
   };
 
-  const openProfileSheet = (tab: 'posts'|'likes'|'reposts' = 'posts') => {
+  const openProfileSheet = (tab: 'posts'|'comments'|'likes'|'reposts' = 'posts') => {
     closeAvatarMenu();
     setActiveSheetTab(tab);
     setShowProfileSheet(true);
     Animated.spring(sheetAnim, { toValue: 1, damping: 22, stiffness: 300, useNativeDriver: true }).start();
   };
+
+  useEffect(() => {
+    const tab = props.initialProfileSheetTab;
+    if (!tab) return;
+    setActiveSheetTab(tab);
+    setShowProfileSheet(true);
+    Animated.spring(sheetAnim, {
+      toValue: 1,
+      damping: 22,
+      stiffness: 300,
+      useNativeDriver: true,
+    }).start();
+    props.onInitialProfileSheetHandled?.();
+  }, [props.initialProfileSheetTab, props.onInitialProfileSheetHandled, sheetAnim]);
 
   const closeProfileSheet = () => {
     Animated.timing(sheetAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() =>
@@ -147,9 +164,11 @@ export default function FansScreen(props: FansScreenProps) {
 
   const [activeClubId, setActiveClubId] = useState<FanClubId | null>(defaultUserClub?.id ?? null);
   const [activeLeagueId, setActiveLeagueId] = useState<string>(defaultUserClub?.leagueId ?? "saudi");
-  const [showLeagueMenu, setShowLeagueMenu] = useState(false);
-  const [communityPosts, setCommunityPosts] = useState<FansCommunityPost[]>([]);
-  const [postsLoading, setPostsLoading] = useState(false);
+  const [myComments, setMyComments] = useState<FansCommunityPost[]>([]);
+  const [myCommentsLoading, setMyCommentsLoading] = useState(false);
+  const [openedPost, setOpenedPost] = useState<Post | null>(null);
+  const [replyTargetPost, setReplyTargetPost] = useState<Post | null>(null);
+  const [replyDraft, setReplyDraft] = useState("");
 
   useEffect(() => {
     if (activeClubId) {
@@ -159,11 +178,6 @@ export default function FansScreen(props: FansScreenProps) {
       }
     }
   }, [activeClubId, activeLeagueId]);
-
-  const activeRoomId = useMemo(() => {
-    if (activeClubId) return activeClubId;
-    return null;
-  }, [activeClubId]);
 
   const formatTime = (iso: string) => {
     try {
@@ -176,89 +190,6 @@ export default function FansScreen(props: FansScreenProps) {
       return `قبل ${Math.floor(hrs / 24)} يوم`;
     } catch {
       return "";
-    }
-  };
-
-  const loadPosts = useCallback(async (clubId: string) => {
-    setPostsLoading(true);
-    try {
-      const records = await listFansPostsByClub(clubId, 50);
-      const posts: FansCommunityPost[] = records.map((r) => ({
-        id: r.id,
-        author: r.author,
-        varId: r.varId,
-        time: formatTime(r.createdAt),
-        content: r.content,
-        replyCount: 0,
-        avatarUri: r.avatarUri || undefined,
-        verified: r.verified,
-      }));
-      setCommunityPosts(posts);
-    } finally {
-      setPostsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!activeRoomId) {
-      setCommunityPosts([]);
-      return;
-    }
-    void loadPosts(activeRoomId);
-
-    const unsubscribe = subscribeToAppwriteCollection(
-      APPWRITE_CONFIG.databaseId,
-      APPWRITE_CONFIG.fansPostsCollectionId,
-      (payload, events) => {
-        const isCreate = events.some((e) => e.includes(".create"));
-        if (!isCreate) return;
-        const doc = payload as Record<string, unknown>;
-        if (doc.clubId !== activeRoomId) return;
-        const newPost: FansCommunityPost = {
-          id: (doc.$id as string) || `rt-${Date.now()}`,
-          author: (doc.author as string) || "",
-          varId: (doc.varId as string) || "",
-          time: "الآن",
-          content: (doc.content as string) || "",
-          replyCount: 0,
-          avatarUri: (doc.avatarUri as string) || undefined,
-          verified: Boolean(doc.verified),
-        };
-        setCommunityPosts((prev) => {
-          if (prev.some((p) => p.id === newPost.id)) return prev;
-          return [newPost, ...prev];
-        });
-      },
-    );
-
-    return () => { unsubscribe?.(); };
-  }, [activeRoomId, loadPosts]);
-
-  const handleSend = async (text: string) => {
-    if (!activeRoomId) return;
-    const optimistic: FansCommunityPost = {
-      id: `opt-${Date.now()}`,
-      author: props.userDisplayName || "مجهول",
-      varId: props.userVarId || "",
-      time: "الآن",
-      content: text,
-      replyCount: 0,
-      avatarUri: props.userAvatarUri,
-      verified: props.userIsVerified ?? false,
-    };
-    setCommunityPosts((prev) => [optimistic, ...prev]);
-    const saved = await createFansPost({
-      clubId: activeRoomId,
-      varId: props.userVarId || "",
-      author: props.userDisplayName || "مجهول",
-      avatarUri: props.userAvatarUri || "",
-      verified: props.userIsVerified ?? false,
-      content: text,
-    });
-    if (saved) {
-      setCommunityPosts((prev) =>
-        prev.map((p) => p.id === optimistic.id ? { ...p, id: saved.id } : p)
-      );
     }
   };
 
@@ -286,34 +217,238 @@ export default function FansScreen(props: FansScreenProps) {
     [userFanClubs],
   );
 
-  const displayClubId = activeClubId ?? null;
+  const resolveDefaultClubForLeague = useCallback(
+    (leagueId: string): FanClubId | null => {
+      const profileClub = myRoomClubs.find((club) => club.leagueId === leagueId);
+      if (profileClub) return profileClub.id as FanClubId;
 
-  const canInteractInFeed = useMemo(() => {
-    if (!props.isLoggedIn) return false;
-    const targetId = displayClubId;
-    if (!targetId) {
-      const leader = resolveLeadingFanClub(props.supporters);
-      if (!leader) return false;
-      return userFanClubs.some(
-        (name) =>
-          name.trim() === leader.club.title.trim() ||
-          name.trim() === leader.club.id.trim(),
-      );
+      const supportedClub = props.supportedTeams.find((teamId) => {
+        const club = FAN_CLUBS.find((candidate) => candidate.id === teamId);
+        return club?.leagueId === leagueId;
+      });
+      if (supportedClub) return supportedClub;
+
+      const topClub = [...FAN_CLUBS]
+        .filter((club) => club.leagueId === leagueId)
+        .sort(
+          (left, right) =>
+            (props.supporters[right.id] ?? 0) - (props.supporters[left.id] ?? 0),
+        )[0];
+
+      return topClub?.id ?? null;
+    },
+    [myRoomClubs, props.supportedTeams, props.supporters],
+  );
+
+  const cheerClubId = useMemo(
+    (): FanClubId | null =>
+      activeClubId ?? resolveDefaultClubForLeague(activeLeagueId),
+    [activeClubId, activeLeagueId, resolveDefaultClubForLeague],
+  );
+
+  const myVarIds = useMemo(
+    () =>
+      [props.currentUserVarId, props.userVarId]
+        .map((value) => normalizeAuthorId(value || ""))
+        .filter((value) => value && value !== "local-user"),
+    [props.currentUserVarId, props.userVarId],
+  );
+
+  const matchesMyVarId = useCallback(
+    (varId: string) => {
+      const normalized = normalizeAuthorId(varId || "");
+      return normalized !== "local-user" && myVarIds.includes(normalized);
+    },
+    [myVarIds],
+  );
+
+  const isMyFansTweet = useCallback(
+    (post: Post) => matchesMyVarId(post.authorId || ""),
+    [matchesMyVarId],
+  );
+
+  const loadMyComments = useCallback(async () => {
+    if (myVarIds.length === 0) {
+      setMyComments([]);
+      return;
     }
-    return userFanClubs.some(
-      (name) => {
-        const club = FAN_CLUBS.find((c) => c.id === targetId);
-        return name.trim() === (club?.title.trim() ?? "") || name.trim() === targetId.trim();
-      }
-    );
-  }, [props.isLoggedIn, displayClubId, props.supporters, userFanClubs]);
+    setMyCommentsLoading(true);
+    try {
+      const records = await listFansPostsByVarId(
+        [props.currentUserVarId, props.userVarId].filter(Boolean) as string[],
+        100,
+      );
+      const posts: FansCommunityPost[] = records.map((record) => {
+        const club = FAN_CLUBS.find((candidate) => candidate.id === record.clubId);
+        return {
+          id: record.id,
+          author: record.author,
+          varId: record.varId,
+          time: formatTime(record.createdAt),
+          content: record.content,
+          replyCount: 0,
+          avatarUri: record.avatarUri || undefined,
+          verified: record.verified,
+          clubId: record.clubId,
+          clubTitle: club?.title ?? record.clubId,
+        };
+      });
+      setMyComments(posts);
+    } finally {
+      setMyCommentsLoading(false);
+    }
+  }, [myVarIds.length, props.currentUserVarId, props.userVarId]);
+
+  useEffect(() => {
+    if (showProfileSheet && activeSheetTab === "comments") {
+      void loadMyComments();
+    }
+  }, [showProfileSheet, activeSheetTab, loadMyComments]);
+
+  const selectLeague = useCallback(
+    (leagueId: string) => {
+      setActiveLeagueId(leagueId);
+      setActiveClubId(resolveDefaultClubForLeague(leagueId));
+    },
+    [resolveDefaultClubForLeague],
+  );
 
   const activeClubTitle = useMemo(() => {
-    const clubName = displayClubId
-      ? FAN_CLUBS.find((c) => c.id === displayClubId)?.title ?? ""
+    const clubName = cheerClubId
+      ? FAN_CLUBS.find((c) => c.id === cheerClubId)?.title ?? ""
       : resolveLeadingFanClub(props.supporters)?.club.title ?? "";
     return clubName ? `رابطة ${clubName}` : "رابطتي";
-  }, [displayClubId, props.supporters]);
+  }, [cheerClubId, props.supporters]);
+
+  const handleComposePress = () => {
+    if (!props.isLoggedIn) {
+      props.onRequireAuth("سجّل الدخول لإنشاء تغريدة.");
+      return;
+    }
+    props.onCreatePost?.();
+  };
+
+  const fansPosts = props.posts ?? [];
+
+  const replyAuthorName =
+    props.currentUserDisplayName?.trim() ||
+    props.userDisplayName?.trim() ||
+    "مستخدم VAR";
+  const replyAuthorAvatarUri =
+    props.currentUserAvatarUri?.trim() || props.userAvatarUri?.trim() || "";
+  const replyAuthorVarId = buildComposerDisplayVarId(
+    props.userVarId || "",
+    props.currentUserVarId || "",
+  );
+  const replyAuthorInitial = replyAuthorName.slice(0, 1) || "V";
+
+  const openPostDetail = (post: Post) => {
+    setOpenedPost(post);
+  };
+
+  const closePostDetail = () => {
+    setOpenedPost(null);
+  };
+
+  const closeReplyComposer = () => {
+    setReplyTargetPost(null);
+    setReplyDraft("");
+  };
+
+  const openReplyComposer = (post: Post) => {
+    if (!props.isLoggedIn) {
+      props.onRequireAuth("سجّل الدخول للرد على منشورات الرابطة.", {
+        type: "reply-post",
+        postId: post.id,
+      });
+      return;
+    }
+
+    setReplyDraft("");
+    setReplyTargetPost(post);
+    setOpenedPost(null);
+  };
+
+  const submitReply = () => {
+    if (!replyTargetPost || !replyDraft.trim()) {
+      return;
+    }
+
+    props.onSubmitPostReply?.(replyTargetPost.id, replyDraft);
+    closeReplyComposer();
+  };
+
+  const handlePostLike = (post: Post) => {
+    if (!props.isLoggedIn) {
+      props.onRequireAuth("سجّل الدخول للتفاعل مع منشورات الرابطة.", {
+        type: "toggle-post-like",
+        postId: post.id,
+      });
+      return;
+    }
+
+    props.onTogglePostLike?.(post.id);
+  };
+
+  const handlePostRepost = (post: Post) => {
+    if (!props.isLoggedIn) {
+      props.onRequireAuth("سجّل الدخول لإعادة نشر منشورات الرابطة.", {
+        type: "toggle-post-repost",
+        postId: post.id,
+      });
+      return;
+    }
+
+    props.onTogglePostRepost?.(post.id);
+  };
+
+  const handlePostShare = (post: Post) => {
+    if (!props.isLoggedIn) {
+      props.onRequireAuth("سجّل الدخول لمشاركة منشورات الرابطة.", {
+        type: "share-post",
+        postId: post.id,
+      });
+      return;
+    }
+
+    void props.onSharePost?.(post.id);
+  };
+
+  useEffect(() => {
+    if (!openedPost) {
+      return;
+    }
+
+    const latestPost = fansPosts.find((post) => post.id === openedPost.id);
+    if (latestPost && latestPost !== openedPost) {
+      setOpenedPost(latestPost);
+    }
+  }, [fansPosts, openedPost]);
+
+  useEffect(() => {
+    if (!props.resumeReplyPostId || !props.isLoggedIn) {
+      return;
+    }
+
+    const targetPost = fansPosts.find((post) => post.id === props.resumeReplyPostId);
+    if (targetPost) {
+      setReplyDraft("");
+      setReplyTargetPost(targetPost);
+    }
+
+    props.onReplyIntentConsumed?.();
+  }, [props.resumeReplyPostId, props.isLoggedIn, fansPosts, props.onReplyIntentConsumed]);
+
+  const showComposeFab =
+    !showAvatarMenu &&
+    !showProfileSheet &&
+    !showAllClubsDropdown &&
+    !showClubDropdown;
+
+  const fansHeaderChromeScale = Math.max(
+    0.84,
+    Math.min(1, Math.min(windowWidth, 430) / 430),
+  );
 
   return (
     <View style={styles.root}>
@@ -329,13 +464,14 @@ export default function FansScreen(props: FansScreenProps) {
           avatarUri={props.userAvatarUri}
           onOpenAvatar={() => showAvatarMenu ? closeAvatarMenu() : openAvatarMenu()}
           onAvatarLayout={(y, h) => setAvatarBottom(y + h)}
+          leftSlotWidth={Math.round(80 * fansHeaderChromeScale)}
           leftElement={
-            displayClubId ? (
+            cheerClubId ? (
               <FansCheerSwipeButton
-                clubId={displayClubId as FanClubId}
-                isSupported={props.supportedTeams.includes(displayClubId as FanClubId)}
+                clubId={cheerClubId}
+                isSupported={props.supportedTeams.includes(cheerClubId)}
                 alreadySupportingAnother={
-                  !props.supportedTeams.includes(displayClubId as FanClubId) &&
+                  !props.supportedTeams.includes(cheerClubId) &&
                   props.supportedTeams.length > 0
                 }
                 isLoggedIn={props.isLoggedIn}
@@ -402,26 +538,26 @@ export default function FansScreen(props: FansScreenProps) {
         </Animated.View>
       ) : null}
 
-      {/* فيد المنشورات */}
+      {/* فيد منشورات الرابطة — واجهة X، بيانات مستقلة عن تايم لاين X */}
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.screenContent}
       >
-        {(props.posts ?? []).map((post) => (
+        {fansPosts.map((post) => (
           <XPostCard
             key={post.id}
             post={post}
-            onOpen={() => undefined}
-            onReply={() => undefined}
-            onRepost={() => props.onTogglePostRepost?.(post.id)}
-            onShare={() => props.onSharePost?.(post.id)}
-            onLike={() => props.onTogglePostLike?.(post.id)}
+            onOpen={() => openPostDetail(post)}
+            onReply={() => openReplyComposer(post)}
+            onRepost={() => handlePostRepost(post)}
+            onShare={() => handlePostShare(post)}
+            onLike={() => handlePostLike(post)}
             onOpenAuthor={() => undefined}
             onOpenActions={() => undefined}
           />
         ))}
-        {(props.posts ?? []).length === 0 ? (
+        {fansPosts.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>لا توجد منشورات بعد</Text>
           </View>
@@ -452,64 +588,6 @@ export default function FansScreen(props: FansScreenProps) {
             onExpandedChange={setIsTongueExpanded}
           />
         </View>
-      ) : null}
-
-      {/* الهيدر الثابت (رابطة الهلال + شجع + اللوقو) مخفي في الصفحة الرئيسية - يظهر في صفحة الرابطة فقط */}
-      {false && (
-        <View
-          style={[
-            styles.stickyHeaderHost,
-            isTongueExpanded ? styles.stickyHeaderHostExpanded : null,
-          ]}
-          pointerEvents="box-none"
-        >
-          <View style={styles.heroHost}>
-            <FansAssociationHero
-              supporters={props.supporters}
-              supportedTeams={props.supportedTeams}
-              isLoggedIn={props.isLoggedIn}
-              onRequireAuth={props.onRequireAuth}
-              onToggleSupport={props.onToggleSupport}
-              overrideClubId={displayClubId ?? undefined}
-              onTitlePress={myRoomClubs.length > 0 && props.isLoggedIn ? () => setShowMyRooms((v) => !v) : undefined}
-              onDotsPress={() => setShowLeagueMenu((v) => !v)}
-            />
-            {isTongueExpanded ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="إغلاق قائمة الأندية"
-                style={styles.heroDismissOverlay}
-                onPress={() => tongueRef.current?.collapse()}
-              />
-            ) : null}
-          </View>
-        </View>
-      )}
-
-      {showLeagueMenu ? (
-        <Pressable
-          style={styles.leagueMenuBackdrop}
-          onPress={() => setShowLeagueMenu(false)}
-          accessibilityRole="button"
-          accessibilityLabel="إغلاق"
-        >
-          <View style={styles.leagueMenuPanel}>
-            {LEAGUES.map((league) => (
-              <Pressable
-                key={league.id}
-                style={[styles.leagueMenuItem, activeLeagueId === league.id && styles.leagueMenuItemActive]}
-                onPress={() => { setActiveLeagueId(league.id); setShowLeagueMenu(false); setActiveClubId(null); }}
-              >
-                <Text style={[styles.leagueMenuItemText, activeLeagueId === league.id && styles.leagueMenuItemTextActive]}>
-                  {league.name}
-                </Text>
-                {activeLeagueId === league.id ? (
-                  <Ionicons name="checkmark" size={16} color="#F4C565" />
-                ) : null}
-              </Pressable>
-            ))}
-          </View>
-        </Pressable>
       ) : null}
 
       {showMyRooms && myRoomClubs.length > 0 ? (
@@ -547,10 +625,10 @@ export default function FansScreen(props: FansScreenProps) {
         <>
           <Pressable style={styles.menuBackdrop} onPress={closeAvatarMenu} />
           {([
-            { icon: 'trophy-outline',        label: 'الدوري',      action: () => { closeAvatarMenu(); openAllClubsDropdown(); } },
+            { icon: 'trophy-outline',        label: 'الدوريات',    action: () => { closeAvatarMenu(); openAllClubsDropdown(); } },
             { icon: 'notifications-outline', label: 'إشعارات',  action: () => closeAvatarMenu() },
             { icon: 'document-text-outline', label: 'منشوراتي', action: () => openProfileSheet('posts') },
-            { icon: 'chatbubble-outline',    label: 'تعليقات',   action: () => openProfileSheet('posts') },
+            { icon: 'chatbubble-outline',    label: 'تعليقات',   action: () => openProfileSheet('comments') },
             { icon: 'heart-outline',         label: 'إعجاباتي', action: () => openProfileSheet('likes') },
             { icon: 'repeat-outline',        label: 'إعادة نشر',  action: () => openProfileSheet('reposts') },
           ]).map((item, i) => (
@@ -574,7 +652,7 @@ export default function FansScreen(props: FansScreenProps) {
         </>
       ) : null}
 
-      {/* dropdown كل الأندية - يفتح من زر الدوري */}
+      {/* dropdown الدوريات - يفتح من زر الدوريات في قائمة الأفاتار */}
       {showAllClubsDropdown ? (
         <>
           <Pressable style={styles.sheetBackdrop} onPress={closeAllClubsDropdown} />
@@ -592,25 +670,25 @@ export default function FansScreen(props: FansScreenProps) {
             </Pressable>
             <Text style={styles.allClubsTitle}>اختر الدوري</Text>
             <ScrollView showsVerticalScrollIndicator={false}>
-              {FAN_CLUBS.map((club) => (
+              {LEAGUES.map((league) => (
                 <Pressable
-                  key={club.id}
+                  key={league.id}
                   style={[
                     styles.allClubsItem,
-                    activeClubId === club.id && styles.allClubsItemActive,
+                    activeLeagueId === league.id && styles.allClubsItemActive,
                   ]}
                   onPress={() => {
-                    setActiveClubId(club.id as FanClubId);
+                    selectLeague(league.id);
                     closeAllClubsDropdown();
                   }}
                 >
                   <Text style={[
                     styles.allClubsItemText,
-                    activeClubId === club.id && styles.allClubsItemTextActive,
+                    activeLeagueId === league.id && styles.allClubsItemTextActive,
                   ]}>
-                    {club.title}
+                    {league.name}
                   </Text>
-                  {activeClubId === club.id ? (
+                  {activeLeagueId === league.id ? (
                     <Ionicons name="checkmark-circle" size={18} color="#F4C565" />
                   ) : null}
                 </Pressable>
@@ -651,44 +729,107 @@ export default function FansScreen(props: FansScreenProps) {
 
             {/* تابات */}
             <View style={styles.sheetTabs}>
-              {(['posts','likes','reposts'] as const).map((tab) => (
+              {(['posts','comments','likes','reposts'] as const).map((tab) => (
                 <Pressable key={tab} style={[styles.sheetTab, activeSheetTab === tab && styles.sheetTabActive]} onPress={() => setActiveSheetTab(tab)}>
                   <Text style={[styles.sheetTabText, activeSheetTab === tab && styles.sheetTabTextActive]}>
-                    {tab === 'posts' ? 'منشوراتي' : tab === 'likes' ? 'إعجاباتي' : 'إعادة نشر'}
+                    {tab === 'posts'
+                      ? 'منشوراتي'
+                      : tab === 'comments'
+                      ? 'تعليقاتي'
+                      : tab === 'likes'
+                      ? 'إعجاباتي'
+                      : 'إعادة نشر'}
                   </Text>
                 </Pressable>
               ))}
             </View>
 
             <ScrollView style={styles.sheetPostsScroll} showsVerticalScrollIndicator={false}>
-              {(activeSheetTab === 'posts'
-                ? (props.posts ?? []).filter((p) => p.authorId === props.userVarId)
-                : activeSheetTab === 'likes'
-                ? (props.posts ?? []).filter((p) => p.likedByMe)
-                : (props.posts ?? []).filter((p) => p.repostedByMe)
-              ).slice(0, 20).map((post) => (
-                <View key={post.id} style={styles.sheetPostItem}>
-                  <Text style={styles.sheetPostText} numberOfLines={2}>{post.content}</Text>
-                  <View style={styles.sheetPostMeta}>
-                    <Ionicons name="heart" size={12} color="rgba(255,255,255,0.35)" />
-                    <Text style={styles.sheetPostMetaText}>{post.likes}</Text>
-                    <Ionicons name="chatbubble-outline" size={12} color="rgba(255,255,255,0.35)" style={{ marginRight: 8 }} />
-                    <Text style={styles.sheetPostMetaText}>{post.replies}</Text>
-                  </View>
-                </View>
-              ))}
-              {(activeSheetTab === 'posts'
-                ? (props.posts ?? []).filter((p) => p.authorId === props.userVarId)
-                : activeSheetTab === 'likes'
-                ? (props.posts ?? []).filter((p) => p.likedByMe)
-                : (props.posts ?? []).filter((p) => p.repostedByMe)
-              ).length === 0 ? (
-                <Text style={styles.sheetEmpty}>لا يوجد محتوى بعد</Text>
-              ) : null}
+              {activeSheetTab === 'comments' ? (
+                myCommentsLoading ? (
+                  <Text style={styles.sheetEmpty}>جاري تحميل التعليقات...</Text>
+                ) : myComments.length === 0 ? (
+                  <Text style={styles.sheetEmpty}>لا توجد تعليقات بعد</Text>
+                ) : (
+                  myComments.slice(0, 50).map((comment) => (
+                    <View key={comment.id} style={styles.sheetPostItem}>
+                      {comment.clubTitle ? (
+                        <Text style={styles.sheetCommentClub}>
+                          رابطة {comment.clubTitle}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.sheetPostText}>{comment.content}</Text>
+                      <Text style={styles.sheetPostMetaText}>{comment.time}</Text>
+                    </View>
+                  ))
+                )
+              ) : (
+                <>
+                  {(activeSheetTab === 'posts'
+                    ? (props.posts ?? []).filter(isMyFansTweet)
+                    : activeSheetTab === 'likes'
+                    ? (props.posts ?? []).filter((p) => p.likedByMe)
+                    : (props.posts ?? []).filter((p) => p.repostedByMe)
+                  ).slice(0, 20).map((post) => (
+                    <View key={post.id} style={styles.sheetPostItem}>
+                      <Text style={styles.sheetPostText} numberOfLines={2}>{post.content}</Text>
+                      <View style={styles.sheetPostMeta}>
+                        <Ionicons name="heart" size={12} color="rgba(255,255,255,0.35)" />
+                        <Text style={styles.sheetPostMetaText}>{post.likes}</Text>
+                        <Ionicons name="chatbubble-outline" size={12} color="rgba(255,255,255,0.35)" style={{ marginRight: 8 }} />
+                        <Text style={styles.sheetPostMetaText}>{post.replies}</Text>
+                      </View>
+                    </View>
+                  ))}
+                  {(activeSheetTab === 'posts'
+                    ? (props.posts ?? []).filter(isMyFansTweet)
+                    : activeSheetTab === 'likes'
+                    ? (props.posts ?? []).filter((p) => p.likedByMe)
+                    : (props.posts ?? []).filter((p) => p.repostedByMe)
+                  ).length === 0 ? (
+                    <Text style={styles.sheetEmpty}>لا يوجد محتوى بعد</Text>
+                  ) : null}
+                </>
+              )}
             </ScrollView>
           </Animated.View>
         </>
       ) : null}
+
+      {showComposeFab ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="تغريدة جديدة"
+          style={({ pressed }) => [
+            styles.composeFab,
+            pressed && styles.composeFabPressed,
+          ]}
+          onPress={handleComposePress}
+        >
+          <Ionicons name="create-outline" size={24} color="#FFFFFF" />
+        </Pressable>
+      ) : null}
+
+      <XPostDetailModal
+        post={openedPost}
+        onClose={closePostDetail}
+        onReply={openReplyComposer}
+        onRepost={handlePostRepost}
+        onShare={handlePostShare}
+        onLike={handlePostLike}
+      />
+
+      <XPostReplyComposerModal
+        targetPost={replyTargetPost}
+        replyDraft={replyDraft}
+        authorName={replyAuthorName}
+        authorAvatarUri={replyAuthorAvatarUri}
+        authorVarId={replyAuthorVarId}
+        authorInitial={replyAuthorInitial}
+        onChangeReplyDraft={setReplyDraft}
+        onClose={closeReplyComposer}
+        onSubmit={submitReply}
+      />
     </View>
   );
 }
@@ -761,6 +902,29 @@ const styles = createCompatStyleSheet({
     color: "rgba(255,255,255,0.4)",
     fontSize: 15,
     fontWeight: "500",
+  },
+  composeFab: {
+    position: "absolute",
+    left: 16,
+    bottom: FANS_BOTTOM_NAV_RESERVE + 10,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#1D9BF0",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 40,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    shadowColor: "#1D9BF0",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  composeFabPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.96 }],
   },
   clubDropdownBackdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -882,7 +1046,7 @@ const styles = createCompatStyleSheet({
     top: "5%",
     left: "5%",
     right: "5%",
-    bottom: "5%",
+    bottom: FANS_SHEET_BOTTOM_INSET,
     backgroundColor: "rgba(12,12,16,0.98)",
     borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1016,6 +1180,13 @@ const styles = createCompatStyleSheet({
     alignItems: "center",
     gap: 4,
     marginTop: 6,
+  },
+  sheetCommentClub: {
+    color: "#F4C565",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "right",
+    marginBottom: 4,
   },
   sheetPostMetaText: {
     color: "rgba(255,255,255,0.35)",

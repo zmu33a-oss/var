@@ -869,6 +869,7 @@ export function mapAppwritePostRecordToPost(
     content: record.content,
     mediaUri: record.mediaUri?.trim() || undefined,
     fromVarLibrary: record.fromVarLibrary || undefined,
+    feedScope: record.feedScope,
     replyItems: [],
     likes: 0,
     replies: 0,

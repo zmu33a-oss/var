@@ -40,6 +40,58 @@ function toFansPostRecord(doc: AppwriteFansPostDocument): AppwriteFansPostRecord
   };
 }
 
+export async function listFansPostsByVarId(
+  varId: string | string[],
+  limit = 50,
+): Promise<AppwriteFansPostRecord[]> {
+  if (!hasFansPostsConfig()) return [];
+
+  const normalizedIds = [
+    ...new Set(
+      (Array.isArray(varId) ? varId : [varId])
+        .map((value) => normalizeAppwriteVarId(value))
+        .filter(Boolean),
+    ),
+  ];
+  if (normalizedIds.length === 0) return [];
+
+  try {
+    const databases = getDatabasesBridge();
+    const batches = await Promise.all(
+      normalizedIds.map((normalizedVarId) =>
+        databases.listDocuments(
+          APPWRITE_CONFIG.databaseId,
+          APPWRITE_CONFIG.fansPostsCollectionId,
+          [
+            AppwriteQuery.equal("varId", normalizedVarId),
+            AppwriteQuery.orderDesc("$createdAt"),
+            AppwriteQuery.limit(limit),
+          ],
+        ),
+      ),
+    );
+
+    const seen = new Set<string>();
+    const merged: AppwriteFansPostRecord[] = [];
+    for (const response of batches) {
+      for (const doc of response.documents as AppwriteFansPostDocument[]) {
+        if (seen.has(doc.$id)) continue;
+        seen.add(doc.$id);
+        merged.push(toFansPostRecord(doc));
+      }
+    }
+
+    merged.sort(
+      (left, right) =>
+        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+    );
+    return merged.slice(0, limit);
+  } catch (err) {
+    console.error("[listFansPostsByVarId] error:", err);
+    return [];
+  }
+}
+
 export async function listFansPostsByClub(
   clubId: string,
   limit = 50,

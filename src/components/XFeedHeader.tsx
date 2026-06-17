@@ -27,6 +27,7 @@ type XFeedHeaderProps = {
   showTabChevron?: boolean;
   onTabPress?: () => void;
   leftElement?: ReactNode;
+  leftSlotWidth?: number;
   avatarUri?: string;
   onOpenAvatar?: () => void;
   onAvatarLayout?: (y: number, height: number) => void;
@@ -75,7 +76,10 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
         <View
           style={[
             styles.xTopBarSpacer,
-            { width: metrics.xTopBarItemSize, height: metrics.xTopBarItemSize },
+            {
+              width: props.leftSlotWidth ?? metrics.xTopBarItemSize,
+              height: metrics.xTopBarItemSize,
+            },
           ]}
         >
           {props.leftElement ?? null}
@@ -226,6 +230,9 @@ const styles = StyleSheet.create({
   xTopBarSpacer: {
     width: 42,
     height: 42,
+    overflow: "visible",
+    alignItems: "center",
+    justifyContent: "center",
   },
   xTabsBar: {
     backgroundColor: "rgba(0,0,0,0.98)",

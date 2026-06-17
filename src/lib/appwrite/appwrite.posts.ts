@@ -177,6 +177,7 @@ export async function createAppwritePost(
       varId: normalizedVarId,
       ...(input.mediaUri?.trim() ? { mediaUri: input.mediaUri.trim() } : {}),
       ...(input.fromVarLibrary ? { fromVarLibrary: true } : {}),
+      ...(input.feedScope === "fans" ? { feedScope: "fans" } : {}),
     },
     buildPostDocumentPermissions(userId),
   );

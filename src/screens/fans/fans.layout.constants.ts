@@ -4,6 +4,9 @@ export const FANS_TONGUE_ENABLED = true;
 /** Space for BottomNav dock in AppShell (approx. bar + padding). */
 export const FANS_BOTTOM_NAV_RESERVE = 78;
 
+/** Bottom inset for profile/league sheets — sits flush above nav bar. */
+export const FANS_SHEET_BOTTOM_INSET = FANS_BOTTOM_NAV_RESERVE + 6;
+
 /** Space for the community composer above bottom nav. */
 export const FANS_COMPOSER_HEIGHT = 50;
 

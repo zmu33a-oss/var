@@ -76,9 +76,12 @@ export type PostRepostMeta = {
   time: string;
 };
 
+export type PostFeedScope = "x" | "fans";
+
 export type Post = {
   id: number;
   feedKey?: string;
+  feedScope?: PostFeedScope;
   sourceId?: string;
   title?: string;
   authorId?: string;
@@ -221,4 +224,16 @@ export type MetricTile = {
   value: string;
   color: string;
   icon: IconName;
+};
+
+export type SocialInteractionRecord = {
+  id: string;
+  varId: string;
+  targetId: string;
+  action: "like" | "repost" | "share" | "reply" | "follow" | "notify" | "comment";
+  mode: "x" | "video" | "profile" | "prediction" | "notification";
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  value?: string;
 };

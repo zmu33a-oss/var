@@ -57,6 +57,17 @@ const RANK_LABELS: Record<number, string> = {
   3: "المركز الثالث",
   4: "المركز الرابع",
   5: "المركز الخامس",
+  6: "المركز السادس",
+  7: "المركز السابع",
+  8: "المركز الثامن",
+  9: "المركز التاسع",
+  10: "المركز العاشر",
+  11: "المركز الحادي عشر",
+  12: "المركز الثاني عشر",
+  13: "المركز الثالث عشر",
+  14: "المركز الرابع عشر",
+  15: "المركز الخامس عشر",
+  16: "المركز السادس عشر",
 };
 
 const TONGUE_ANCHOR_WIDTH = "82%";
@@ -150,7 +161,7 @@ const FansSupportTongue = forwardRef<
     [props.activeLeagueId],
   );
 
-  const rankedClubs = useMemo<RankedClubEntry[]>(() => {
+  const leagueClubCards = useMemo<RankedClubEntry[]>(() => {
     return [...leagueClubs]
       .map((club) => {
         const count = props.supporters[club.id] ?? 0;
@@ -163,26 +174,31 @@ const FansSupportTongue = forwardRef<
           rank: 0,
         };
       })
-      .sort((left, right) => right.count - left.count)
-      .slice(0, 3)
+      .sort((left, right) => {
+        if (right.count !== left.count) {
+          return right.count - left.count;
+        }
+
+        return left.club.title.localeCompare(right.club.title, "ar");
+      })
       .map((entry, index) => ({
         ...entry,
         rank: index + 1,
       }));
   }, [leagueClubs, props.supporters]);
 
-  const leader = rankedClubs[0];
-  const filteredRankedClubs = useMemo(() => {
+  const leader = leagueClubCards[0];
+  const filteredLeagueClubCards = useMemo(() => {
     const query = clubSearchQuery.trim();
 
     if (!query) {
-      return rankedClubs;
+      return leagueClubCards;
     }
 
-    return rankedClubs.filter((entry) =>
+    return leagueClubCards.filter((entry) =>
       entry.club.title.includes(query),
     );
-  }, [clubSearchQuery, rankedClubs]);
+  }, [clubSearchQuery, leagueClubCards]);
 
   useEffect(() => {
     if (!contentExpanded) {
@@ -268,10 +284,7 @@ const FansSupportTongue = forwardRef<
                   showsVerticalScrollIndicator={false}
                   bounces={false}
                 >
-                  {filteredRankedClubs
-                    .slice()
-                    .reverse()
-                    .map((entry) => (
+                  {filteredLeagueClubCards.map((entry) => (
                       <TongueRankCard
                         key={entry.club.id}
                         entry={entry}
@@ -503,6 +516,8 @@ function TongueRankCard(props: {
           style={styles.tongueEntryLabelHost}
           onPress={() => props.onEnterClub?.(props.entry.club.id)}
           hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={`دخول رابطة ${props.entry.club.title}`}
         >
           <TongueText style={styles.tongueEntryLabel} numberOfLines={1}>
             دخول

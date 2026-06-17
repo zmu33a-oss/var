@@ -99,6 +99,28 @@ async function main() {
 
   await waitForAttribute(databases, postsCollectionId, "mediaUri");
   await waitForAttribute(databases, postsCollectionId, "fromVarLibrary");
+
+  try {
+    await databases.createStringAttribute(
+      databaseId,
+      postsCollectionId,
+      "feedScope",
+      16,
+      false,
+      "x",
+    );
+    console.log("Created attribute feedScope (String).");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (message.toLowerCase().includes("already exists")) {
+      console.log("Attribute feedScope already exists.");
+    } else {
+      throw error;
+    }
+  }
+
+  await waitForAttribute(databases, postsCollectionId, "feedScope");
   console.log("Post library fields are ready.");
 }
 

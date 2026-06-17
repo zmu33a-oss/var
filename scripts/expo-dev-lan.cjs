@@ -2,6 +2,8 @@ const { spawn } = require("node:child_process");
 const os = require("node:os");
 const path = require("node:path");
 
+require("./sync-preview.cjs");
+
 const VIRTUAL_INTERFACE_PATTERN =
   /(vEthernet|WSL|Hyper-V|VirtualBox|VMware|Loopback|Teredo|isatap|Npcap)/i;
 
@@ -56,7 +58,8 @@ function resolveLanIp() {
   return candidates[0]?.address || "";
 }
 
-const rootDir = path.resolve(__dirname, "..");
+const previewDir =
+  process.env.VAR_PREVIEW_DIR?.trim() || path.join("/tmp", "var-preview");
 const lanIp = resolveLanIp();
 const port = String(process.env.EXPO_WEB_PORT || "8081").trim();
 
@@ -66,18 +69,24 @@ if (!lanIp) {
 }
 
 console.log("");
+console.log("========================================");
 console.log("Expo web (LAN)");
 console.log(`  PC:     http://localhost:${port}`);
 console.log(`  Mobile: http://${lanIp}:${port}`);
-console.log("  Admin:  http://localhost:3000/admin/  (run npm run admin:dev in another terminal)");
-console.log("  Both:   npm run dev:stack");
+console.log("========================================");
+console.log("  لا تستخدم IP قديم — الرقم يتغير مع الشبكة");
+console.log("  Admin:  http://localhost:3000/admin/");
 console.log("  Same Wi-Fi required on phone and PC.");
 console.log("");
+
+const expoCliPath = require.resolve("expo/bin/cli", {
+  paths: [path.join(previewDir, "node_modules")],
+});
 
 const child = spawn(
   process.execPath,
   [
-    require.resolve("expo/bin/cli"),
+    expoCliPath,
     "start",
     "--web",
     "--port",
@@ -86,7 +95,7 @@ const child = spawn(
     "lan",
   ],
   {
-    cwd: rootDir,
+    cwd: previewDir,
     stdio: "inherit",
     env: {
       ...process.env,

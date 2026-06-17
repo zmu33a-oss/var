@@ -189,6 +189,7 @@ export { submitAppwritePostReport } from "./appwrite.reports";
 
 export {
   listFansPostsByClub,
+  listFansPostsByVarId,
   createFansPost,
 } from "./appwrite.fansPosts";
 

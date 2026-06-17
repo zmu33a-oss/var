@@ -41,6 +41,7 @@ import {
   hasAppwriteProjectConfig,
   listAppwriteFollowingVarIds,
   listAppwriteProfileIndexesByVarIds,
+  listAppwriteVarSocialInteractions,
   normalizeAppwriteDisplayVarId,
   saveAppwriteNotification,
   syncAppwriteSocialInteraction,
@@ -55,6 +56,7 @@ import type {
   PendingAuthIntent,
   Post,
   PostReply,
+  SocialInteractionRecord,
 } from "./app.types";
 import type { XFeedTab } from "./screens/x-feed/x-feed.types";
 import { styles, SHELL_WIDTH } from "./appshell/appshell.styles";
@@ -184,11 +186,15 @@ export default function AppShell() {
   const [notice, setNotice] = useState(INITIAL_NOTICE);
   const [videos, setVideos] = useState(INITIAL_VIDEOS);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [fansPosts, setFansPosts] = useState<Post[]>([]);
   const [supporters, setSupporters] = useState(INITIAL_SUPPORTERS);
   const [supportedTeams, setSupportedTeams] = useState<FanClubId[]>([]);
   const [followedAuthorIds, setFollowedAuthorIds] = useState<string[]>([]);
   const [followedProfiles, setFollowedProfiles] = useState<
     FollowingProfileCard[]
+  >([]);
+  const [socialInteractions, setSocialInteractions] = useState<
+    import("./app.types").SocialInteractionRecord[]
   >([]);
   const [profile, setProfile] = useState(INITIAL_PROFILE);
   const [isVideoFullscreen, setIsVideoFullscreen] = useState(false);
@@ -198,6 +204,7 @@ export default function AppShell() {
   const [studioCaption, setStudioCaption] = useState("");
   const [studioTag, setStudioTag] = useState("Studio");
   const [isPostComposerOpen, setIsPostComposerOpen] = useState(false);
+  const [postComposerTarget, setPostComposerTarget] = useState<"x" | "fans">("x");
   const [postTitle, setPostTitle] = useState(POST_COMPOSER_DEFAULT_TITLE);
   const [postContent, setPostContent] = useState("");
   const [postMediaUri, setPostMediaUri] = useState("");
@@ -221,6 +228,9 @@ export default function AppShell() {
   );
   const [isLogoutFarewellVisible, setIsLogoutFarewellVisible] = useState(false);
   const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
+  const [fansProfileSheetRequest, setFansProfileSheetRequest] = useState<
+    "posts" | "comments" | "likes" | "reposts" | null
+  >(null);
   const layoutWidth = Math.min(width, SHELL_WIDTH);
   const chromeScale = Math.max(0.84, Math.min(1, layoutWidth / SHELL_WIDTH));
   const themeSwitchTopInset = Math.round(9.5 * chromeScale);
@@ -329,6 +339,7 @@ export default function AppShell() {
 
     if (!isLoggedIn || !currentVarId) {
       setFollowedAuthorIds([]);
+      setSocialInteractions([]);
       return;
     }
 
@@ -347,7 +358,37 @@ export default function AppShell() {
       }
     };
 
+    const syncSocialInteractions = async () => {
+      try {
+        const summary = await listAppwriteVarSocialInteractions(currentVarId);
+
+        if (!isActive) {
+          return;
+        }
+
+        // تحويل AppwriteSocialInteractionRecord إلى SocialInteractionRecord
+        const records: SocialInteractionRecord[] =
+          summary.records?.map((record) => ({
+            id: record.id,
+            varId: record.varId,
+            targetId: record.targetId,
+            action: record.action as SocialInteractionRecord["action"],
+            mode: record.mode as SocialInteractionRecord["mode"],
+            active: record.active,
+            createdAt: record.createdAt,
+            updatedAt: record.createdAt, // Appwrite لا يرجع updatedAt منفصل
+            value: record.value,
+          })) || [];
+
+        setSocialInteractions(records);
+      } catch {
+        // Keep empty if Appwrite sync fails temporarily.
+        setSocialInteractions([]);
+      }
+    };
+
     void syncFollowingAuthors();
+    void syncSocialInteractions();
 
     return () => {
       isActive = false;
@@ -428,6 +469,7 @@ export default function AppShell() {
     appwriteUser,
     profile,
     setPosts,
+    setFansPosts,
     setNotice,
   });
 
@@ -588,10 +630,29 @@ export default function AppShell() {
   const closePostComposer = () => {
     setIsPostComposerOpen(false);
     setPostComposerNotice("");
+    setPostComposerTarget("x");
     resetPostComposerDraft();
   };
 
   const openPostComposer = () => {
+    setPostComposerTarget("x");
+    setIsVideoFullscreen(false);
+    resetPostComposerDraft();
+
+    const resolvedAuthorId =
+      appwriteUser?.varId.trim() ||
+      profile.varId.trim() ||
+      buildDefaultPostAuthorId(profile);
+
+    if (resolvedAuthorId) {
+      setPostAuthorId(resolvedAuthorId);
+    }
+
+    setIsPostComposerOpen(true);
+  };
+
+  const openFansPostComposer = () => {
+    setPostComposerTarget("fans");
     setIsVideoFullscreen(false);
     resetPostComposerDraft();
 
@@ -616,14 +677,47 @@ export default function AppShell() {
     setCurrentTab(tab);
   };
 
+  const openFansAssociationFromProfile = useCallback(
+    (options?: { sheetTab?: "posts" | "comments" | "likes" | "reposts" }) => {
+      if (options?.sheetTab) {
+        setFansProfileSheetRequest(options.sheetTab);
+      }
+      setCurrentTab("fans");
+    },
+    [],
+  );
+
   const resolvePostInteractionTargetId = (postId: number) => {
-    const targetPost = posts.find((candidate) => candidate.id === postId);
+    const targetPost =
+      posts.find((candidate) => candidate.id === postId) ??
+      fansPosts.find((candidate) => candidate.id === postId);
 
     return targetPost?.sourceId?.trim() || String(postId);
   };
 
+  const updatePostInFeeds = (
+    postId: number,
+    updater: (post: Post) => Post,
+  ) => {
+    setPosts((currentPosts) =>
+      currentPosts.map((post) => (post.id === postId ? updater(post) : post)),
+    );
+    setFansPosts((currentPosts) =>
+      currentPosts.map((post) => (post.id === postId ? updater(post) : post)),
+    );
+  };
+
   const prependPost = (post: Post) => {
+    if (post.feedScope === "fans") {
+      return;
+    }
+
     setPosts((currentPosts) => [post, ...currentPosts]);
+  };
+
+  const prependFansPost = (post: Post) => {
+    const fansScopedPost = { ...post, feedScope: "fans" as const };
+    setFansPosts((currentPosts) => [fansScopedPost, ...currentPosts]);
   };
 
   const pickStudioVideo = async () => {
@@ -742,6 +836,7 @@ export default function AppShell() {
   };
 
   const handlePublishAppwritePost = () => {
+    const target = postComposerTarget;
     setPostComposerNotice("");
 
     void publishAppwritePost({
@@ -749,11 +844,16 @@ export default function AppShell() {
       postContent,
       postAuthorId,
       postMediaUri,
+      feedScope: target,
       appwriteUser,
       profile,
       onPublished: (post) => {
-        prependPost(post);
-        setCurrentTab("home");
+        if (target === "fans") {
+          prependFansPost(post);
+        } else {
+          prependPost(post);
+          setCurrentTab("home");
+        }
       },
       setIsPublishingPost,
       setNotice: reportPostComposerStatus,
@@ -923,21 +1023,15 @@ export default function AppShell() {
     let nextLiked = false;
     const interactionTargetId = resolvePostInteractionTargetId(postId);
 
-    setPosts((currentPosts) =>
-      currentPosts.map((post) => {
-        if (post.id !== postId) {
-          return post;
-        }
+    updatePostInFeeds(postId, (post) => {
+      nextLiked = !post.likedByMe;
 
-        nextLiked = !post.likedByMe;
-
-        return {
-          ...post,
-          likedByMe: nextLiked,
-          likes: Math.max(0, post.likes + (nextLiked ? 1 : -1)),
-        };
-      }),
-    );
+      return {
+        ...post,
+        likedByMe: nextLiked,
+        likes: Math.max(0, post.likes + (nextLiked ? 1 : -1)),
+      };
+    });
     trackVarInteraction({
       mode: "x",
       action: "like",
@@ -1220,6 +1314,17 @@ export default function AppShell() {
           : post,
       ),
     );
+    setFansPosts((currentPosts) =>
+      currentPosts.map((post) =>
+        post.id === postId
+          ? {
+              ...post,
+              replies: post.replies + 1,
+              replyItems: [nextReply, ...(post.replyItems ?? [])],
+            }
+          : post,
+      ),
+    );
     trackVarInteraction({
       mode: "x",
       action: "reply",
@@ -1231,7 +1336,7 @@ export default function AppShell() {
 
   const togglePostRepost = (postId: number) => {
     let nextReposted = false;
-    let targetPost: Post | undefined;
+    let didChange = false;
     const interactionTargetId = resolvePostInteractionTargetId(postId);
     const currentUserIdentity = buildCurrentUserPostIdentity({
       varId: profile.varId || appwriteUser?.varId || "",
@@ -1242,13 +1347,14 @@ export default function AppShell() {
       profile.varId || appwriteUser?.varId || "",
     );
 
-    setPosts((currentPosts) => {
-      targetPost = currentPosts.find((post) => post.id === postId);
+    const applyRepostToggle = (currentPosts: Post[]) => {
+      const targetPost = currentPosts.find((post) => post.id === postId);
 
       if (!targetPost) {
         return currentPosts;
       }
 
+      didChange = true;
       nextReposted = !targetPost.repostedByMe;
 
       const updatedPosts = currentPosts
@@ -1315,7 +1421,15 @@ export default function AppShell() {
         },
         ...updatedPosts,
       ];
-    });
+    };
+
+    setPosts(applyRepostToggle);
+    setFansPosts(applyRepostToggle);
+
+    if (!didChange) {
+      return;
+    }
+
     setNotice(
       nextReposted ? "تمت إعادة نشر المنشور." : "تم إلغاء إعادة النشر.",
     );
@@ -1328,7 +1442,9 @@ export default function AppShell() {
   };
 
   const sharePost = async (postId: number): Promise<boolean> => {
-    const post = posts.find((candidate) => candidate.id === postId);
+    const post =
+      posts.find((candidate) => candidate.id === postId) ??
+      fansPosts.find((candidate) => candidate.id === postId);
 
     if (!post) {
       return false;
@@ -1340,7 +1456,7 @@ export default function AppShell() {
     const applyLocalShare = () => {
       let didUpdate = false;
 
-      setPosts((currentPosts) =>
+      const updateFeed = (currentPosts: Post[]) =>
         currentPosts.map((candidate) => {
           const candidateTargetId =
             candidate.sourceId?.trim() || String(candidate.id);
@@ -1359,8 +1475,10 @@ export default function AppShell() {
             sharedByMe: true,
             shares: candidate.shares + 1,
           };
-        }),
-      );
+        });
+
+      setPosts(updateFeed);
+      setFansPosts(updateFeed);
 
       return didUpdate;
     };
@@ -1755,15 +1873,19 @@ export default function AppShell() {
           onToggleSupport={toggleSupport}
           onRefresh={refreshVisibleAppData}
           isRefreshing={isPullRefreshing}
-          posts={posts}
+          posts={fansPosts}
           onTogglePostLike={togglePostLike}
           onTogglePostRepost={togglePostRepost}
           onSharePost={sharePost}
           onSubmitPostReply={submitPostReply}
-          onCreatePost={openPostComposer}
+          onCreatePost={openFansPostComposer}
           currentUserVarId={profile.varId || appwriteUser?.varId || ""}
           currentUserDisplayName={profile.displayName || appwriteUser?.name || ""}
           currentUserAvatarUri={profile.avatarUri || appwriteUser?.avatarUri || ""}
+          initialProfileSheetTab={fansProfileSheetRequest ?? undefined}
+          onInitialProfileSheetHandled={() => setFansProfileSheetRequest(null)}
+          resumeReplyPostId={resumeReplyPostId}
+          onReplyIntentConsumed={consumeReplyIntent}
         />
       );
       break;
@@ -1799,10 +1921,13 @@ export default function AppShell() {
           }
           adminRoleLabel={profile.role === "admin" ? "ADMIN" : "MEMBER"}
           posts={posts}
+          fansPosts={fansPosts}
           profile={profile}
           followedProfiles={followedProfiles}
+          socialInteractions={socialInteractions}
           onRefresh={refreshVisibleAppData}
           isRefreshing={isPullRefreshing}
+          onOpenFansAssociation={openFansAssociationFromProfile}
           onSaveProfile={(nextProfile) => {
             void persistAppwriteProfile(nextProfile, appwriteUser).then(
               (savedUser) => {

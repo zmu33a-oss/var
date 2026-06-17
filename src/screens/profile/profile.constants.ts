@@ -77,8 +77,10 @@ export type ProfileScreenProps = {
   adminDisplayVarId?: string;
   adminRoleLabel?: string;
   posts: import("../../app.types").Post[];
+  fansPosts?: import("../../app.types").Post[];
   profile: import("../../app.types").ProfileData;
   followedProfiles: import("../../app.types").FollowingProfileCard[];
+  socialInteractions?: import("../../app.types").SocialInteractionRecord[];
   onRefresh: () => void;
   isRefreshing: boolean;
   onSaveProfile: (
@@ -88,6 +90,9 @@ export type ProfileScreenProps = {
   onAddUserByDisplayVarId: (
     displayVarId: string,
   ) => Promise<{ ok: boolean; message: string }>;
+  onOpenFansAssociation?: (options?: {
+    sheetTab?: "posts" | "comments" | "likes" | "reposts";
+  }) => void;
 };
 
 export type SwipeActionControlProps = {

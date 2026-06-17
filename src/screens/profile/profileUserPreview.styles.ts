@@ -152,7 +152,7 @@ export const styles = createCompatStyleSheet({
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(12,12,16,0.98)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.20)",
   },
