@@ -1,4 +1,5 @@
 import type { AppwriteDirectMessageRecord } from "../../lib/appwrite";
+import { I18nManager } from "react-native";
 import { normalizeAuthorId } from "../../appshell/appshell.helpers";
 import type { Post } from "../../app.types";
 import type {
@@ -7,6 +8,7 @@ import type {
   MessageThreadProfileLike,
   PrivateMessageEntry,
 } from "./x-feed.types";
+import { FANS_BOTTOM_NAV_RESERVE } from "../fans/fans.layout.constants";
 
 export const HASHTAG_PATTERN = /#[A-Za-z0-9_\u0600-\u06FF]+/g;
 
@@ -234,5 +236,34 @@ export function buildPrivateMessageEntry(
     content: record.content.trim(),
     timeLabel: formatPrivateMessageTimeLabel(normalizedCreatedAt),
     createdAt: normalizedCreatedAt,
+  };
+}
+
+const X_FEED_SHELL_WIDTH = 430;
+const X_BOTTOM_DOCK_HORIZONTAL_INSET = 8;
+const X_COMPOSE_FAB_BOTTOM_GAP = 10;
+
+/** يطابق أبعاد BottomNav — لتوسيط زر الرسالة فوق تبويب الحساب. */
+export function resolveXComposeFabLayout(windowWidth: number) {
+  const layoutWidth = Math.min(windowWidth, X_FEED_SHELL_WIDTH);
+  const chromeScale = Math.max(0.84, Math.min(1, layoutWidth / X_FEED_SHELL_WIDTH));
+  const size = Math.round(56 * chromeScale);
+  const bottom = FANS_BOTTOM_NAV_RESERVE + X_COMPOSE_FAB_BOTTOM_GAP;
+  const dockInset = Math.round(X_BOTTOM_DOCK_HORIZONTAL_INSET * chromeScale);
+  const navPadding = Math.round(6 * chromeScale);
+  const centerActionWidth = Math.round(88 * chromeScale);
+  const navWidth = layoutWidth - dockInset * 2;
+  const tabWidth = (navWidth - navPadding * 2 - centerActionWidth) / 4;
+  const accountTabCenterFromStart = dockInset + navPadding + tabWidth / 2;
+  const accountTabCenterFromEnd =
+    layoutWidth - dockInset - navPadding - tabWidth / 2;
+  const accountTabCenterX = I18nManager.isRTL
+    ? accountTabCenterFromEnd
+    : accountTabCenterFromStart;
+
+  return {
+    left: Math.round(accountTabCenterX - size / 2),
+    bottom,
+    size,
   };
 }

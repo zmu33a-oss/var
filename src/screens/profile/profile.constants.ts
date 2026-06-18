@@ -91,7 +91,7 @@ export type ProfileScreenProps = {
     displayVarId: string,
   ) => Promise<{ ok: boolean; message: string }>;
   onOpenFansAssociation?: (options?: {
-    sheetTab?: "posts" | "comments" | "likes" | "reposts";
+    sheetTab?: "posts" | "likes" | "reposts";
   }) => void;
 };
 

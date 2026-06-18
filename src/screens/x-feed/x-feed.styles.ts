@@ -55,6 +55,24 @@ export const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: -2,
   },
+  xComposeFab: {
+    position: "absolute",
+    backgroundColor: "#1D9BF0",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 40,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    shadowColor: "#1D9BF0",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  xComposeFabPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.96 }],
+  },
   xHashtagScreen: {
     flex: 1,
     backgroundColor: "#000000",
@@ -288,9 +306,6 @@ export const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.56)",
     fontSize: 13,
     fontWeight: "700",
-  },
-  xVarLibraryPage: {
-    minHeight: 420,
   },
   xAvatarTiny: {
     width: 40,

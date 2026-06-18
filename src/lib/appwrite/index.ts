@@ -43,7 +43,6 @@ export {
   getAppwritePostsConfigurationError,
   hasAppwriteProfileImagesBucketConfig,
   getAppwriteProfileImagesBucketConfigurationError,
-  hasAppwriteVarLibraryConfig,
   getMissingAppwriteVarProfileFields,
   hasAppwriteVarProfileConfig,
   getMissingAppwriteSocialInteractionFields,
@@ -159,20 +158,9 @@ export {
 export { uploadAppwritePostImage, buildAppwriteFileViewUrl } from "./appwrite.storage";
 
 export {
-  listAppwriteVarLibraryItems,
-  createAppwriteVarLibraryItem,
-  deleteAppwriteVarLibraryItem,
-} from "./appwrite.varLibrary";
-
-export {
   isAppwriteStorageViewUrl,
   isSameAppwriteImagesBucketUrl,
 } from "./appwrite.storage";
-
-export type {
-  AppwriteVarLibraryRecord,
-  AppwriteVarLibraryInput,
-} from "./appwrite.types";
 
 // ─── Social ───────────────────────────────────────────────────────────────────
 export {

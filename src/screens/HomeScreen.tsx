@@ -51,7 +51,6 @@ type HomeScreenProps = {
   videos: Video[];
   windowHeight: number;
   onChangeMode: (mode: HomeMode) => void;
-  onCreatePost: () => void;
   onPingAppwrite: () => void;
   onRequireAuth: (message?: string, pendingIntent?: PendingAuthIntent) => void;
   onTogglePostLike: (postId: number) => void;
@@ -83,6 +82,7 @@ type HomeScreenProps = {
   onDeletePost: (postId: number) => void;
   onUpdatePostContent: (postId: number, content: string) => void;
   onReportPost: (postId: number) => void;
+  onCreatePost?: () => void;
   onXFeedTabChange?: (tab: XFeedTab) => void;
   onToggleVideoLike: (videoId: number) => void;
   onToggleVideoSave: (videoId: number) => void;
@@ -101,7 +101,6 @@ export default function HomeScreen(props: HomeScreenProps) {
     posts,
     videos,
     windowHeight,
-    onCreatePost,
     onPingAppwrite,
     onRequireAuth,
     onTogglePostLike,
@@ -133,6 +132,7 @@ export default function HomeScreen(props: HomeScreenProps) {
     onDeletePost,
     onUpdatePostContent,
     onReportPost,
+    onCreatePost,
     onXFeedTabChange,
     onToggleVideoLike,
     onToggleVideoSave,
@@ -200,7 +200,6 @@ export default function HomeScreen(props: HomeScreenProps) {
       <XFeedScreen
         isLoggedIn={isLoggedIn}
         posts={posts}
-        onCreatePost={onCreatePost}
         onRequireAuth={onRequireAuth}
         onTogglePostLike={onTogglePostLike}
         onTogglePostRepost={onTogglePostRepost}
@@ -231,6 +230,7 @@ export default function HomeScreen(props: HomeScreenProps) {
         onDeletePost={onDeletePost}
         onUpdatePostContent={onUpdatePostContent}
         onReportPost={onReportPost}
+        onCreatePost={onCreatePost}
         onActiveTabChange={onXFeedTabChange}
       />
     </View>

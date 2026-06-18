@@ -54,7 +54,6 @@ import {
   AdminUsersPanel,
   type AdminMobilePanel,
 } from "./admin/AdminMobilePanels";
-import { AdminVarLibraryPanel } from "./admin/AdminVarLibraryPanel";
 
 const SHELL_WIDTH = 430;
 
@@ -720,10 +719,6 @@ export default function AdminDashboardScreen(props: AdminDashboardScreenProps) {
         ) : null}
 
         {activePanel === "posts" ? <AdminPostsPanel /> : null}
-
-        {activePanel === "library" ? (
-          <AdminVarLibraryPanel adminVarId={props.adminUser.varId} />
-        ) : null}
 
         {activePanel === "audit" ? <AdminAuditPanel /> : null}
 

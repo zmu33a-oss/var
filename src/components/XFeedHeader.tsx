@@ -31,6 +31,7 @@ type XFeedHeaderProps = {
   avatarUri?: string;
   onOpenAvatar?: () => void;
   onAvatarLayout?: (y: number, height: number) => void;
+  onOpenHashtag?: () => void;
 };
 
 export default function XFeedHeader(props: XFeedHeaderProps) {
@@ -45,14 +46,14 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
     const layoutWidth = Math.min(props.windowWidth, SHELL_WIDTH);
     const chromeScale = Math.max(0.84, Math.min(1, layoutWidth / SHELL_WIDTH));
     return {
-      xTopBarPaddingTop: Math.round(44 * chromeScale),
+      xTopBarPaddingTop: Math.max(6, Math.round(8 * chromeScale)),
       xTopBarPaddingHorizontal: Math.round(12 * chromeScale),
-      xTopBarPaddingBottom: Math.max(10, Math.round(10 * chromeScale)),
+      xTopBarPaddingBottom: Math.max(6, Math.round(8 * chromeScale)),
       xTopBarItemSize: Math.round(36 * chromeScale),
       xTopBarChatIconSize: Math.round(34 * chromeScale),
       xTopBarUnreadIndicatorSize: Math.round(14 * chromeScale),
-      xHeaderLogoImageWidth: Math.round(132 * chromeScale),
-      xHeaderLogoImageHeight: Math.round(82 * chromeScale),
+      xHeaderLogoImageWidth: Math.round(136 * chromeScale),
+      xHeaderLogoImageHeight: Math.round(72 * chromeScale),
       chromeScale,
     };
   }, [props.windowWidth]);
@@ -60,6 +61,42 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
   const normalizedNotificationCount = Math.max(0, props.notificationCount ?? 0);
   const isNotificationButtonActive = props.notificationsActive ?? false;
   const isTimelineActive = props.activeTab !== "profile";
+  const showNotificationsButton = Boolean(props.onOpenNotifications);
+  const leftColumnWidth = props.leftSlotWidth ?? metrics.xTopBarItemSize;
+  const useXFeedTabsLayout = Boolean(props.onOpenHashtag);
+
+  const notificationButton = showNotificationsButton ? (
+    <Pressable
+      style={[
+        styles.xTopBarChatButton,
+        isNotificationButtonActive ? styles.xTopBarChatButtonActive : null,
+        { width: metrics.xTopBarItemSize, height: metrics.xTopBarItemSize },
+      ]}
+      onPress={props.onOpenNotifications}
+    >
+      <Image
+        source={VAR_CHAT_ICON}
+        resizeMode="contain"
+        style={{
+          width: metrics.xTopBarChatIconSize,
+          height: metrics.xTopBarChatIconSize,
+        }}
+      />
+      {normalizedNotificationCount ? (
+        <Image
+          source={VAR_CHAT_UNREAD_INDICATOR}
+          resizeMode="contain"
+          style={[
+            styles.xTopBarUnreadIndicator,
+            {
+              width: metrics.xTopBarUnreadIndicatorSize,
+              height: metrics.xTopBarUnreadIndicatorSize,
+            },
+          ]}
+        />
+      ) : null}
+    </Pressable>
+  ) : null;
 
   return (
     <>
@@ -77,12 +114,12 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
           style={[
             styles.xTopBarSpacer,
             {
-              width: props.leftSlotWidth ?? metrics.xTopBarItemSize,
+              width: leftColumnWidth,
               height: metrics.xTopBarItemSize,
             },
           ]}
         >
-          {props.leftElement ?? null}
+          {props.leftElement ?? notificationButton}
         </View>
 
         <View style={styles.xTopBarCenter}>
@@ -118,65 +155,105 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
             />
           </Pressable>
         ) : (
-          <Pressable
-            style={[
-              styles.xTopBarChatButton,
-              isNotificationButtonActive ? styles.xTopBarChatButtonActive : null,
-              { width: metrics.xTopBarItemSize, height: metrics.xTopBarItemSize },
-            ]}
-            onPress={
-              props.onOpenNotifications ? props.onOpenNotifications : undefined
-            }
-            disabled={!props.onOpenNotifications}
-          >
-            <Image
-              source={VAR_CHAT_ICON}
-              resizeMode="contain"
-              style={{
-                width: metrics.xTopBarChatIconSize,
-                height: metrics.xTopBarChatIconSize,
-              }}
-            />
-            {normalizedNotificationCount ? (
-              <Image
-                source={VAR_CHAT_UNREAD_INDICATOR}
-                resizeMode="contain"
-                style={[
-                  styles.xTopBarUnreadIndicator,
-                  {
-                    width: metrics.xTopBarUnreadIndicatorSize,
-                    height: metrics.xTopBarUnreadIndicatorSize,
-                  },
-                ]}
-              />
-            ) : null}
-          </Pressable>
+          <View
+            style={{
+              width: metrics.xTopBarItemSize,
+              height: metrics.xTopBarItemSize,
+            }}
+          />
         )}
       </View>
 
-      <View style={styles.xTabsBar}>
-        <Pressable
-          style={styles.xTabsInnerCentered}
-          onPress={props.onTabPress ?? (() => props.onChangeTab("timeline"))}
-          accessibilityRole="button"
-          accessibilityLabel={props.customTabLabel ?? "تايم لاين"}
-        >
-          <View style={styles.xHomeTabLabelRow}>
-            <View style={styles.xHomeTabLiveDot} />
-            <Text
+      <View
+        style={[
+          styles.xTabsBar,
+          useXFeedTabsLayout
+            ? { paddingHorizontal: metrics.xTopBarPaddingHorizontal }
+            : null,
+        ]}
+      >
+        {useXFeedTabsLayout ? (
+          <View style={[styles.xTabsRow, styles.xTabsRowLtr]}>
+            <Pressable
               style={[
-                styles.xHomeTabText,
-                tabFontFamily ? { fontFamily: tabFontFamily } : null,
-                isTimelineActive ? styles.xHomeTabTextActive : null,
+                styles.xHashtagTabButton,
+                {
+                  width: Math.round(30 * metrics.chromeScale),
+                  height: Math.round(30 * metrics.chromeScale),
+                  borderRadius: Math.round(8 * metrics.chromeScale),
+                },
               ]}
+              onPress={props.onOpenHashtag}
+              accessibilityRole="button"
+              accessibilityLabel="الهاشتاقات"
+              hitSlop={8}
             >
-              {props.customTabLabel ?? "تايم لاين"}
-            </Text>
-            {props.showTabChevron ? (
-              <Ionicons name="chevron-down" size={14} color="rgba(255,255,255,0.7)" style={{ marginRight: 4 }} />
-            ) : null}
+              <Text
+                style={[
+                  styles.xHashtagTabButtonText,
+                  { fontSize: Math.round(17 * metrics.chromeScale) },
+                ]}
+              >
+                #
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.xTabsCenter}
+              onPress={props.onTabPress ?? (() => props.onChangeTab("timeline"))}
+              accessibilityRole="button"
+              accessibilityLabel={props.customTabLabel ?? "تايم لاين"}
+            >
+              <View style={styles.xHomeTabLabelRow}>
+                <View style={styles.xHomeTabLiveDot} />
+                <Text
+                  style={[
+                    styles.xHomeTabText,
+                    tabFontFamily ? { fontFamily: tabFontFamily } : null,
+                    isTimelineActive ? styles.xHomeTabTextActive : null,
+                  ]}
+                >
+                  {props.customTabLabel ?? "تايم لاين"}
+                </Text>
+              </View>
+            </Pressable>
+
+            <View
+              style={{
+                width: Math.round(30 * metrics.chromeScale),
+                height: Math.round(30 * metrics.chromeScale),
+              }}
+            />
           </View>
-        </Pressable>
+        ) : (
+          <Pressable
+            style={styles.xTabsInnerCentered}
+            onPress={props.onTabPress ?? (() => props.onChangeTab("timeline"))}
+            accessibilityRole="button"
+            accessibilityLabel={props.customTabLabel ?? "تايم لاين"}
+          >
+            <View style={styles.xHomeTabLabelRow}>
+              <View style={styles.xHomeTabLiveDot} />
+              <Text
+                style={[
+                  styles.xHomeTabText,
+                  tabFontFamily ? { fontFamily: tabFontFamily } : null,
+                  isTimelineActive ? styles.xHomeTabTextActive : null,
+                ]}
+              >
+                {props.customTabLabel ?? "تايم لاين"}
+              </Text>
+              {props.showTabChevron ? (
+                <Ionicons
+                  name="chevron-down"
+                  size={14}
+                  color="rgba(255,255,255,0.7)"
+                  style={{ marginRight: 4 }}
+                />
+              ) : null}
+            </View>
+          </Pressable>
+        )}
       </View>
     </>
   );
@@ -187,14 +264,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.96)",
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.14)",
-    paddingTop: 74,
+    paddingTop: 8,
     paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingBottom: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   xTopBarCenter: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -238,15 +316,44 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.98)",
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.12)",
-    paddingTop: 2,
-    paddingBottom: 8,
+    paddingTop: 0,
+    paddingBottom: 6,
     alignItems: "center",
+  },
+  xTabsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: 34,
+    width: "100%",
+  },
+  xTabsRowLtr: {
+    direction: "ltr",
+  },
+  xTabsCenter: {
+    flex: 1,
+    minHeight: 34,
+    alignItems: "center",
+    justifyContent: "center",
   },
   xTabsInnerCentered: {
     minHeight: 34,
     alignItems: "center",
     justifyContent: "center",
+    alignSelf: "center",
     paddingHorizontal: 16,
+  },
+  xHashtagTabButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#000000",
+    borderWidth: 1,
+    borderColor: "#FFFFFF",
+  },
+  xHashtagTabButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "900",
+    marginTop: -1,
   },
   xHomeTabLabelRow: {
     flexDirection: "row-reverse",

@@ -6,10 +6,6 @@ import XFeedHeader from "../components/XFeedHeader";
 import { XPostCard } from "./x-feed/XPostCard";
 import { XPostDetailModal } from "./x-feed/XPostDetailModal";
 import { XPostReplyComposerModal } from "./x-feed/XPostReplyComposerModal";
-import type { FansCommunityPost } from "./fans/FansCommunityFeed";
-import {
-  listFansPostsByVarId,
-} from "../lib/appwrite";
 import { buildComposerDisplayVarId, normalizeAuthorId } from "../appshell/appshell.helpers";
 import { FAN_CLUBS, LEAGUES } from "../app.data";
 import { createCompatStyleSheet } from "../lib/crossPlatformStyles";
@@ -49,7 +45,7 @@ type FansScreenProps = {
   currentUserVarId?: string;
   currentUserDisplayName?: string;
   currentUserAvatarUri?: string;
-  initialProfileSheetTab?: 'posts'|'comments'|'likes'|'reposts';
+  initialProfileSheetTab?: 'posts'|'likes'|'reposts';
   onInitialProfileSheetHandled?: () => void;
   resumeReplyPostId?: number | null;
   onReplyIntentConsumed?: () => void;
@@ -82,11 +78,11 @@ export default function FansScreen(props: FansScreenProps) {
     );
   };
   const [showProfileSheet, setShowProfileSheet] = useState(false);
-  const [activeSheetTab, setActiveSheetTab] = useState<'posts'|'comments'|'likes'|'reposts'>('posts');
+  const [activeSheetTab, setActiveSheetTab] = useState<'posts'|'likes'|'reposts'>('posts');
   const [headerHeight, setHeaderHeight] = useState(0);
   const [avatarBottom, setAvatarBottom] = useState(0);
   const sheetAnim = useRef(new Animated.Value(0)).current;
-  const menuItemAnims = useRef([0,1,2,3,4,5].map(() => new Animated.Value(0))).current;
+  const menuItemAnims = useRef([0,1,2,3,4].map(() => new Animated.Value(0))).current;
 
   const openAvatarMenu = () => {
     setShowAvatarMenu(true);
@@ -101,7 +97,7 @@ export default function FansScreen(props: FansScreenProps) {
     )).start(() => setShowAvatarMenu(false));
   };
 
-  const openProfileSheet = (tab: 'posts'|'comments'|'likes'|'reposts' = 'posts') => {
+  const openProfileSheet = (tab: 'posts'|'likes'|'reposts' = 'posts') => {
     closeAvatarMenu();
     setActiveSheetTab(tab);
     setShowProfileSheet(true);
@@ -164,8 +160,6 @@ export default function FansScreen(props: FansScreenProps) {
 
   const [activeClubId, setActiveClubId] = useState<FanClubId | null>(defaultUserClub?.id ?? null);
   const [activeLeagueId, setActiveLeagueId] = useState<string>(defaultUserClub?.leagueId ?? "saudi");
-  const [myComments, setMyComments] = useState<FansCommunityPost[]>([]);
-  const [myCommentsLoading, setMyCommentsLoading] = useState(false);
   const [openedPost, setOpenedPost] = useState<Post | null>(null);
   const [replyTargetPost, setReplyTargetPost] = useState<Post | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
@@ -178,20 +172,6 @@ export default function FansScreen(props: FansScreenProps) {
       }
     }
   }, [activeClubId, activeLeagueId]);
-
-  const formatTime = (iso: string) => {
-    try {
-      const diff = Date.now() - new Date(iso).getTime();
-      const mins = Math.floor(diff / 60000);
-      if (mins < 1) return "الآن";
-      if (mins < 60) return `قبل ${mins} دقيقة`;
-      const hrs = Math.floor(mins / 60);
-      if (hrs < 24) return `قبل ${hrs} ساعة`;
-      return `قبل ${Math.floor(hrs / 24)} يوم`;
-    } catch {
-      return "";
-    }
-  };
 
   const handleEnterClub = (clubId: FanClubId) => {
     tongueRef.current?.collapse();
@@ -266,44 +246,6 @@ export default function FansScreen(props: FansScreenProps) {
     (post: Post) => matchesMyVarId(post.authorId || ""),
     [matchesMyVarId],
   );
-
-  const loadMyComments = useCallback(async () => {
-    if (myVarIds.length === 0) {
-      setMyComments([]);
-      return;
-    }
-    setMyCommentsLoading(true);
-    try {
-      const records = await listFansPostsByVarId(
-        [props.currentUserVarId, props.userVarId].filter(Boolean) as string[],
-        100,
-      );
-      const posts: FansCommunityPost[] = records.map((record) => {
-        const club = FAN_CLUBS.find((candidate) => candidate.id === record.clubId);
-        return {
-          id: record.id,
-          author: record.author,
-          varId: record.varId,
-          time: formatTime(record.createdAt),
-          content: record.content,
-          replyCount: 0,
-          avatarUri: record.avatarUri || undefined,
-          verified: record.verified,
-          clubId: record.clubId,
-          clubTitle: club?.title ?? record.clubId,
-        };
-      });
-      setMyComments(posts);
-    } finally {
-      setMyCommentsLoading(false);
-    }
-  }, [myVarIds.length, props.currentUserVarId, props.userVarId]);
-
-  useEffect(() => {
-    if (showProfileSheet && activeSheetTab === "comments") {
-      void loadMyComments();
-    }
-  }, [showProfileSheet, activeSheetTab, loadMyComments]);
 
   const selectLeague = useCallback(
     (leagueId: string) => {
@@ -628,7 +570,6 @@ export default function FansScreen(props: FansScreenProps) {
             { icon: 'trophy-outline',        label: 'الدوريات',    action: () => { closeAvatarMenu(); openAllClubsDropdown(); } },
             { icon: 'notifications-outline', label: 'إشعارات',  action: () => closeAvatarMenu() },
             { icon: 'document-text-outline', label: 'منشوراتي', action: () => openProfileSheet('posts') },
-            { icon: 'chatbubble-outline',    label: 'تعليقات',   action: () => openProfileSheet('comments') },
             { icon: 'heart-outline',         label: 'إعجاباتي', action: () => openProfileSheet('likes') },
             { icon: 'repeat-outline',        label: 'إعادة نشر',  action: () => openProfileSheet('reposts') },
           ]).map((item, i) => (
@@ -729,13 +670,11 @@ export default function FansScreen(props: FansScreenProps) {
 
             {/* تابات */}
             <View style={styles.sheetTabs}>
-              {(['posts','comments','likes','reposts'] as const).map((tab) => (
+              {(['posts','likes','reposts'] as const).map((tab) => (
                 <Pressable key={tab} style={[styles.sheetTab, activeSheetTab === tab && styles.sheetTabActive]} onPress={() => setActiveSheetTab(tab)}>
                   <Text style={[styles.sheetTabText, activeSheetTab === tab && styles.sheetTabTextActive]}>
                     {tab === 'posts'
                       ? 'منشوراتي'
-                      : tab === 'comments'
-                      ? 'تعليقاتي'
                       : tab === 'likes'
                       ? 'إعجاباتي'
                       : 'إعادة نشر'}
@@ -745,52 +684,30 @@ export default function FansScreen(props: FansScreenProps) {
             </View>
 
             <ScrollView style={styles.sheetPostsScroll} showsVerticalScrollIndicator={false}>
-              {activeSheetTab === 'comments' ? (
-                myCommentsLoading ? (
-                  <Text style={styles.sheetEmpty}>جاري تحميل التعليقات...</Text>
-                ) : myComments.length === 0 ? (
-                  <Text style={styles.sheetEmpty}>لا توجد تعليقات بعد</Text>
-                ) : (
-                  myComments.slice(0, 50).map((comment) => (
-                    <View key={comment.id} style={styles.sheetPostItem}>
-                      {comment.clubTitle ? (
-                        <Text style={styles.sheetCommentClub}>
-                          رابطة {comment.clubTitle}
-                        </Text>
-                      ) : null}
-                      <Text style={styles.sheetPostText}>{comment.content}</Text>
-                      <Text style={styles.sheetPostMetaText}>{comment.time}</Text>
-                    </View>
-                  ))
-                )
-              ) : (
-                <>
-                  {(activeSheetTab === 'posts'
-                    ? (props.posts ?? []).filter(isMyFansTweet)
-                    : activeSheetTab === 'likes'
-                    ? (props.posts ?? []).filter((p) => p.likedByMe)
-                    : (props.posts ?? []).filter((p) => p.repostedByMe)
-                  ).slice(0, 20).map((post) => (
-                    <View key={post.id} style={styles.sheetPostItem}>
-                      <Text style={styles.sheetPostText} numberOfLines={2}>{post.content}</Text>
-                      <View style={styles.sheetPostMeta}>
-                        <Ionicons name="heart" size={12} color="rgba(255,255,255,0.35)" />
-                        <Text style={styles.sheetPostMetaText}>{post.likes}</Text>
-                        <Ionicons name="chatbubble-outline" size={12} color="rgba(255,255,255,0.35)" style={{ marginRight: 8 }} />
-                        <Text style={styles.sheetPostMetaText}>{post.replies}</Text>
-                      </View>
-                    </View>
-                  ))}
-                  {(activeSheetTab === 'posts'
-                    ? (props.posts ?? []).filter(isMyFansTweet)
-                    : activeSheetTab === 'likes'
-                    ? (props.posts ?? []).filter((p) => p.likedByMe)
-                    : (props.posts ?? []).filter((p) => p.repostedByMe)
-                  ).length === 0 ? (
-                    <Text style={styles.sheetEmpty}>لا يوجد محتوى بعد</Text>
-                  ) : null}
-                </>
-              )}
+              {(activeSheetTab === 'posts'
+                ? (props.posts ?? []).filter(isMyFansTweet)
+                : activeSheetTab === 'likes'
+                ? (props.posts ?? []).filter((p) => p.likedByMe)
+                : (props.posts ?? []).filter((p) => p.repostedByMe)
+              ).slice(0, 20).map((post) => (
+                <View key={post.id} style={styles.sheetPostItem}>
+                  <Text style={styles.sheetPostText} numberOfLines={2}>{post.content}</Text>
+                  <View style={styles.sheetPostMeta}>
+                    <Ionicons name="heart" size={12} color="rgba(255,255,255,0.35)" />
+                    <Text style={styles.sheetPostMetaText}>{post.likes}</Text>
+                    <Ionicons name="chatbubble-outline" size={12} color="rgba(255,255,255,0.35)" style={{ marginRight: 8 }} />
+                    <Text style={styles.sheetPostMetaText}>{post.replies}</Text>
+                  </View>
+                </View>
+              ))}
+              {(activeSheetTab === 'posts'
+                ? (props.posts ?? []).filter(isMyFansTweet)
+                : activeSheetTab === 'likes'
+                ? (props.posts ?? []).filter((p) => p.likedByMe)
+                : (props.posts ?? []).filter((p) => p.repostedByMe)
+              ).length === 0 ? (
+                <Text style={styles.sheetEmpty}>لا يوجد محتوى بعد</Text>
+              ) : null}
             </ScrollView>
           </Animated.View>
         </>
@@ -1180,13 +1097,6 @@ const styles = createCompatStyleSheet({
     alignItems: "center",
     gap: 4,
     marginTop: 6,
-  },
-  sheetCommentClub: {
-    color: "#F4C565",
-    fontSize: 12,
-    fontWeight: "700",
-    textAlign: "right",
-    marginBottom: 4,
   },
   sheetPostMetaText: {
     color: "rgba(255,255,255,0.35)",

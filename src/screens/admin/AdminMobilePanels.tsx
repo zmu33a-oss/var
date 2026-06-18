@@ -35,14 +35,12 @@ export type AdminMobilePanel =
   | "overview"
   | "users"
   | "posts"
-  | "library"
   | "audit";
 
 const PANELS: Array<{ id: AdminMobilePanel; label: string }> = [
   { id: "overview", label: "نظرة عامة" },
   { id: "users", label: "المستخدمون" },
   { id: "posts", label: "المنشورات" },
-  { id: "library", label: "مكتبة فار" },
   { id: "audit", label: "السجل" },
 ];
 

@@ -51,16 +51,6 @@ export const COLLECTION_DEFAULTS: AppwriteCollectionIds = {
     process.env.EXPO_PUBLIC_APPWRITE_FANS_POSTS_COLLECTION_ID?.trim() || "",
 };
 
-export function hasAppwriteVarLibraryConfig() {
-  const collectionId = APPWRITE_CONFIG.varLibraryCollectionId.trim();
-
-  return (
-    Boolean(APPWRITE_CONFIG.databaseId.trim()) &&
-    Boolean(collectionId) &&
-    !isAppwritePlaceholderValue(collectionId)
-  );
-}
-
 export const APPWRITE_CONFIG: AppwriteConfig = {
   ...PROJECT_DEFAULTS,
   ...COLLECTION_DEFAULTS,
@@ -122,7 +112,7 @@ export function getAppwriteProfileImagesBucketConfigurationError(): string | nul
     return null;
   }
 
-  return "نشر صور مكتبة فار يحتاج EXPO_PUBLIC_APPWRITE_PROFILE_IMAGES_BUCKET_ID في ملف .env (من Appwrite → Storage → Bucket ID)، ثم أعد تشغيل التطبيق.";
+  return "نشر صور المنشورات يحتاج EXPO_PUBLIC_APPWRITE_PROFILE_IMAGES_BUCKET_ID في ملف .env (من Appwrite → Storage → Bucket ID)، ثم أعد تشغيل التطبيق.";
 }
 
 export function getAppwritePostsConfigurationError(): string | null {

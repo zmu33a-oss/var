@@ -18,6 +18,7 @@ type BottomNavProps = {
   richIconsEnabled?: boolean;
   onHomeAction: () => void;
   onSelect: (tab: MainTab) => void;
+  onVarPress?: () => void;
 };
 
 function resolveNavIcon(
@@ -94,7 +95,7 @@ export default function BottomNav(props: BottomNavProps) {
 
       <Pressable
         style={styles.bottomCenterActionWrap}
-        onPress={props.onHomeAction}
+        onPress={props.onVarPress || props.onHomeAction}
       >
         <View
           style={[

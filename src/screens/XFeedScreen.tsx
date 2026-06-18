@@ -24,6 +24,12 @@ import {
 } from "react-native";
 import XFeedHeader from "../components/XFeedHeader";
 import {
+  UserActivityOverlay,
+  UserActivitySheetEmpty,
+  UserActivitySheetPostItem,
+  type UserActivityMenuItem,
+} from "../components/UserActivityOverlay";
+import {
   getMissingAppwriteSocialInteractionFields,
   hasAppwriteSocialInteractionsConfig,
   listAppwriteDirectMessages,
@@ -38,6 +44,7 @@ import type {
   FollowingProfileCard,
   PendingAuthIntent,
   Post,
+  PostReply,
 } from "../app.types";
 import { normalizeAuthorId } from "../appshell/appshell.helpers";
 import type {
@@ -59,6 +66,7 @@ import {
   buildNotificationSnippet,
   buildPrivateMessageEntry,
   buildTrendingHashtags,
+  resolveXComposeFabLayout,
 } from "./x-feed/x-feed.utils";
 import {
   createDefaultAuthorProfileSectionNoticeDismissal,
@@ -87,7 +95,6 @@ import {
 type XFeedScreenProps = {
   isLoggedIn: boolean;
   posts: Post[];
-  onCreatePost: () => void;
   onRequireAuth: (message?: string, pendingIntent?: PendingAuthIntent) => void;
   onTogglePostLike: (postId: number) => void;
   onTogglePostRepost: (postId: number) => void;
@@ -118,12 +125,31 @@ type XFeedScreenProps = {
   onDeletePost: (postId: number) => void;
   onUpdatePostContent: (postId: number, content: string) => void;
   onReportPost: (postId: number) => void;
+  onCreatePost?: () => void;
   onActiveTabChange?: (tab: XFeedTab) => void;
 };
 
 type OpenedAuthorReplyItem = import("../app.types").PostReply & {
   sourcePost: Post;
 };
+
+type XActivitySheetTab = "posts" | "replies" | "reposts" | "likes" | "shares";
+
+const X_ACTIVITY_MENU_ITEMS: UserActivityMenuItem[] = [
+  { icon: "document-text-outline", label: "تغريدات", tab: "posts" },
+  { icon: "chatbubble-outline", label: "ردود", tab: "replies" },
+  { icon: "repeat-outline", label: "ريتويت", tab: "reposts" },
+  { icon: "heart-outline", label: "إعجابات", tab: "likes" },
+  { icon: "share-outline", label: "مشاركة", tab: "shares" },
+];
+
+const X_ACTIVITY_SHEET_TABS: { id: XActivitySheetTab; label: string }[] = [
+  { id: "posts", label: "تغريدات" },
+  { id: "replies", label: "ردود" },
+  { id: "reposts", label: "ريتويت" },
+  { id: "likes", label: "إعجابات" },
+  { id: "shares", label: "مشاركة" },
+];
 
 const CLICK_SOUND = require("../../assets/audio/click.mp3.mp3");
 const WEB_PULL_REFRESH_TRIGGER_DISTANCE = 76;
@@ -167,6 +193,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     onDeletePost,
     onUpdatePostContent,
     onReportPost,
+    onCreatePost,
     onActiveTabChange,
   } = props;
   const normalizedCurrentUserVarId = normalizeAuthorId(currentUserVarId);
@@ -192,6 +219,15 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   useEffect(() => {
     onActiveTabChange?.(activeTab);
   }, [activeTab, onActiveTabChange]);
+
+  const handleCreatePost = useCallback(() => {
+    if (!isLoggedIn) {
+      onRequireAuth("سجّل الدخول لإنشاء رسالة جديدة.", { type: "open-x-post" });
+      return;
+    }
+
+    onCreatePost?.();
+  }, [isLoggedIn, onCreatePost, onRequireAuth]);
 
   const [replyDraft, setReplyDraft] = useState("");
   const [replyTargetPost, setReplyTargetPost] = useState<Post | null>(null);
@@ -234,6 +270,14 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     XNotificationEntry[]
   >([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false);
+  const [showProfileSheet, setShowProfileSheet] = useState(false);
+  const [activeSheetTab, setActiveSheetTab] = useState<XActivitySheetTab>("posts");
+  const [avatarBottom, setAvatarBottom] = useState(0);
+  const sheetAnim = useRef(new Animated.Value(0)).current;
+  const menuItemAnims = useRef(
+    X_ACTIVITY_MENU_ITEMS.map(() => new Animated.Value(0)),
+  ).current;
   const [seenNotificationIds, setSeenNotificationIds] = useState<
     Record<string, true>
   >({});
@@ -298,7 +342,10 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   const layoutWidth = Math.min(windowWidth, 430);
   const chromeScale = Math.max(0.84, Math.min(1, layoutWidth / 430));
   const xScreenBottomPadding = Math.round(132 * chromeScale);
-  const xHashtagButtonSize = Math.round(48 * chromeScale);
+  const xComposeFabLayout = useMemo(
+    () => resolveXComposeFabLayout(windowWidth),
+    [windowWidth],
+  );
   const normalizedReplyAuthorName =
     currentUserDisplayName.trim() || normalizedCurrentUserVarId || "VAR User";
   const normalizedReplyAuthorAvatarUri = currentUserAvatarUri.trim();
@@ -2181,6 +2228,225 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     }
   };
 
+  const openAvatarMenu = useCallback(() => {
+    if (!isLoggedIn) {
+      onRequireAuth("سجّل الدخول لعرض نشاطك.");
+      return;
+    }
+
+    setShowAvatarMenu(true);
+    Animated.stagger(
+      60,
+      menuItemAnims.map((anim) =>
+        Animated.spring(anim, {
+          toValue: 1,
+          damping: 18,
+          stiffness: 260,
+          useNativeDriver: true,
+        }),
+      ),
+    ).start();
+  }, [isLoggedIn, menuItemAnims, onRequireAuth]);
+
+  const closeAvatarMenu = useCallback(() => {
+    Animated.parallel(
+      menuItemAnims.map((anim) =>
+        Animated.timing(anim, { toValue: 0, duration: 150, useNativeDriver: true }),
+      ),
+    ).start(() => setShowAvatarMenu(false));
+  }, [menuItemAnims]);
+
+  const openProfileSheet = useCallback(
+    (tab: XActivitySheetTab = "posts") => {
+      if (!isLoggedIn) {
+        onRequireAuth("سجّل الدخول لعرض نشاطك.");
+        return;
+      }
+
+      closeAvatarMenu();
+      setActiveSheetTab(tab);
+      setShowProfileSheet(true);
+      Animated.spring(sheetAnim, {
+        toValue: 1,
+        damping: 22,
+        stiffness: 300,
+        useNativeDriver: true,
+      }).start();
+    },
+    [closeAvatarMenu, isLoggedIn, onRequireAuth, sheetAnim],
+  );
+
+  const closeProfileSheet = useCallback(() => {
+    Animated.timing(sheetAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => setShowProfileSheet(false));
+  }, [sheetAnim]);
+
+  const myAuthorTokens = useMemo(() => {
+    return new Set(
+      [
+        normalizedCurrentUserVarId,
+        resolvedCurrentUserDisplayVarId,
+        currentUserUsername,
+        currentUserDisplayName,
+      ]
+        .map((value) => (value || "").trim().replace(/^@/, "").toLowerCase())
+        .filter(Boolean),
+    );
+  }, [
+    currentUserDisplayName,
+    currentUserUsername,
+    normalizedCurrentUserVarId,
+    resolvedCurrentUserDisplayVarId,
+  ]);
+
+  const isMyXAuthor = useCallback(
+    (authorId: string, handle?: string, authorName?: string) => {
+      const normalizedAuthorId = normalizeAuthorId(authorId || "");
+      if (
+        normalizedAuthorId !== "local-user" &&
+        normalizedAuthorId === normalizedCurrentUserVarId
+      ) {
+        return true;
+      }
+
+      const normalizedHandle = (handle || "").trim().replace(/^@/, "").toLowerCase();
+      const normalizedAuthor = (authorName || "").trim().toLowerCase();
+
+      return (
+        (normalizedHandle && myAuthorTokens.has(normalizedHandle)) ||
+        (normalizedAuthor && myAuthorTokens.has(normalizedAuthor))
+      );
+    },
+    [myAuthorTokens, normalizedCurrentUserVarId],
+  );
+
+  const xPosts = useMemo(
+    () => posts.filter((post) => post.feedScope !== "fans"),
+    [posts],
+  );
+
+  const myAuthoredPosts = useMemo(
+    () =>
+      xPosts.filter(
+        (post) =>
+          !post.repostMeta &&
+          isMyXAuthor(post.authorId || "", post.handle, post.author),
+      ),
+    [isMyXAuthor, xPosts],
+  );
+
+  const myReplyItems = useMemo(() => {
+    const replies: PostReply[] = [];
+
+    xPosts.forEach((post) => {
+      (post.replyItems ?? []).forEach((reply) => {
+        if (isMyXAuthor("", reply.handle, reply.author)) {
+          replies.push(reply);
+        }
+      });
+    });
+
+    return replies;
+  }, [isMyXAuthor, xPosts]);
+
+  const myRepostedPosts = useMemo(
+    () =>
+      xPosts.filter(
+        (post) =>
+          post.repostedByMe ||
+          (post.repostMeta &&
+            isMyXAuthor(post.repostMeta.varId, post.repostMeta.handle, post.repostMeta.author)),
+      ),
+    [isMyXAuthor, xPosts],
+  );
+
+  const myLikedPosts = useMemo(
+    () => xPosts.filter((post) => post.likedByMe),
+    [xPosts],
+  );
+
+  const mySharedPosts = useMemo(
+    () => xPosts.filter((post) => post.sharedByMe),
+    [xPosts],
+  );
+
+  const renderActivitySheetContent = () => {
+    if (activeSheetTab === "posts") {
+      if (myAuthoredPosts.length === 0) {
+        return <UserActivitySheetEmpty text="لا توجد تغريدات بعد" />;
+      }
+
+      return myAuthoredPosts.slice(0, 30).map((post) => (
+        <UserActivitySheetPostItem
+          key={post.id}
+          content={post.content}
+          likes={post.likes}
+          replies={post.replies}
+        />
+      ));
+    }
+
+    if (activeSheetTab === "replies") {
+      if (myReplyItems.length === 0) {
+        return <UserActivitySheetEmpty text="لا توجد ردود بعد" />;
+      }
+
+      return myReplyItems.slice(0, 30).map((reply) => (
+        <UserActivitySheetPostItem
+          key={reply.id}
+          content={reply.content}
+          meta={reply.time}
+        />
+      ));
+    }
+
+    if (activeSheetTab === "reposts") {
+      if (myRepostedPosts.length === 0) {
+        return <UserActivitySheetEmpty text="لا توجد إعادة تغريد بعد" />;
+      }
+
+      return myRepostedPosts.slice(0, 30).map((post) => (
+        <UserActivitySheetPostItem
+          key={`repost-${post.id}-${post.sourceId || ""}`}
+          content={post.content}
+          likes={post.likes}
+          replies={post.replies}
+        />
+      ));
+    }
+
+    if (activeSheetTab === "likes") {
+      if (myLikedPosts.length === 0) {
+        return <UserActivitySheetEmpty text="لا توجد إعجابات بعد" />;
+      }
+
+      return myLikedPosts.slice(0, 30).map((post) => (
+        <UserActivitySheetPostItem
+          key={`like-${post.id}`}
+          content={post.content}
+          likes={post.likes}
+          replies={post.replies}
+        />
+      ));
+    }
+
+    if (mySharedPosts.length === 0) {
+      return <UserActivitySheetEmpty text="لا توجد مشاركات بعد" />;
+    }
+
+    return mySharedPosts.slice(0, 30).map((post) => (
+      <UserActivitySheetPostItem
+        key={`share-${post.id}`}
+        content={post.content}
+        likes={post.likes}
+        replies={post.replies}
+      />
+    ));
+  };
+
   const handleFeedScroll = (event: {
     nativeEvent: {
       layoutMeasurement: { height: number };
@@ -2244,6 +2510,23 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           </Text>
         </View>
       ) : null}
+
+      <XFeedHeader
+        windowWidth={windowWidth}
+        activeTab={activeTab}
+        onChangeTab={setActiveTab}
+        notificationCount={unreadNotificationCount}
+        notificationsActive={isNotificationsOpen}
+        onOpenNotifications={openNotifications}
+        onOpenProfile={() => setActiveTab("profile")}
+        avatarUri={isLoggedIn ? currentUserAvatarUri : undefined}
+        onOpenAvatar={() =>
+          showAvatarMenu ? closeAvatarMenu() : openAvatarMenu()
+        }
+        onAvatarLayout={(y, height) => setAvatarBottom(y + height)}
+        onOpenHashtag={openHashtagDirectory}
+      />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         style={styles.xScrollArea}
@@ -2262,16 +2545,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           />
         }
       >
-        <XFeedHeader
-          windowWidth={windowWidth}
-          activeTab={activeTab}
-          onChangeTab={setActiveTab}
-          notificationCount={unreadNotificationCount}
-          notificationsActive={isNotificationsOpen}
-          onOpenNotifications={openNotifications}
-          onOpenProfile={() => setActiveTab("profile")}
-        />
-
         {activeTab === "profile" ? (
           <XProfileHub
             isLoggedIn={isLoggedIn}
@@ -2333,19 +2606,28 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         ) : null}
       </ScrollView>
 
-      {activeTab === "timeline" ? (
+      {activeTab === "timeline" &&
+      onCreatePost &&
+      !showAvatarMenu &&
+      !showProfileSheet &&
+      !isHashtagDirectoryOpen ? (
         <Pressable
-          style={[
-            styles.xHashtagButton,
+          accessibilityRole="button"
+          accessibilityLabel="رسالة جديدة"
+          style={({ pressed }) => [
+            styles.xComposeFab,
             {
-              width: xHashtagButtonSize,
-              height: xHashtagButtonSize,
-              borderRadius: Math.round(15 * chromeScale),
+              left: xComposeFabLayout.left,
+              bottom: xComposeFabLayout.bottom,
+              width: xComposeFabLayout.size,
+              height: xComposeFabLayout.size,
+              borderRadius: xComposeFabLayout.size / 2,
             },
+            pressed ? styles.xComposeFabPressed : null,
           ]}
-          onPress={openHashtagDirectory}
+          onPress={handleCreatePost}
         >
-          <Text style={styles.xHashtagButtonText}>#</Text>
+          <Ionicons name="mail-unread-outline" size={26} color="#FFFFFF" />
         </Pressable>
       ) : null}
 
@@ -2714,6 +2996,26 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         onSaveEdit={handleSaveEditActionPost}
         onReport={handleReportActionPost}
       />
+
+      <UserActivityOverlay
+        menuVisible={showAvatarMenu}
+        sheetVisible={showProfileSheet}
+        menuItems={X_ACTIVITY_MENU_ITEMS}
+        sheetTabs={X_ACTIVITY_SHEET_TABS}
+        activeTab={activeSheetTab}
+        avatarBottom={avatarBottom}
+        avatarUri={currentUserAvatarUri}
+        displayName={currentUserDisplayName}
+        varId={resolvedCurrentUserDisplayVarId}
+        menuItemAnims={menuItemAnims}
+        sheetAnim={sheetAnim}
+        onCloseMenu={closeAvatarMenu}
+        onCloseSheet={closeProfileSheet}
+        onOpenSheet={(tab) => openProfileSheet(tab as XActivitySheetTab)}
+        onTabChange={(tab) => setActiveSheetTab(tab as XActivitySheetTab)}
+      >
+        {renderActivitySheetContent()}
+      </UserActivityOverlay>
     </View>
   );
 }

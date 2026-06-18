@@ -6,12 +6,16 @@ import { StatusBar } from "expo-status-bar";
 import {
   Modal,
   Platform,
+  Pressable,
   SafeAreaView,
+  ScrollView,
   Share,
+  StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   HOME_PALETTES,
   INITIAL_PROFILE,
@@ -28,6 +32,7 @@ import LeaguesScreen from "./screens/leagues";
 import AuthScreen from "./screens/AuthScreen";
 import ProfileScreen from "./screens/profile";
 import AdminDashboardScreen from "./screens/AdminDashboardScreen";
+import VarExcellenceScreen from "./screens/VarExcellenceScreen";
 import { fetchAppRuntimeSettings } from "./lib/app/app-runtime-settings";
 import FloatingThemeSwitch from "./components/FloatingThemeSwitch";
 import FloatingProfileArrow from "./components/FloatingProfileArrow";
@@ -164,7 +169,7 @@ export default function AppShell() {
   const { height, width } = useWindowDimensions();
   const [currentTab, setCurrentTab] = useState<MainTab>("home");
   const [homeMode, setHomeModeState] = useState<HomeMode>(
-    () => readStoredHomeMode() ?? "tiktok",
+    () => readStoredHomeMode() ?? "x",
   );
   const hasLockedHomeModeRef = useRef(Boolean(readStoredHomeMode()));
   const setHomeMode = useCallback((mode: HomeMode) => {
@@ -183,6 +188,7 @@ export default function AppShell() {
   });
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
+  const [isVarExcellencePanelOpen, setIsVarExcellencePanelOpen] = useState(false);
   const [notice, setNotice] = useState(INITIAL_NOTICE);
   const [videos, setVideos] = useState(INITIAL_VIDEOS);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -229,7 +235,7 @@ export default function AppShell() {
   const [isLogoutFarewellVisible, setIsLogoutFarewellVisible] = useState(false);
   const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
   const [fansProfileSheetRequest, setFansProfileSheetRequest] = useState<
-    "posts" | "comments" | "likes" | "reposts" | null
+    "posts" | "likes" | "reposts" | null
   >(null);
   const layoutWidth = Math.min(width, SHELL_WIDTH);
   const chromeScale = Math.max(0.84, Math.min(1, layoutWidth / SHELL_WIDTH));
@@ -678,7 +684,7 @@ export default function AppShell() {
   };
 
   const openFansAssociationFromProfile = useCallback(
-    (options?: { sheetTab?: "posts" | "comments" | "likes" | "reposts" }) => {
+    (options?: { sheetTab?: "posts" | "likes" | "reposts" }) => {
       if (options?.sheetTab) {
         setFansProfileSheetRequest(options.sheetTab);
       }
@@ -863,45 +869,8 @@ export default function AppShell() {
   };
 
   const handleHomeAction = () => {
-    if (homeMode === "tiktok") {
-      openStudio();
-      return;
-    }
-
-    if (!isLoggedIn) {
-      requireAuth(
-        homeMode === "x"
-          ? "سجل الدخول لإنشاء منشور X."
-          : "سجل الدخول لإضافة فيديو جديد.",
-      );
-      return;
-    }
-
-    if (homeMode === "x") {
-      openPostComposer();
-      return;
-    }
-
-    setVideos((currentVideos) => [
-      {
-        id: Date.now(),
-        creatorName: "WEBPLUS Expo",
-        creatorHandle: "@expo",
-        caption:
-          "فيديو تجريبي جديد من زر VAR المركزي، بنفس الروح الداكنة للواجهة الأصلية.",
-        likes: 0,
-        saves: 0,
-        shares: 0,
-        comments: 0,
-        likedByMe: false,
-        savedByMe: false,
-        sharedByMe: false,
-        theme: ["#6647FF", "#160B2E"],
-        tag: "Night",
-      },
-      ...currentVideos,
-    ]);
-    setNotice("تمت إضافة فيديو تجريبي جديد.");
+    // فتح لوحة فار للتميز بدلاً من البوست كومبوزر
+    setIsVarExcellencePanelOpen(true);
   };
 
   const toggleVideoLike = (videoId: number) => {
@@ -1757,7 +1726,6 @@ export default function AppShell() {
   }, [
     currentTab,
     isLoggedIn,
-    openPostComposer,
     pendingAuthIntent,
     pendingAuthReturnTab,
     shouldResumePendingAuth,
@@ -1786,12 +1754,7 @@ export default function AppShell() {
   let screen: ReactNode;
   const visibleTab: MainTab = currentTab;
   const palette = HOME_PALETTES[homeMode];
-  const showThemeSwitch =
-    visibleTab === "home" &&
-    !isVideoFullscreen &&
-    (homeMode === "tiktok" ||
-      xFeedActiveTab === "timeline" ||
-      xFeedActiveTab === "profile");
+  const showThemeSwitch = false; // مخفي مؤقتاً - كان: visibleTab === "home" && !isVideoFullscreen && (homeMode === "tiktok" || xFeedActiveTab === "timeline" || xFeedActiveTab === "profile")
 
   switch (visibleTab) {
     case "home":
@@ -1805,7 +1768,6 @@ export default function AppShell() {
           videos={videos}
           windowHeight={height}
           onChangeMode={setHomeMode}
-          onCreatePost={handleHomeAction}
           onPingAppwrite={handleAppwritePing}
           onRequireAuth={requireAuth}
           onTogglePostLike={togglePostLike}
@@ -1847,6 +1809,7 @@ export default function AppShell() {
           onDeletePost={deletePost}
           onUpdatePostContent={updatePostContent}
           onReportPost={reportPost}
+          onCreatePost={openPostComposer}
           onXFeedTabChange={setXFeedActiveTab}
           onToggleVideoLike={toggleVideoLike}
           onToggleVideoSave={toggleVideoSave}
@@ -1952,6 +1915,9 @@ export default function AppShell() {
           onSuccess={completeAuthFlow}
         />
       );
+      break;
+    case "excellence":
+      screen = <VarExcellenceScreen />;
       break;
   }
 
@@ -2059,6 +2025,7 @@ export default function AppShell() {
               richIconsEnabled={appRuntimeSettings.richIconsEnabled}
               onHomeAction={handleHomeAction}
               onSelect={selectMainTab}
+              onVarPress={() => selectMainTab("excellence")}
             />
           </View>
         ) : null}
@@ -2118,6 +2085,40 @@ export default function AppShell() {
               onClose={() => setIsAdminDashboardOpen(false)}
             />
           ) : null}
+        </Modal>
+
+        {/* لوحة فار للتميز */}
+        <Modal
+          visible={isVarExcellencePanelOpen}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setIsVarExcellencePanelOpen(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: '#000' }}>
+            <LinearGradient
+              colors={['#000000', '#0a0a0a']}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <SafeAreaView style={{ flex: 1 }}>
+              <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Pressable onPress={() => setIsVarExcellencePanelOpen(false)}>
+                  <Ionicons name="close" size={24} color="#FFFFFF" />
+                </Pressable>
+                <Text style={{ color: '#F4C565', fontSize: 18, fontWeight: 'bold' }}>
+                  لوحة فار للتميز
+                </Text>
+                <View style={{ width: 24 }} />
+              </View>
+              <ScrollView style={{ flex: 1, padding: 20 }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 16, textAlign: 'center', marginTop: 40 }}>
+                  مرحباً بك في لوحة فار للتميز
+                </Text>
+                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14, textAlign: 'center', marginTop: 16 }}>
+                  قريباً ستتوفر المزيد من الميزات هنا
+                </Text>
+              </ScrollView>
+            </SafeAreaView>
+          </View>
         </Modal>
 
         <LogoutFarewellOverlay visible={isLogoutFarewellVisible} />

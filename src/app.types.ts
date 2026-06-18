@@ -2,7 +2,7 @@ import type { ComponentProps } from "react";
 import { Ionicons } from "@expo/vector-icons";
 
 export type GradientPair = [string, string];
-export type MainTab = "home" | "fans" | "leagues" | "account";
+export type MainTab = "home" | "fans" | "leagues" | "account" | "excellence";
 export type Tab = MainTab;
 export type HomeMode = "tiktok" | "x";
 export type AuthMode = "login" | "signup";
