@@ -47,7 +47,8 @@ export function resolvePublicApiBase() {
 
 function normalizeHomeMode(value: unknown): HomeMode {
   const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
-  return raw === "x" || raw === "x-mode" ? "x" : "tiktok";
+  // فقط "tiktok" يخليها تيك توك، أي شيء آخر (بما فيه undefined/null) = x
+  return raw === "tiktok" ? "tiktok" : "x";
 }
 
 function readBool(value: unknown, fallback: boolean) {
