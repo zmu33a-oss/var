@@ -139,45 +139,13 @@ function clearHandledAddRouteFromUrl() {
   }
 }
 
-const HOME_MODE_STORAGE_KEY = "var.homeMode";
-
-function readStoredHomeMode(): HomeMode | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const stored = window.localStorage.getItem(HOME_MODE_STORAGE_KEY)?.trim();
-    return stored === "x" || stored === "tiktok" ? stored : null;
-  } catch {
-    return null;
-  }
-}
-
-function persistHomeMode(mode: HomeMode) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(HOME_MODE_STORAGE_KEY, mode);
-  } catch {
-    // Ignore storage failures and keep the in-memory choice.
-  }
-}
-
 export default function AppShell() {
   const { height, width } = useWindowDimensions();
   const [currentTab, setCurrentTab] = useState<MainTab>("home");
-  const [homeMode, setHomeModeState] = useState<HomeMode>(
-    () => readStoredHomeMode() ?? "x",
-  );
-  const setHomeMode = useCallback((mode: HomeMode) => {
-    persistHomeMode(mode);
-    // Use startTransition to avoid UI freeze during mode switch
-    startTransition(() => {
-      setHomeModeState(mode);
-    });
+    // TikTok (فار تيك) معطل مؤقتاً - homeMode دائماً "x"
+  const [homeMode] = useState<HomeMode>("x");
+  const setHomeMode = useCallback((_mode: HomeMode) => {
+    // معطل - لا يمكن التبديل إلى تيك توك
   }, []);
   const [xFeedActiveTab, setXFeedActiveTab] = useState<XFeedTab>("timeline");
   const [appRuntimeSettings, setAppRuntimeSettings] = useState({
