@@ -11,18 +11,35 @@ function readQueryParam(req: VercelRequest, key: string): string {
 
 async function parseBody(req: VercelRequest): Promise<void> {
   if (req.body !== undefined) return;
+
+  const method = String(req.method || "GET").toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+    (req as any).body = Buffer.from("");
+    return;
+  }
+
+  if ((req as any).readableEnded || (req as any).complete) {
+    (req as any).body = Buffer.from("");
+    return;
+  }
+
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
-    req.on("data", (chunk: Buffer) => chunks.push(chunk));
-    req.on("end", () => {
+    const finish = () => {
       (req as any).body = Buffer.concat(chunks);
       resolve();
-    });
-    req.on("error", () => resolve());
+    };
+
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", finish);
+    req.on("error", finish);
   });
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Debug headers
+  console.log('[DEBUG] admin/index headers:', JSON.stringify(req.headers, null, 2));
+  
   await parseBody(req);
 
   const section = readQueryParam(req, "section");

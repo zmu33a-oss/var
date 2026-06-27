@@ -58,9 +58,52 @@ function resolveLanIp() {
   return candidates[0]?.address || "";
 }
 
+function listLocalLanIps() {
+  const nets = os.networkInterfaces();
+  const addresses = new Set();
+
+  for (const entries of Object.values(nets)) {
+    for (const entry of entries || []) {
+      if (!isIpv4(entry) || entry.internal || !isPrivateLanAddress(entry.address)) {
+        continue;
+      }
+
+      if (isVirtualLanAddress(entry.address)) {
+        continue;
+      }
+
+      addresses.add(entry.address);
+    }
+  }
+
+  return [...addresses];
+}
+
+function resolvePreviewLanIp() {
+  const detectedIp = resolveLanIp();
+  const requestedIp = process.env.VAR_LAN_IP?.trim();
+
+  if (!requestedIp) {
+    return detectedIp;
+  }
+
+  const localIps = listLocalLanIps();
+  if (localIps.includes(requestedIp)) {
+    return requestedIp;
+  }
+
+  console.warn("");
+  console.warn(
+    `تنبيه: ${requestedIp} غير موجود على الماك — سيُستخدم IP الشبكة الحالي: ${detectedIp}`,
+  );
+  console.warn("");
+
+  return detectedIp;
+}
+
 const previewDir =
   process.env.VAR_PREVIEW_DIR?.trim() || path.join("/tmp", "var-preview");
-const lanIp = resolveLanIp();
+const lanIp = resolvePreviewLanIp();
 const port = String(process.env.EXPO_WEB_PORT || "8081").trim();
 
 if (!lanIp) {
@@ -77,6 +120,8 @@ console.log("========================================");
 console.log("  لا تستخدم IP قديم — الرقم يتغير مع الشبكة");
 console.log("  Admin:  http://localhost:3000/admin/");
 console.log("  Same Wi-Fi required on phone and PC.");
+console.log("  على بيانات الجوال استخدم: https://var-gold.vercel.app");
+console.log("  Settings API: production (نفس Vercel)");
 console.log("");
 
 const expoCliPath = require.resolve("expo/bin/cli", {
@@ -89,6 +134,7 @@ const child = spawn(
     expoCliPath,
     "start",
     "--web",
+    "--clear",
     "--port",
     port,
     "--host",
@@ -101,6 +147,8 @@ const child = spawn(
       ...process.env,
       REACT_NATIVE_PACKAGER_HOSTNAME: lanIp,
       EXPO_DEV_SERVER_LISTEN_ADDRESS: "0.0.0.0",
+      EXPO_PUBLIC_APP_URL:
+        process.env.EXPO_PUBLIC_APP_URL?.trim() || "https://var-gold.vercel.app",
     },
   },
 );

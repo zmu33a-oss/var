@@ -7,6 +7,7 @@ import type {
   MessageThreadEntry,
   MessageThreadProfileLike,
   PrivateMessageEntry,
+  XNotificationEntry,
 } from "./x-feed.types";
 import { FANS_BOTTOM_NAV_RESERVE } from "../fans/fans.layout.constants";
 
@@ -125,6 +126,40 @@ export function formatPrivateMessageTimeLabel(createdAt: string) {
   return new Date(parsedDate).toLocaleDateString("ar-SA");
 }
 
+export const formatRelativeTimeLabel = formatPrivateMessageTimeLabel;
+
+export function resolveNotificationTimeLabel(
+  notification: Pick<
+    XNotificationEntry,
+    "createdAt" | "sortOrder" | "timeLabel"
+  >,
+) {
+  const createdAt =
+    notification.createdAt?.trim() ||
+    (notification.sortOrder > 1_000_000_000_000
+      ? new Date(notification.sortOrder).toISOString()
+      : "");
+
+  if (createdAt) {
+    return formatRelativeTimeLabel(createdAt);
+  }
+
+  return notification.timeLabel?.trim() || "الآن";
+}
+
+export function createPostAvatarLabel(author: string) {
+  const compactAuthor = author.replace(/\s+/g, "").trim();
+
+  return compactAuthor.slice(0, 2) || "VX";
+}
+
+export function estimatePostViews(post: Post) {
+  return Math.max(
+    220,
+    post.likes * 6 + post.replies * 14 + post.reposts * 18 + post.shares * 22,
+  );
+}
+
 export function buildTrendingHashtags(posts: Post[]): HashtagTrendEntry[] {
   const hashtagMap = new Map<string, HashtagTrendEntry>();
 
@@ -220,6 +255,41 @@ export function buildTrendingHashtags(posts: Post[]): HashtagTrendEntry[] {
   });
 }
 
+/** يطابق نفس بطاقة التايملاين دون الخلط بين الأصل وإعادة النشر (نفس sourceId). */
+export function findMatchingFeedPost(
+  posts: Post[],
+  target: Pick<Post, "id" | "feedKey" | "sourceId" | "repostMeta">,
+): Post | undefined {
+  const targetFeedKey = target.feedKey?.trim();
+
+  if (targetFeedKey) {
+    const byFeedKey = posts.find(
+      (post) => post.feedKey?.trim() === targetFeedKey,
+    );
+
+    if (byFeedKey) {
+      return byFeedKey;
+    }
+  }
+
+  const byId = posts.find((post) => post.id === target.id);
+
+  if (byId) {
+    return byId;
+  }
+
+  const targetSourceId = target.sourceId?.trim();
+
+  if (targetSourceId && !target.repostMeta) {
+    return posts.find(
+      (post) =>
+        post.sourceId?.trim() === targetSourceId && !post.repostMeta,
+    );
+  }
+
+  return undefined;
+}
+
 export function buildPrivateMessageEntry(
   record: AppwriteDirectMessageRecord,
   currentUserVarId: string,
@@ -239,7 +309,9 @@ export function buildPrivateMessageEntry(
   };
 }
 
-const X_FEED_SHELL_WIDTH = 430;
+/** عرض عمود X — قريب من عرض تايم لاين تويتر على الجوال (~392pt). */
+export const X_FEED_COLUMN_WIDTH = 392;
+const X_FEED_SHELL_WIDTH = X_FEED_COLUMN_WIDTH;
 const X_BOTTOM_DOCK_HORIZONTAL_INSET = 8;
 const X_COMPOSE_FAB_BOTTOM_GAP = 10;
 

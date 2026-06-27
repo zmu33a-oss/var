@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import type { FanClubId, PendingAuthIntent, Post } from "../app.types";
-import XFeedHeader from "../components/XFeedHeader";
+import FansHeader from "../components/FansHeader";
 import { XPostCard } from "./x-feed/XPostCard";
 import { XPostDetailModal } from "./x-feed/XPostDetailModal";
 import { XPostReplyComposerModal } from "./x-feed/XPostReplyComposerModal";
@@ -49,6 +49,9 @@ type FansScreenProps = {
   onInitialProfileSheetHandled?: () => void;
   resumeReplyPostId?: number | null;
   onReplyIntentConsumed?: () => void;
+  // الرابطة النشطة (مرفوعة من AppShell)
+  activeClubId?: FanClubId | null;
+  onActiveClubChange?: (clubId: FanClubId | null) => void;
 };
 
 /**
@@ -85,6 +88,7 @@ export default function FansScreen(props: FansScreenProps) {
   const menuItemAnims = useRef([0,1,2,3,4].map(() => new Animated.Value(0))).current;
 
   const openAvatarMenu = () => {
+    menuItemAnims.forEach((anim) => anim.setValue(0));
     setShowAvatarMenu(true);
     Animated.stagger(60, menuItemAnims.map((a) =>
       Animated.spring(a, { toValue: 1, damping: 18, stiffness: 260, useNativeDriver: true })
@@ -158,8 +162,13 @@ export default function FansScreen(props: FansScreenProps) {
     }
   }, [props.userLeagueClub]);
 
-  const [activeClubId, setActiveClubId] = useState<FanClubId | null>(defaultUserClub?.id ?? null);
+  // استخدام الرابطة النشطة من props (مرفوعة من AppShell) أو القيمة الافتراضية
+  const activeClubId = props.activeClubId ?? defaultUserClub?.id ?? null;
   const [activeLeagueId, setActiveLeagueId] = useState<string>(defaultUserClub?.leagueId ?? "saudi");
+
+  const setActiveClubId = useCallback((clubId: FanClubId | null) => {
+    props.onActiveClubChange?.(clubId);
+  }, [props.onActiveClubChange]);
   const [openedPost, setOpenedPost] = useState<Post | null>(null);
   const [replyTargetPost, setReplyTargetPost] = useState<Post | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
@@ -250,9 +259,10 @@ export default function FansScreen(props: FansScreenProps) {
   const selectLeague = useCallback(
     (leagueId: string) => {
       setActiveLeagueId(leagueId);
-      setActiveClubId(resolveDefaultClubForLeague(leagueId));
+      const newClubId = resolveDefaultClubForLeague(leagueId);
+      props.onActiveClubChange?.(newClubId);
     },
-    [resolveDefaultClubForLeague],
+    [resolveDefaultClubForLeague, props.onActiveClubChange],
   );
 
   const activeClubTitle = useMemo(() => {
@@ -267,10 +277,23 @@ export default function FansScreen(props: FansScreenProps) {
       props.onRequireAuth("سجّل الدخول لإنشاء تغريدة.");
       return;
     }
+    if (!activeClubId) {
+      props.onRequireAuth?.("اختر رابطة أولاً لإنشاء منشور.");
+      return;
+    }
     props.onCreatePost?.();
   };
 
-  const fansPosts = props.posts ?? [];
+  // تصفية المنشورات حسب الرابطة النشطة
+  const allFansPosts = props.posts ?? [];
+  const fansPosts = useMemo(() => {
+    // إذا ما فيه رابطة نشطة، نعرض كل المنشورات
+    if (!activeClubId) return allFansPosts;
+    // نعرض المنشورات الخاصة بالرابطة النشطة + المنشورات القديمة بدون رابطة
+    return allFansPosts.filter(
+      (post) => !post.clubId || post.clubId === activeClubId
+    );
+  }, [allFansPosts, activeClubId]);
 
   const replyAuthorName =
     props.currentUserDisplayName?.trim() ||
@@ -332,15 +355,19 @@ export default function FansScreen(props: FansScreenProps) {
     props.onTogglePostLike?.(post.id);
   };
 
-  const handlePostRepost = (post: Post) => {
+  const guardPostRepost = (post: Post) => {
     if (!props.isLoggedIn) {
       props.onRequireAuth("سجّل الدخول لإعادة نشر منشورات الرابطة.", {
         type: "toggle-post-repost",
         postId: post.id,
       });
-      return;
+      return false;
     }
 
+    return true;
+  };
+
+  const handlePostRepost = (post: Post) => {
     props.onTogglePostRepost?.(post.id);
   };
 
@@ -391,21 +418,26 @@ export default function FansScreen(props: FansScreenProps) {
     0.84,
     Math.min(1, Math.min(windowWidth, 430) / 430),
   );
+  const avatarMenuAnchor =
+    avatarBottom > 0
+      ? avatarBottom
+      : Math.max(64, headerHeight > 0 ? headerHeight - 36 : 72);
 
   return (
     <View style={styles.root}>
       {/* هيدر FansFeed */}
-      <View onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
-        <XFeedHeader
+      <View
+        style={styles.headerHost}
+        onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+      >
+        <FansHeader
           windowWidth={windowWidth}
-          activeTab="timeline"
-          onChangeTab={() => undefined}
-          customTabLabel={activeClubTitle || "رابطتي"}
+          clubLabel={activeClubTitle || "رابطتي"}
           showTabChevron
           onTabPress={() => showClubDropdown ? closeDropdown() : openDropdown()}
           avatarUri={props.userAvatarUri}
           onOpenAvatar={() => showAvatarMenu ? closeAvatarMenu() : openAvatarMenu()}
-          onAvatarLayout={(y, h) => setAvatarBottom(y + h)}
+          onAvatarLayout={setAvatarBottom}
           leftSlotWidth={Math.round(80 * fansHeaderChromeScale)}
           leftElement={
             cheerClubId ? (
@@ -492,6 +524,7 @@ export default function FansScreen(props: FansScreenProps) {
             post={post}
             onOpen={() => openPostDetail(post)}
             onReply={() => openReplyComposer(post)}
+            beforeRepost={() => guardPostRepost(post)}
             onRepost={() => handlePostRepost(post)}
             onShare={() => handlePostShare(post)}
             onLike={() => handlePostLike(post)}
@@ -577,7 +610,7 @@ export default function FansScreen(props: FansScreenProps) {
               key={i}
               style={[
                 styles.menuItem,
-                { top: avatarBottom + 6 + i * 44 },
+                { top: avatarMenuAnchor + 6 + i * 44 },
                 {
                   opacity: menuItemAnims[i],
                   transform: [{ translateY: menuItemAnims[i].interpolate({ inputRange: [0,1], outputRange: [-20, 0] }) }],
@@ -731,6 +764,7 @@ export default function FansScreen(props: FansScreenProps) {
         post={openedPost}
         onClose={closePostDetail}
         onReply={openReplyComposer}
+        beforeRepost={guardPostRepost}
         onRepost={handlePostRepost}
         onShare={handlePostShare}
         onLike={handlePostLike}
@@ -756,7 +790,13 @@ const styles = createCompatStyleSheet({
     flex: 1,
     backgroundColor: "#000000",
     position: "relative",
-    overflow: "hidden",
+    overflow: "visible",
+    paddingTop: 44,
+  },
+  headerHost: {
+    position: "relative",
+    zIndex: 24,
+    backgroundColor: "#000000",
   },
   scroll: {
     flex: 1,
@@ -798,7 +838,7 @@ const styles = createCompatStyleSheet({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 20,
+    zIndex: 50,
     paddingTop: FANS_STICKY_HEADER_TOP,
     alignItems: "center",
     overflow: "visible",
@@ -892,12 +932,12 @@ const styles = createCompatStyleSheet({
   },
   menuBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 98,
+    zIndex: 120,
   },
   menuItem: {
     position: "absolute",
     right: 10,
-    zIndex: 99,
+    zIndex: 121,
   },
   menuIconBtn: {
     flexDirection: "row-reverse",

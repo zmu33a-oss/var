@@ -34,13 +34,15 @@ import {
 
   listAppwriteXRepliesByTargetIds,
 
+  normalizeAppwriteVarId,
+
   subscribeToAppwriteCollection,
 
   uploadAppwritePostImage,
 
 } from "../lib/appwrite";
 
-import type { Post, ProfileData } from "../app.types";
+import type { Post, PostReply, ProfileData } from "../app.types";
 
 import {
 
@@ -136,6 +138,78 @@ function splitPostsByFeedScope(
 
 }
 
+function findMatchingSyncedPost(
+  currentPosts: Post[],
+  syncedPost: Post,
+): Post | undefined {
+  const sourceId = syncedPost.sourceId?.trim();
+  const feedKey = syncedPost.feedKey?.trim();
+
+  return currentPosts.find((post) => {
+    if (feedKey && post.feedKey?.trim() === feedKey) {
+      return true;
+    }
+
+    if (sourceId && post.sourceId?.trim() === sourceId) {
+      return true;
+    }
+
+    return post.id === syncedPost.id;
+  });
+}
+
+function mergeReplyItems(
+  serverItems: PostReply[],
+  localItems: PostReply[],
+): PostReply[] {
+  if (!localItems.length) {
+    return serverItems;
+  }
+
+  const serverKeys = new Set(
+    serverItems.map(
+      (reply) =>
+        `${reply.createdAt || ""}:${reply.content}:${reply.handle}:${reply.author}`,
+    ),
+  );
+
+  const pendingLocal = localItems.filter((reply) => {
+    const key = `${reply.createdAt || ""}:${reply.content}:${reply.handle}:${reply.author}`;
+    return !serverKeys.has(key);
+  });
+
+  if (!pendingLocal.length) {
+    return serverItems;
+  }
+
+  return [...pendingLocal, ...serverItems].sort((left, right) => {
+    const leftTime = Date.parse(left.createdAt || "") || left.id;
+    const rightTime = Date.parse(right.createdAt || "") || right.id;
+    return rightTime - leftTime;
+  });
+}
+
+function mergeSyncedPostWithLocal(syncedPost: Post, localPost?: Post): Post {
+  if (!localPost) {
+    return syncedPost;
+  }
+
+  const replyItems = mergeReplyItems(
+    syncedPost.replyItems ?? [],
+    localPost.replyItems ?? [],
+  );
+
+  if (replyItems === syncedPost.replyItems) {
+    return syncedPost;
+  }
+
+  return {
+    ...syncedPost,
+    replies: Math.max(syncedPost.replies, replyItems.length),
+    replyItems,
+  };
+}
+
 
 
 function mergeSyncedPosts(
@@ -198,7 +272,9 @@ function mergeSyncedPosts(
 
     );
 
-    const nextEntries = syncedPosts.filter((post) => {
+    const nextEntries = syncedPosts
+
+      .filter((post) => {
 
       const entryKey = post.feedKey?.trim() || String(post.id);
 
@@ -206,7 +282,14 @@ function mergeSyncedPosts(
 
       return !existingKeys.has(entryKey);
 
-    });
+    })
+
+      .map((syncedPost) =>
+        mergeSyncedPostWithLocal(
+          syncedPost,
+          findMatchingSyncedPost(currentPosts, syncedPost),
+        ),
+      );
 
 
 
@@ -216,7 +299,16 @@ function mergeSyncedPosts(
 
 
 
-  return [...syncedPosts, ...pendingLocalPosts];
+  const mergedSyncedPosts = syncedPosts.map((syncedPost) =>
+    mergeSyncedPostWithLocal(
+      syncedPost,
+      findMatchingSyncedPost(currentPosts, syncedPost),
+    ),
+  );
+
+
+
+  return [...mergedSyncedPosts, ...pendingLocalPosts];
 
 }
 
@@ -436,6 +528,26 @@ async function buildSyncedPostsFromRecords(
 
   }
 
+  const resolveReplyRecordsForTarget = (targetId: string) => {
+    const normalizedTargetId = targetId.trim();
+
+    if (!normalizedTargetId) {
+      return [] as AppwritePostReplyRecord[];
+    }
+
+    const variants = new Set<string>([normalizedTargetId]);
+
+    if (normalizedTargetId.startsWith("VAR-")) {
+      variants.add(normalizedTargetId.slice(4));
+    } else {
+      variants.add(normalizeAppwriteVarId(normalizedTargetId));
+    }
+
+    return Array.from(variants).flatMap(
+      (variant) => repliesByTargetId.get(variant) ?? [],
+    );
+  };
+
 
 
   const enrichPost = (record: (typeof appwritePosts)[number], index: number) => {
@@ -482,7 +594,7 @@ async function buildSyncedPostsFromRecords(
 
           .filter((value): value is string => Boolean(value))
 
-          .flatMap((targetId) => repliesByTargetId.get(targetId) ?? [])
+          .flatMap((targetId) => resolveReplyRecordsForTarget(targetId))
 
           .map((replyRecord) => [replyRecord.id, replyRecord]),
 

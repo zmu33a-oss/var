@@ -866,6 +866,7 @@ export function mapAppwritePostRecordToPost(
     authorVerified: identityOverrides?.authorVerified,
     handle: trimmedHandle || buildProfilePostHandle("", normalizedAuthorId),
     time: formatPostTime(record.createdAt),
+    createdAt: record.createdAt,
     content: record.content,
     mediaUri: record.mediaUri?.trim() || undefined,
     fromVarLibrary: record.fromVarLibrary || undefined,
@@ -878,6 +879,7 @@ export function mapAppwritePostRecordToPost(
     likedByMe: false,
     repostedByMe: false,
     sharedByMe: false,
+    savedByMe: false,
   };
 }
 
@@ -894,11 +896,13 @@ export function mapAppwriteReplyRecordToPostReply(
 
   return {
     id: (Number.isNaN(createdAtValue) ? Date.now() : createdAtValue) + index,
+    authorId: normalizedAuthorId,
     author: trimmedAuthor || normalizedAuthorId,
     authorAvatarUri: trimmedAvatarUri || undefined,
     authorVerified: identityOverrides?.authorVerified,
     handle: trimmedHandle || buildProfilePostHandle("", normalizedAuthorId),
     time: formatPostTime(record.createdAt),
+    createdAt: record.createdAt,
     content: record.content,
   };
 }

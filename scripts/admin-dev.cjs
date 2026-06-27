@@ -27,3 +27,4 @@ execSync("npx vercel dev --listen 0.0.0.0:3000 --yes", {
   stdio: "inherit",
   env: process.env,
 });
+

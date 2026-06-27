@@ -1,4 +1,5 @@
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
+import { X_FEED_COLUMN_WIDTH } from "./x-feed.utils";
 
 export const styles = StyleSheet.create({
   xScreen: {
@@ -12,6 +13,23 @@ export const styles = StyleSheet.create({
   xScrollArea: {
     flex: 1,
     backgroundColor: "#000000",
+  },
+  xCollapsibleHeaderHost: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    backgroundColor: "#000000",
+    alignItems: "center",
+  },
+  xFeedColumn: {
+    width: "100%",
+    maxWidth: X_FEED_COLUMN_WIDTH,
+    alignSelf: "center",
+  },
+  xFeedColumnInner: {
+    width: "100%",
   },
   xWebRefreshIndicator: {
     position: "absolute",
@@ -468,6 +486,29 @@ export const styles = StyleSheet.create({
   },
   xDetailScreen: {
     flex: 1,
+    width: "100%",
+    backgroundColor: "#000000",
+    ...(Platform.OS === "web"
+      ? {
+          minHeight: "100%",
+          height: "100%",
+        }
+      : null),
+  },
+  xPostDetailOverlay: {
+    ...(Platform.OS === "web"
+      ? {
+          position: "fixed",
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+        }
+      : StyleSheet.absoluteFillObject),
+    zIndex: 250,
+    elevation: 250,
     backgroundColor: "#000000",
   },
   xDetailHeader: {
@@ -502,6 +543,7 @@ export const styles = StyleSheet.create({
   },
   xDetailContent: {
     paddingBottom: 40,
+    backgroundColor: "#000000",
   },
   xDetailRepliesSection: {
     borderTopWidth: StyleSheet.hairlineWidth,

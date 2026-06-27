@@ -523,6 +523,22 @@ export function MilestoneProgressBar(props: MilestoneProgressBarProps) {
                 </Text>
               </View>
             </View>
+
+            {/* التوقعات */}
+            <View style={styles.compactPredictionsRow}>
+              <View style={styles.compactPredictionItem}>
+                <Text style={styles.compactPredictionLabel}>التوقعات</Text>
+                <Text style={styles.compactPredictionValue}>0</Text>
+              </View>
+              <View style={styles.compactPredictionItem}>
+                <Text style={styles.compactPredictionLabel}>صح</Text>
+                <Text style={styles.compactPredictionValue}>0</Text>
+              </View>
+              <View style={styles.compactPredictionItem}>
+                <Text style={styles.compactPredictionLabel}>خطأ</Text>
+                <Text style={styles.compactPredictionValue}>0</Text>
+              </View>
+            </View>
           </View>
         ) : showHeader ? (
           <View style={styles.headerRow}>
@@ -804,52 +820,57 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   compactProfileSection: {
-    marginBottom: 14,
+    marginBottom: 16,
   },
   compactProfileDivider: {
     height: 1,
     borderRadius: 999,
-    marginBottom: 14,
+    marginBottom: 16,
   },
   compactProfileHeader: {
     flexDirection: "row-reverse",
-    alignItems: "flex-start",
-    gap: 12,
+    alignItems: "center",
+    gap: 14,
   },
   compactProfileHeaderCopy: {
     flex: 1,
     minWidth: 0,
     alignItems: "flex-end",
-    gap: 4,
+    gap: 6,
   },
   compactProfileTitleRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: 6,
+    justifyContent: "flex-start",
+    gap: 8,
+    width: "100%",
   },
   compactProfileTitle: {
     color: "#FFFFFF",
-    fontSize: 15,
+    flexShrink: 1,
+    fontSize: 16,
     fontWeight: "900",
+    lineHeight: 20,
     textAlign: "right",
     writingDirection: "rtl",
   },
   compactProfileSubtitle: {
     color: "rgba(255,255,255,0.56)",
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700",
-    lineHeight: 15,
+    lineHeight: 17,
+    maxWidth: "100%",
     textAlign: "right",
     writingDirection: "rtl",
   },
   compactProfilePointsChip: {
-    minWidth: 58,
-    minHeight: 52,
-    borderRadius: 16,
+    minWidth: 72,
+    minHeight: 60,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     backgroundColor: "rgba(244,197,101,0.10)",
     borderWidth: 1,
     borderColor: "rgba(244,197,101,0.34)",
@@ -867,7 +888,7 @@ const styles = StyleSheet.create({
   },
   compactProfilePointsLabel: {
     color: "rgba(255,255,255,0.52)",
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: "800",
     marginTop: 2,
     writingDirection: "rtl",
@@ -1085,6 +1106,30 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.45,
     shadowRadius: 6,
     elevation: 6,
+  },
+  compactPredictionsRow: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 14,
+    gap: 8,
+  },
+  compactPredictionItem: {
+    flex: 1,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  compactPredictionLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.64)",
+  },
+  compactPredictionValue: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#F4C565",
   },
   trackCheckUnlocked: {
     backgroundColor: "#22C55E",

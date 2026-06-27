@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
+  FAN_CLUBS,
   HOME_PALETTES,
   INITIAL_PROFILE,
   INITIAL_SUPPORTERS,
@@ -171,10 +172,8 @@ export default function AppShell() {
   const [homeMode, setHomeModeState] = useState<HomeMode>(
     () => readStoredHomeMode() ?? "x",
   );
-  const hasLockedHomeModeRef = useRef(Boolean(readStoredHomeMode()));
   const setHomeMode = useCallback((mode: HomeMode) => {
     persistHomeMode(mode);
-    hasLockedHomeModeRef.current = true;
     // Use startTransition to avoid UI freeze during mode switch
     startTransition(() => {
       setHomeModeState(mode);
@@ -237,6 +236,7 @@ export default function AppShell() {
   const [fansProfileSheetRequest, setFansProfileSheetRequest] = useState<
     "posts" | "likes" | "reposts" | null
   >(null);
+  const [fansActiveClubId, setFansActiveClubId] = useState<FanClubId | null>(null);
   const layoutWidth = Math.min(width, SHELL_WIDTH);
   const chromeScale = Math.max(0.84, Math.min(1, layoutWidth / SHELL_WIDTH));
   const themeSwitchTopInset = Math.round(9.5 * chromeScale);
@@ -498,11 +498,10 @@ export default function AppShell() {
       };
     });
 
-    if (!hasLockedHomeModeRef.current) {
-      setHomeModeState(settings.uiMode);
-      hasLockedHomeModeRef.current = true;
+    if (settings.loadedFromServer) {
+      setHomeMode(settings.uiMode);
     }
-  }, []);
+  }, [setHomeMode]);
 
   useEffect(() => {
     void syncAppRuntimeSettings();
@@ -722,7 +721,11 @@ export default function AppShell() {
   };
 
   const prependFansPost = (post: Post) => {
-    const fansScopedPost = { ...post, feedScope: "fans" as const };
+    const fansScopedPost = {
+      ...post,
+      feedScope: "fans" as const,
+      clubId: fansActiveClubId || undefined,
+    };
     setFansPosts((currentPosts) => [fansScopedPost, ...currentPosts]);
   };
 
@@ -1009,6 +1012,29 @@ export default function AppShell() {
     });
   };
 
+  const togglePostSave = (postId: number) => {
+    let nextSaved = false;
+    const interactionTargetId = resolvePostInteractionTargetId(postId);
+
+    updatePostInFeeds(postId, (post) => {
+      nextSaved = !post.savedByMe;
+
+      return {
+        ...post,
+        savedByMe: nextSaved,
+      };
+    });
+    trackVarInteraction({
+      mode: "x",
+      action: "save",
+      targetId: interactionTargetId,
+      active: nextSaved,
+    });
+    setNotice(
+      nextSaved ? "تم حفظ المنشور." : "تمت إزالة المنشور من المحفوظات.",
+    );
+  };
+
   const toggleAuthorFollow = (authorVarId: string) => {
     const currentVarId = appwriteUser?.varId.trim() || profile.varId.trim();
     const normalizedCurrentVarId = normalizeAuthorId(currentVarId);
@@ -1090,7 +1116,8 @@ export default function AppShell() {
       id: `follow-${normalizedCurrentVarId}-${normalizedRecipientVarId}`,
       title: "إضافة جديدة عبر بطاقة VAR",
       body: `${followerName} أضافك إلى المتابعين عبر الباركود.`,
-      timeLabel: "الآن",
+      createdAt: new Date().toISOString(),
+      timeLabel: "",
       iconName: "person-add-outline",
       accentColor: "#34D399",
       avatarUri: followerIdentity.authorAvatarUri || profile.avatarUri,
@@ -1220,27 +1247,45 @@ export default function AppShell() {
     setSupportedTeams((currentTeams) => {
       const alreadySupported = currentTeams.includes(clubId);
 
-      setSupporters((currentCounts) => ({
-        ...currentCounts,
-        [clubId]: Math.max(
-          0,
-          (currentCounts[clubId] ?? 0) + (alreadySupported ? -1 : 1),
-        ),
-      }));
-      setNotice(
-        alreadySupported
-          ? "تمت إزالة الدعم من الرابطة."
-          : "تم تسجيل دعمك للرابطة.",
-      );
-
+      // إذا كان النادي مدعوم — نلغي التشجيع
       if (alreadySupported) {
+        setSupporters((currentCounts) => ({
+          ...currentCounts,
+          [clubId]: Math.max(0, (currentCounts[clubId] ?? 0) - 1),
+        }));
+        setNotice("تمت إزالة الدعم من الرابطة.");
         return currentTeams.filter((teamId) => teamId !== clubId);
       }
 
-      if (currentTeams.includes(clubId)) {
-        return currentTeams;
+      // الحصول على الدوري للنادي الجديد
+      const targetClub = FAN_CLUBS.find((c) => c.id === clubId);
+      const targetLeagueId = targetClub?.leagueId;
+
+      // إذا المستخدم يشجع نادي في نفس الدوري — ننقل التشجيع
+      const existingClubInSameLeague = targetLeagueId
+        ? currentTeams.find((teamId) => {
+            const club = FAN_CLUBS.find((c) => c.id === teamId);
+            return club?.leagueId === targetLeagueId;
+          })
+        : undefined;
+
+      if (existingClubInSameLeague) {
+        // ننقل التشجيع: نحذف القديم ونضيف الجديد
+        setSupporters((currentCounts) => ({
+          ...currentCounts,
+          [existingClubInSameLeague]: Math.max(0, (currentCounts[existingClubInSameLeague] ?? 0) - 1),
+          [clubId]: (currentCounts[clubId] ?? 0) + 1,
+        }));
+        setNotice(`تم تغيير دعمك من ${FAN_CLUBS.find(c => c.id === existingClubInSameLeague)?.title} إلى ${targetClub?.title}`);
+        return [...currentTeams.filter((id) => id !== existingClubInSameLeague), clubId];
       }
 
+      // إضافة نادي جديد في دوري جديد
+      setSupporters((currentCounts) => ({
+        ...currentCounts,
+        [clubId]: (currentCounts[clubId] ?? 0) + 1,
+      }));
+      setNotice("تم تسجيل دعمك للرابطة.");
       return [...currentTeams, clubId];
     });
   };
@@ -1262,38 +1307,49 @@ export default function AppShell() {
     });
     const nextReply: PostReply = {
       id: Date.now(),
+      authorId: normalizeAuthorId(replyAuthorVarId || "local-user"),
       author: replyIdentity.author || normalizeAuthorId(replyAuthorVarId),
       authorAvatarUri: replyIdentity.authorAvatarUri,
       authorVerified: replyIdentity.authorVerified,
       handle:
         replyIdentity.handle ||
         createPostHandle(replyAuthorVarId || "local-user"),
-      time: "الآن",
+      time: formatPostTime(new Date().toISOString()),
+      createdAt: new Date().toISOString(),
       content: trimmedReply,
     };
 
-    setPosts((currentPosts) =>
-      currentPosts.map((post) =>
-        post.id === postId
-          ? {
-              ...post,
-              replies: post.replies + 1,
-              replyItems: [nextReply, ...(post.replyItems ?? [])],
-            }
-          : post,
-      ),
-    );
-    setFansPosts((currentPosts) =>
-      currentPosts.map((post) =>
-        post.id === postId
-          ? {
-              ...post,
-              replies: post.replies + 1,
-              replyItems: [nextReply, ...(post.replyItems ?? [])],
-            }
-          : post,
-      ),
-    );
+    const targetPost =
+      posts.find((candidate) => candidate.id === postId) ??
+      fansPosts.find((candidate) => candidate.id === postId);
+    const targetSourceId = targetPost?.sourceId?.trim() || "";
+
+    const attachReplyToPost = (post: Post): Post => {
+      const matchesTarget =
+        post.id === postId ||
+        (targetSourceId && post.sourceId?.trim() === targetSourceId);
+
+      if (!matchesTarget) {
+        return post;
+      }
+
+      const alreadyHasReply = (post.replyItems ?? []).some(
+        (item) => item.id === nextReply.id,
+      );
+
+      if (alreadyHasReply) {
+        return post;
+      }
+
+      return {
+        ...post,
+        replies: post.id === postId ? post.replies + 1 : post.replies,
+        replyItems: [nextReply, ...(post.replyItems ?? [])],
+      };
+    };
+
+    setPosts((currentPosts) => currentPosts.map(attachReplyToPost));
+    setFansPosts((currentPosts) => currentPosts.map(attachReplyToPost));
     trackVarInteraction({
       mode: "x",
       action: "reply",
@@ -1709,6 +1765,9 @@ export default function AppShell() {
       case "toggle-post-repost":
         togglePostRepost(pendingAuthIntent.postId);
         break;
+      case "toggle-post-save":
+        togglePostSave(pendingAuthIntent.postId);
+        break;
       case "share-post":
         void sharePost(pendingAuthIntent.postId);
         break;
@@ -1772,6 +1831,7 @@ export default function AppShell() {
           onRequireAuth={requireAuth}
           onTogglePostLike={togglePostLike}
           onTogglePostRepost={togglePostRepost}
+          onTogglePostSave={togglePostSave}
           onSharePost={sharePost}
           currentUserVarId={profile.varId || appwriteUser?.varId || ""}
           currentUserDisplayName={
@@ -1839,6 +1899,7 @@ export default function AppShell() {
           posts={fansPosts}
           onTogglePostLike={togglePostLike}
           onTogglePostRepost={togglePostRepost}
+          onTogglePostSave={togglePostSave}
           onSharePost={sharePost}
           onSubmitPostReply={submitPostReply}
           onCreatePost={openFansPostComposer}
@@ -1849,6 +1910,8 @@ export default function AppShell() {
           onInitialProfileSheetHandled={() => setFansProfileSheetRequest(null)}
           resumeReplyPostId={resumeReplyPostId}
           onReplyIntentConsumed={consumeReplyIntent}
+          activeClubId={fansActiveClubId}
+          onActiveClubChange={setFansActiveClubId}
         />
       );
       break;

@@ -6,13 +6,15 @@ export type AppRuntimeSettings = {
   richIconsEnabled: boolean;
   gpuAccelerationEnabled: boolean;
   updatedAt: string;
+  loadedFromServer: boolean;
 };
 
 const DEFAULT_SETTINGS: AppRuntimeSettings = {
-  uiMode: "tiktok",
+  uiMode: "x",
   richIconsEnabled: true,
   gpuAccelerationEnabled: true,
   updatedAt: "",
+  loadedFromServer: false,
 };
 
 export function resolvePublicApiBase() {
@@ -111,6 +113,7 @@ export async function fetchAppRuntimeSettings(): Promise<AppRuntimeSettings> {
       gpuAccelerationEnabled: readBool(settings.gpuAccelerationEnabled, true),
       updatedAt:
         typeof settings.updatedAt === "string" ? settings.updatedAt : "",
+      loadedFromServer: true,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };

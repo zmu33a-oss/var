@@ -30,7 +30,7 @@ type XFeedHeaderProps = {
   leftSlotWidth?: number;
   avatarUri?: string;
   onOpenAvatar?: () => void;
-  onAvatarLayout?: (y: number, height: number) => void;
+  onAvatarLayout?: (bottom: number) => void;
   onOpenHashtag?: () => void;
 };
 
@@ -145,7 +145,7 @@ export default function XFeedHeader(props: XFeedHeaderProps) {
             onPress={props.onOpenAvatar}
             onLayout={(e) => {
               const { y, height } = e.nativeEvent.layout;
-              props.onAvatarLayout?.(y, height);
+              props.onAvatarLayout?.(metrics.xTopBarPaddingTop + y + height);
             }}
           >
             <Image

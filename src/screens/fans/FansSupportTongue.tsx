@@ -298,14 +298,14 @@ const FansSupportTongue = forwardRef<
                 <Ionicons
                   name="search"
                   size={16}
-                  color="rgba(255,255,255,0.55)"
+                  color="rgba(0,0,0,0.45)"
                   style={styles.tongueDropdownSearchIcon}
                 />
                 <TextInput
                   value={clubSearchQuery}
                   onChangeText={setClubSearchQuery}
                   placeholder="ابحث عن النادي..."
-                  placeholderTextColor="rgba(255,255,255,0.38)"
+                  placeholderTextColor="rgba(0,0,0,0.38)"
                   style={styles.tongueDropdownSearchInput}
                   textAlign="right"
                   returnKeyType="search"
@@ -712,15 +712,15 @@ const styles = createCompatStyleSheet({
     paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.82)",
-    backgroundColor: "rgba(0, 0, 0, 0.88)",
+    borderColor: "rgba(0,0,0,0.1)",
+    backgroundColor: "#FFFFFF",
   },
   tongueDropdownSearchIcon: {
     flexShrink: 0,
   },
   tongueDropdownSearchInput: {
     flex: 1,
-    color: "#FFFFFF",
+    color: "#000000",
     fontSize: 13,
     fontWeight: "600",
     paddingVertical: Platform.OS === "ios" ? 8 : 6,

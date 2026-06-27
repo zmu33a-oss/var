@@ -59,6 +59,17 @@ function isProfileReplyAuthor(
   profile: ProfileData,
   handleCandidates: Set<string>,
 ) {
+  const normalizedProfileVarId = normalizeAuthorId(profile.varId);
+  const normalizedReplyAuthorId = normalizeAuthorId(reply.authorId || "");
+
+  if (
+    normalizedProfileVarId !== "local-user" &&
+    normalizedReplyAuthorId !== "local-user" &&
+    normalizedReplyAuthorId === normalizedProfileVarId
+  ) {
+    return true;
+  }
+
   const normalizedReplyHandle = normalizeProfileActivityToken(reply.handle);
   const normalizedReplyAuthor = normalizeProfileActivityToken(reply.author);
   const normalizedDisplayName = normalizeProfileActivityToken(
@@ -282,6 +293,7 @@ export function filterProfileInteractionReplies(
     return [] as PostReply[];
   }
 
+  const normalizedProfileVarId = normalizeAuthorId(profile.varId);
   const replies: PostReply[] = [];
 
   socialInteractions.forEach((interaction, index) => {
@@ -289,15 +301,24 @@ export function filterProfileInteractionReplies(
       return;
     }
 
+    if (
+      normalizedProfileVarId !== "local-user" &&
+      normalizeAuthorId(interaction.varId) !== normalizedProfileVarId
+    ) {
+      return;
+    }
+
     replies.push({
       id:
         Number(String(interaction.id).replace(/\D/g, "").slice(-8)) ||
         index + 1,
+      authorId: normalizeAuthorId(interaction.varId),
       author: profile.displayName.trim() || "مستخدم",
       authorAvatarUri: profile.avatarUri?.trim() || undefined,
       authorVerified: profile.role === "admin",
-      handle: "",
+      handle: buildComposerDisplayVarId(profile.displayVarId, profile.varId),
       time: formatPostTime(interaction.createdAt),
+      createdAt: interaction.createdAt,
       content: interaction.value?.trim() || "بدون نص",
     });
   });
@@ -310,18 +331,24 @@ export function mergeProfileReplies(
   profile: ProfileData,
   socialInteractions?: SocialInteractionRecord[],
 ) {
-  const seen = new Set<number>();
+  const seen = new Set<string>();
   const merged: PostReply[] = [];
 
   [
     ...filterProfileReplyItems(posts, profile),
     ...filterProfileInteractionReplies(posts, profile, socialInteractions),
   ].forEach((reply) => {
-    if (seen.has(reply.id)) {
+    const dedupeKey = [
+      normalizeAuthorId(reply.authorId || ""),
+      reply.createdAt || String(reply.id),
+      reply.content.trim(),
+    ].join(":");
+
+    if (seen.has(dedupeKey)) {
       return;
     }
 
-    seen.add(reply.id);
+    seen.add(dedupeKey);
     merged.push(reply);
   });
 

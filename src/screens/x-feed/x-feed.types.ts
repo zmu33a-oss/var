@@ -92,6 +92,7 @@ export type XNotificationEntry = {
   title: string;
   body: string;
   timeLabel: string;
+  createdAt?: string;
   iconName: IconName;
   accentColor: string;
   avatarUri: string;

@@ -149,11 +149,7 @@ export default function ChatOverlay({ thread, isSending, onSend, onClose }: Chat
   const canSend = Boolean(draft.trim()) && !isSending;
 
   if (!thread) {
-    return (
-      <Modal visible={false} animationType="slide" presentationStyle="fullScreen">
-        <View />
-      </Modal>
-    );
+    return null;
   }
 
   return (

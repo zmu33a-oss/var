@@ -33,7 +33,7 @@ export default async function handler(request: any, response: any) {
     sendJson(response, 200, {
       ok: true,
       settings: {
-        uiMode: "tiktok",
+        uiMode: "x",
         richIconsEnabled: true,
         gpuAccelerationEnabled: true,
         updatedAt: "",

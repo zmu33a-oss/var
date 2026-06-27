@@ -1,11 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useState, type ReactNode } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import RetweetIcon from "../../components/RetweetIcon";
 import SealCheckIcon from "../../components/SealCheckIcon";
 import type { IconName, Post, PostReply } from "../../app.types";
-import {
-  X_POST_MEDIA_BACKGROUND,
-} from "./x-feed.media.constants";
+import { LEAGUE_POLL_AVATAR_GRADIENTS } from "../leagues/leagues.constants";
+import { X_POST_MEDIA_BACKGROUND } from "./x-feed.media.constants";
 import { useRemoteImageAspectRatio } from "./x-feed.media.utils";
+import { XRepostConfirmModal } from "./XRepostConfirmModal";
+import {
+  createPostAvatarLabel,
+  estimatePostViews,
+} from "./x-feed.utils";
+
+const ACTION_MUTED = "rgba(255,255,255,0.56)";
+const ACTION_ICON_SIZE = 18;
 
 function PostMediaPreview(props: { mediaUri: string }) {
   const mediaAspectRatio = useRemoteImageAspectRatio(props.mediaUri, false);
@@ -65,14 +75,52 @@ function PostBodyBlock(props: {
   );
 }
 
+function XPostActionItem(props: {
+  icon?: IconName;
+  customIcon?: ReactNode;
+  value?: number;
+  color?: string;
+  onPress?: () => void;
+}) {
+  const content = (
+    <>
+      {props.customIcon ?? (
+        <Ionicons
+          name={props.icon!}
+          size={ACTION_ICON_SIZE}
+          color={props.color ?? ACTION_MUTED}
+        />
+      )}
+      {typeof props.value === "number" ? (
+        <Text style={[styles.xPostActionCount, props.color ? { color: props.color } : null]}>
+          {props.value}
+        </Text>
+      ) : null}
+    </>
+  );
+
+  if (!props.onPress) {
+    return <View style={styles.xPostActionSlot}>{content}</View>;
+  }
+
+  return (
+    <Pressable style={styles.xPostActionSlot} onPress={props.onPress}>
+      {content}
+    </Pressable>
+  );
+}
+
 export function XPostCard(props: {
   post: Post;
   onOpenAuthor?: () => void;
   onOpen: () => void;
   onReply: () => void;
   onRepost: () => void;
+  beforeRepost?: () => boolean;
+  confirmRepost?: boolean;
   onLike: () => void;
   onShare: () => void;
+  onSave?: () => void;
   onOpenActions?: () => void;
   interactive?: boolean;
   showActionRow?: boolean;
@@ -83,18 +131,65 @@ export function XPostCard(props: {
     onOpen,
     onReply,
     onRepost,
+    beforeRepost,
+    confirmRepost = true,
     onLike,
     onShare,
+    onSave,
     onOpenActions,
     interactive = true,
     showActionRow = true,
   } = props;
+  const [showRepostConfirm, setShowRepostConfirm] = useState(false);
   const repostMeta = post.repostMeta;
   const headerAuthor = repostMeta?.author || post.author;
   const headerHandle = repostMeta?.handle || post.handle;
   const headerTime = repostMeta?.time || post.time;
   const headerAvatarUri = repostMeta?.authorAvatarUri || post.authorAvatarUri;
   const verified = Boolean(repostMeta?.authorVerified ?? post.authorVerified);
+  const avatarGradient =
+    LEAGUE_POLL_AVATAR_GRADIENTS[
+      Math.abs(post.id) % LEAGUE_POLL_AVATAR_GRADIENTS.length
+    ];
+  const viewCount = estimatePostViews(post);
+
+  const handleRepostPress = () => {
+    if (beforeRepost && !beforeRepost()) {
+      return;
+    }
+
+    if (post.repostedByMe || !confirmRepost) {
+      onRepost();
+      return;
+    }
+
+    setShowRepostConfirm(true);
+  };
+
+  const confirmRepostAction = () => {
+    setShowRepostConfirm(false);
+    onRepost();
+  };
+
+  const cancelRepostAction = () => {
+    setShowRepostConfirm(false);
+  };
+
+  const avatarNode = headerAvatarUri?.trim() ? (
+    <Image source={{ uri: headerAvatarUri }} style={styles.xAvatarTinyImage} />
+  ) : (
+    <LinearGradient
+      colors={avatarGradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.xAvatarTinyGradient}
+    >
+      <Text style={styles.xAvatarTinyText}>
+        {createPostAvatarLabel(headerAuthor)}
+      </Text>
+    </LinearGradient>
+  );
+
   const headerActions = onOpenActions ? (
     <View style={styles.xPostHeadActions}>
       <Pressable style={styles.xEllipsisButton} onPress={onOpenActions}>
@@ -109,8 +204,6 @@ export function XPostCard(props: {
 
   const headerBlock = (
     <View style={styles.xPostHead}>
-      {headerActions}
-
       {onOpenAuthor ? (
         <Pressable
           style={styles.xPostMetaBlockPressable}
@@ -122,7 +215,7 @@ export function XPostCard(props: {
           <View style={styles.xPostMetaBlock}>
             {repostMeta ? (
               <View style={styles.xRepostBanner}>
-                <Ionicons name="repeat" size={13} color="#6DE5AA" />
+                <RetweetIcon size={13} color="#6DE5AA" />
                 <Text style={styles.xRepostBannerText}>
                   {headerAuthor} أعاد النشر
                 </Text>
@@ -149,7 +242,7 @@ export function XPostCard(props: {
         <View style={styles.xPostMetaBlock}>
           {repostMeta ? (
             <View style={styles.xRepostBanner}>
-              <Ionicons name="repeat" size={13} color="#6DE5AA" />
+              <RetweetIcon size={13} color="#6DE5AA" />
               <Text style={styles.xRepostBannerText}>
                 {headerAuthor} أعاد النشر
               </Text>
@@ -172,6 +265,8 @@ export function XPostCard(props: {
           </View>
         </View>
       )}
+
+      {headerActions}
     </View>
   );
 
@@ -181,35 +276,54 @@ export function XPostCard(props: {
     <PostBodyBlock post={post} />
   );
 
+  const actionsBlock = showActionRow ? (
+    <View style={styles.xPostActionsRow}>
+      <XPostActionItem
+        icon="chatbubble-outline"
+        value={post.replies}
+        onPress={onReply}
+      />
+      <XPostActionItem
+        customIcon={
+          <RetweetIcon
+            size={ACTION_ICON_SIZE}
+            color={post.repostedByMe ? "#6DE5AA" : ACTION_MUTED}
+            active={post.repostedByMe}
+          />
+        }
+        value={post.reposts}
+        color={post.repostedByMe ? "#6DE5AA" : ACTION_MUTED}
+        onPress={handleRepostPress}
+      />
+      <XPostActionItem
+        icon={post.likedByMe ? "heart" : "heart-outline"}
+        value={post.likes}
+        color={post.likedByMe ? "#F87171" : ACTION_MUTED}
+        onPress={onLike}
+      />
+      <XPostActionItem icon="stats-chart-outline" value={viewCount} />
+      <XPostActionItem
+        icon={post.savedByMe ? "bookmark" : "bookmark-outline"}
+        color={post.savedByMe ? "#FBBF24" : ACTION_MUTED}
+        onPress={onSave}
+      />
+      <XPostActionItem
+        icon="share-social-outline"
+        color={post.sharedByMe ? "#68CBFF" : ACTION_MUTED}
+        onPress={onShare}
+      />
+    </View>
+  ) : null;
+
   return (
     <View style={styles.xPostCard}>
       <View style={styles.xPostRow}>
         {onOpenAuthor ? (
           <Pressable style={styles.xAvatarTiny} onPress={onOpenAuthor}>
-            {headerAvatarUri?.trim() ? (
-              <Image
-                source={{ uri: headerAvatarUri }}
-                style={styles.xAvatarTinyImage}
-              />
-            ) : (
-              <Text style={styles.xAvatarTinyText}>
-                {headerAuthor.slice(0, 1)}
-              </Text>
-            )}
+            {avatarNode}
           </Pressable>
         ) : (
-          <View style={styles.xAvatarTiny}>
-            {headerAvatarUri?.trim() ? (
-              <Image
-                source={{ uri: headerAvatarUri }}
-                style={styles.xAvatarTinyImage}
-              />
-            ) : (
-              <Text style={styles.xAvatarTinyText}>
-                {headerAuthor.slice(0, 1)}
-              </Text>
-            )}
-          </View>
+          <View style={styles.xAvatarTiny}>{avatarNode}</View>
         )}
 
         <View style={styles.xPostContent}>
@@ -224,40 +338,17 @@ export function XPostCard(props: {
               {contentBlock}
             </View>
           )}
-
-          {showActionRow ? (
-            <View style={styles.xActionRow}>
-              <XActionPill
-                icon="chatbubble"
-                value={post.replies}
-                activeColor="#65D884"
-                onPress={onReply}
-              />
-              <XActionPill
-                icon="repeat"
-                value={post.reposts}
-                activeColor="#6DE5AA"
-                onPress={onRepost}
-                active={post.repostedByMe}
-              />
-              <XActionPill
-                icon="heart"
-                value={post.likes}
-                activeColor="#FF607B"
-                onPress={onLike}
-                active={post.likedByMe}
-              />
-              <XActionPill
-                icon="paper-plane"
-                value={post.shares}
-                activeColor="#68CBFF"
-                onPress={onShare}
-                active={post.sharedByMe}
-              />
-            </View>
-          ) : null}
+          {actionsBlock}
         </View>
       </View>
+
+      {showRepostConfirm ? (
+        <XRepostConfirmModal
+          post={post}
+          onConfirm={confirmRepostAction}
+          onCancel={cancelRepostAction}
+        />
+      ) : null}
     </View>
   );
 }
@@ -333,7 +424,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.12)",
     paddingHorizontal: 16,
-    paddingTop: 14,
+    paddingTop: 12,
     paddingBottom: 12,
   },
   xPostRow: {
@@ -348,6 +439,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#1A8CD8",
+  },
+  xAvatarTinyGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
   },
   xAvatarTinyImage: {
     width: "100%",
@@ -375,7 +473,7 @@ const styles = StyleSheet.create({
   xPostMetaBlock: {
     flex: 1,
     alignItems: "flex-end",
-    marginLeft: 10,
+    marginRight: 10,
   },
   xPostMetaBlockPressable: {
     flex: 1,
@@ -441,7 +539,7 @@ const styles = StyleSheet.create({
   },
   xMediaCard: {
     alignSelf: "stretch",
-    borderRadius: 18,
+    borderRadius: 16,
     overflow: "hidden",
     marginTop: 12,
     borderWidth: 1,
@@ -469,15 +567,29 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
-  xActionRow: {
+  xPostActionsRow: {
     alignSelf: "stretch",
     flexDirection: "row-reverse",
     justifyContent: "space-between",
-    marginTop: 14,
+    marginTop: 12,
     paddingHorizontal: 4,
+    maxWidth: "100%",
+  },
+  xPostActionSlot: {
+    flex: 1,
+    minHeight: 34,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  xPostActionCount: {
+    color: "rgba(255,255,255,0.54)",
+    fontSize: 12,
+    fontWeight: "700",
   },
   xActionPill: {
     flex: 1,
@@ -492,7 +604,7 @@ const styles = StyleSheet.create({
   },
   xReplyThreadCard: {
     paddingHorizontal: 16,
-    paddingTop: 14,
+    paddingTop: 12,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.08)",
@@ -508,10 +620,10 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   xReplyThreadBody: {
-    color: "#FFFFFF",
+    color: "#E7EEF5",
     fontSize: 15,
-    lineHeight: 24,
+    lineHeight: 23,
     textAlign: "right",
-    marginTop: 6,
+    marginTop: 4,
   },
 });

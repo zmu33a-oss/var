@@ -66,7 +66,10 @@ import {
   buildNotificationSnippet,
   buildPrivateMessageEntry,
   buildTrendingHashtags,
+  findMatchingFeedPost,
+  formatRelativeTimeLabel,
   resolveXComposeFabLayout,
+  X_FEED_COLUMN_WIDTH,
 } from "./x-feed/x-feed.utils";
 import {
   createDefaultAuthorProfileSectionNoticeDismissal,
@@ -98,6 +101,7 @@ type XFeedScreenProps = {
   onRequireAuth: (message?: string, pendingIntent?: PendingAuthIntent) => void;
   onTogglePostLike: (postId: number) => void;
   onTogglePostRepost: (postId: number) => void;
+  onTogglePostSave: (postId: number) => void;
   onSharePost: (postId: number) => Promise<boolean>;
   currentUserVarId: string;
   currentUserDisplayName: string;
@@ -166,6 +170,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     onRequireAuth,
     onTogglePostLike,
     onTogglePostRepost,
+    onTogglePostSave,
     onSharePost,
     currentUserVarId,
     currentUserDisplayName,
@@ -288,6 +293,11 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   const notifiedMessageIdsRef = useRef<Set<string>>(new Set());
   const realtimeUnsubscribeRef = useRef<(() => void) | null>(null);
   const feedScrollOffsetYRef = useRef(0);
+  const feedHeaderHeightRef = useRef(0);
+  const [feedHeaderHeight, setFeedHeaderHeight] = useState(0);
+  const feedLastScrollYRef = useRef(0);
+  const feedHeaderHiddenRef = useRef(false);
+  const feedHeaderTranslateY = useRef(new Animated.Value(0)).current;
   const webPullStartYRef = useRef<number | null>(null);
   const hasHydratedDirectMessagesRef = useRef(false);
   const pendingSeenPrivateHydrationUserRef = useRef<string | null>(null);
@@ -303,6 +313,28 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     webPullDistanceRef.current = distance;
     setWebPullDistance(distance);
   }, []);
+
+  const setFeedHeaderVisible = useCallback(
+    (visible: boolean) => {
+      if (feedHeaderHiddenRef.current === !visible) {
+        return;
+      }
+
+      feedHeaderHiddenRef.current = !visible;
+      Animated.timing(feedHeaderTranslateY, {
+        toValue: visible ? 0 : -feedHeaderHeightRef.current,
+        duration: 180,
+        useNativeDriver: true,
+      }).start();
+    },
+    [feedHeaderTranslateY],
+  );
+
+  useEffect(() => {
+    feedLastScrollYRef.current = 0;
+    feedHeaderHiddenRef.current = false;
+    feedHeaderTranslateY.setValue(0);
+  }, [activeTab, feedHeaderTranslateY]);
 
   const triggerFeedRefresh = useCallback(() => {
     if (feedRefreshActiveRef.current) {
@@ -339,8 +371,8 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     return typeof CLICK_SOUND === "string" ? CLICK_SOUND : null;
   }, []);
 
-  const layoutWidth = Math.min(windowWidth, 430);
-  const chromeScale = Math.max(0.84, Math.min(1, layoutWidth / 430));
+  const layoutWidth = Math.min(windowWidth, X_FEED_COLUMN_WIDTH);
+  const chromeScale = Math.max(0.84, Math.min(1, layoutWidth / X_FEED_COLUMN_WIDTH));
   const xScreenBottomPadding = Math.round(132 * chromeScale);
   const xComposeFabLayout = useMemo(
     () => resolveXComposeFabLayout(windowWidth),
@@ -421,16 +453,23 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   );
 
   const pushActivityNotification = (
-    notification: Omit<XNotificationEntry, "sortOrder"> & {
+    notification: Omit<XNotificationEntry, "sortOrder" | "timeLabel"> & {
       sortOrder?: number;
+      timeLabel?: string;
+      createdAt?: string;
     },
   ) => {
+    const createdAt = notification.createdAt ?? new Date().toISOString();
+    const sortOrder = notification.sortOrder ?? (Date.parse(createdAt) || Date.now());
+
     startTransition(() => {
       setActivityNotifications((currentNotifications) =>
         [
           {
             ...notification,
-            sortOrder: notification.sortOrder ?? Date.now(),
+            createdAt,
+            timeLabel: formatRelativeTimeLabel(createdAt),
+            sortOrder,
           },
           ...currentNotifications.filter(
             (candidate) => candidate.id !== notification.id,
@@ -1054,6 +1093,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         title: "رسالة خاصة جديدة",
         body: `${thread.displayName}: ${latestMessage.content}`,
         timeLabel: latestMessage.timeLabel || thread.timeLabel,
+        createdAt: latestMessage.createdAt,
         iconName: "mail-unread-outline",
         accentColor: "#38BDF8",
         avatarUri: thread.avatarUri,
@@ -1094,6 +1134,11 @@ export default function XFeedScreen(props: XFeedScreenProps) {
             title: "رد جديد على منشورك",
             body: `${reply.author}: ${buildNotificationSnippet(reply.content, postSnippet)}`,
             timeLabel: reply.time,
+            createdAt:
+              reply.createdAt ||
+              (reply.id > 1_000_000_000_000
+                ? new Date(reply.id).toISOString()
+                : undefined),
             iconName: "chatbubble-ellipses-outline",
             accentColor: "#34D399",
             avatarUri: reply.authorAvatarUri?.trim() || "",
@@ -1117,6 +1162,11 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         title: "نشاط على منشورك",
         body: `${post.likes} إعجاب · ${post.reposts} إعادة نشر · ${post.shares} مشاركة · ${postSnippet}`,
         timeLabel: post.time,
+        createdAt:
+          post.createdAt ||
+          (post.id > 1_000_000_000_000
+            ? new Date(post.id).toISOString()
+            : undefined),
         iconName: "sparkles-outline",
         accentColor: "#F59E0B",
         avatarUri: normalizedReplyAuthorAvatarUri,
@@ -1268,14 +1318,9 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       return;
     }
 
-    const nextOpenedPost = posts.find((post) => post.id === openedPost.id);
+    const nextOpenedPost = findMatchingFeedPost(posts, openedPost);
 
-    if (!nextOpenedPost) {
-      setOpenedPost(null);
-      return;
-    }
-
-    if (nextOpenedPost !== openedPost) {
+    if (nextOpenedPost && nextOpenedPost !== openedPost) {
       setOpenedPost(nextOpenedPost);
     }
   }, [openedPost, posts]);
@@ -1436,19 +1481,36 @@ export default function XFeedScreen(props: XFeedScreenProps) {
   );
 
   const openedAuthorReplyItems = useMemo(() => {
+    const normalizedAuthorId = normalizeAuthorId(
+      resolvedOpenedAuthorProfile?.authorId.trim() || "",
+    );
     const normalizedUsername =
       resolvedOpenedAuthorProfile?.username.trim().toLowerCase() || "";
     const normalizedHandle = normalizedUsername ? `@${normalizedUsername}` : "";
     const normalizedDisplayName =
       resolvedOpenedAuthorProfile?.displayName.trim().toLowerCase() || "";
 
-    if (!normalizedHandle && !normalizedDisplayName) {
+    if (
+      normalizedAuthorId === "local-user" &&
+      !normalizedHandle &&
+      !normalizedDisplayName
+    ) {
       return [] as OpenedAuthorReplyItem[];
     }
 
     return posts.flatMap((post) =>
       (post.replyItems ?? [])
         .filter((reply) => {
+          const replyAuthorId = normalizeAuthorId(reply.authorId || "");
+
+          if (
+            normalizedAuthorId !== "local-user" &&
+            replyAuthorId !== "local-user" &&
+            replyAuthorId === normalizedAuthorId
+          ) {
+            return true;
+          }
+
           const replyHandle = reply.handle.trim().toLowerCase();
           const replyAuthor = reply.author.trim().toLowerCase();
 
@@ -1464,6 +1526,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     );
   }, [
     posts,
+    resolvedOpenedAuthorProfile?.authorId,
     resolvedOpenedAuthorProfile?.displayName,
     resolvedOpenedAuthorProfile?.username,
   ]);
@@ -1846,7 +1909,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       id: `follow-${normalizedAuthorVarId}-${isCurrentlyFollowing ? "off" : "on"}-${Date.now()}`,
       title: isCurrentlyFollowing ? "تم إلغاء المتابعة" : "تمت متابعة الحساب",
       body: `${isCurrentlyFollowing ? "أوقفت متابعة" : "بدأت متابعة"} ${authorSnapshot.displayName}.`,
-      timeLabel: "الآن",
       iconName: isCurrentlyFollowing
         ? "person-remove-outline"
         : "person-add-outline",
@@ -1877,7 +1939,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       id: `like-${post.id}-${Date.now()}`,
       title: "إعجاب داخل X",
       body: `أضفت إعجابًا على منشور ${post.author}.`,
-      timeLabel: "الآن",
       iconName: "heart-outline",
       accentColor: "#FB7185",
       avatarUri: post.authorAvatarUri?.trim() || "",
@@ -1889,20 +1950,23 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     });
   };
 
-  const handlePostRepost = (post: Post) => {
-    const nextReposted = !post.repostedByMe;
-
+  const guardPostRepost = (post: Post) => {
     if (!isLoggedIn) {
       onRequireAuth("سجل الدخول لإعادة نشر منشورات X.", {
         type: "toggle-post-repost",
         postId: post.id,
       });
-      return;
+      return false;
     }
 
+    return true;
+  };
+
+  const handlePostRepost = (post: Post) => {
+    const wasReposted = Boolean(post.repostedByMe);
     onTogglePostRepost(post.id);
 
-    if (!nextReposted) {
+    if (wasReposted) {
       return;
     }
 
@@ -1910,7 +1974,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       id: `repost-${post.id}-${Date.now()}`,
       title: "إعادة نشر داخل X",
       body: `أعدت نشر منشور ${post.author}.`,
-      timeLabel: "الآن",
       iconName: "repeat",
       accentColor: "#6EE7B7",
       avatarUri: post.authorAvatarUri?.trim() || "",
@@ -1920,6 +1983,18 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         postId: post.id,
       },
     });
+  };
+
+  const handlePostSave = (post: Post) => {
+    if (!isLoggedIn) {
+      onRequireAuth("سجل الدخول لحفظ منشورات X.", {
+        type: "toggle-post-save",
+        postId: post.id,
+      });
+      return;
+    }
+
+    onTogglePostSave(post.id);
   };
 
   const handlePostShare = (post: Post) => {
@@ -1942,7 +2017,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         id: `share-${post.id}-${Date.now()}`,
         title: "مشاركة داخل X",
         body: `شاركت منشور ${post.author}.`,
-        timeLabel: "الآن",
         iconName: "paper-plane-outline",
         accentColor: "#68CBFF",
         avatarUri: post.authorAvatarUri?.trim() || "",
@@ -2145,7 +2219,6 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         submittedReply,
         `أرسلت ردًا على منشور ${replyTargetPost.author}.`,
       ),
-      timeLabel: "الآن",
       iconName: "chatbubble-ellipses-outline",
       accentColor: "#34D399",
       avatarUri: replyTargetPost.authorAvatarUri?.trim() || "",
@@ -2343,7 +2416,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
 
     xPosts.forEach((post) => {
       (post.replyItems ?? []).forEach((reply) => {
-        if (isMyXAuthor("", reply.handle, reply.author)) {
+        if (isMyXAuthor(reply.authorId || "", reply.handle, reply.author)) {
           replies.push(reply);
         }
       });
@@ -2455,8 +2528,22 @@ export default function XFeedScreen(props: XFeedScreenProps) {
     };
   }) => {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const y = contentOffset.y;
+    const dy = y - feedLastScrollYRef.current;
 
-    feedScrollOffsetYRef.current = contentOffset.y;
+    feedScrollOffsetYRef.current = y;
+
+    if (feedHeaderHeightRef.current > 0) {
+      if (y <= 2) {
+        setFeedHeaderVisible(true);
+      } else if (dy > 6) {
+        setFeedHeaderVisible(false);
+      } else if (dy < -6) {
+        setFeedHeaderVisible(true);
+      }
+    }
+
+    feedLastScrollYRef.current = y;
 
     if (activeTab !== "timeline" || isLoadingMorePosts || !hasMorePosts) {
       return;
@@ -2469,6 +2556,63 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       onLoadMorePosts();
     }
   };
+
+  const isFeedChromeObscured = Boolean(
+    openedPost ||
+      replyTargetPost ||
+      isNotificationsOpen ||
+      isHashtagDirectoryOpen ||
+      resolvedOpenedAuthorProfile ||
+      openedMessageThread ||
+      actionsPost,
+  );
+
+  const postDetailContent = openedPost ? (
+    <View style={styles.xDetailScreen}>
+      <View style={styles.xDetailHeader}>
+        <View style={styles.xDetailHeaderSpacer} />
+
+        <Text style={styles.xDetailHeaderTitle}>المنشور</Text>
+
+        <Pressable
+          style={styles.xDetailCloseButton}
+          onPress={closePostDetail}
+        >
+          <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
+        </Pressable>
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={styles.xDetailScrollArea}
+        contentContainerStyle={styles.xDetailContent}
+      >
+        <XPostCard
+          post={openedPost}
+          onOpenAuthor={() => openAuthorProfile(openedPost)}
+          interactive={false}
+          onOpen={() => undefined}
+          onReply={() => openReplyComposer(openedPost)}
+          beforeRepost={() => guardPostRepost(openedPost)}
+          onRepost={() => handlePostRepost(openedPost)}
+          onShare={() => handlePostShare(openedPost)}
+          onLike={() => handlePostLike(openedPost)}
+          onSave={() => handlePostSave(openedPost)}
+          onOpenActions={() => openPostActions(openedPost)}
+        />
+
+        {(openedPost.replyItems ?? []).length ? (
+          <View style={styles.xDetailRepliesSection}>
+            <Text style={styles.xDetailRepliesTitle}>الردود</Text>
+
+            {(openedPost.replyItems ?? []).map((reply) => (
+              <XReplyCard key={reply.id} reply={reply} />
+            ))}
+          </View>
+        ) : null}
+      </ScrollView>
+    </View>
+  ) : null;
 
   return (
     <View
@@ -2511,28 +2655,51 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         </View>
       ) : null}
 
-      <XFeedHeader
-        windowWidth={windowWidth}
-        activeTab={activeTab}
-        onChangeTab={setActiveTab}
-        notificationCount={unreadNotificationCount}
-        notificationsActive={isNotificationsOpen}
-        onOpenNotifications={openNotifications}
-        onOpenProfile={() => setActiveTab("profile")}
-        avatarUri={isLoggedIn ? currentUserAvatarUri : undefined}
-        onOpenAvatar={() =>
-          showAvatarMenu ? closeAvatarMenu() : openAvatarMenu()
-        }
-        onAvatarLayout={(y, height) => setAvatarBottom(y + height)}
-        onOpenHashtag={openHashtagDirectory}
-      />
+      <Animated.View
+        pointerEvents="box-none"
+        style={[
+          styles.xCollapsibleHeaderHost,
+          styles.xFeedColumn,
+          { transform: [{ translateY: feedHeaderTranslateY }] },
+        ]}
+        onLayout={(event) => {
+          const height = event.nativeEvent.layout.height;
+          if (height === feedHeaderHeightRef.current) {
+            return;
+          }
+
+          feedHeaderHeightRef.current = height;
+          setFeedHeaderHeight(height);
+        }}
+      >
+        <View style={styles.xFeedColumnInner}>
+          <XFeedHeader
+            windowWidth={windowWidth}
+            activeTab={activeTab}
+            onChangeTab={setActiveTab}
+            notificationCount={unreadNotificationCount}
+            notificationsActive={isNotificationsOpen}
+            onOpenNotifications={openNotifications}
+            onOpenProfile={() => setActiveTab("profile")}
+            avatarUri={isLoggedIn ? currentUserAvatarUri : undefined}
+            onOpenAvatar={() =>
+              showAvatarMenu ? closeAvatarMenu() : openAvatarMenu()
+            }
+            onAvatarLayout={setAvatarBottom}
+            onOpenHashtag={openHashtagDirectory}
+          />
+        </View>
+      </Animated.View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        style={styles.xScrollArea}
+        style={[styles.xScrollArea, styles.xFeedColumn]}
         contentContainerStyle={[
           styles.xScreenContent,
-          { paddingBottom: xScreenBottomPadding },
+          {
+            paddingTop: feedHeaderHeight,
+            paddingBottom: xScreenBottomPadding,
+          },
         ]}
         scrollEventThrottle={16}
         onScroll={handleFeedScroll}
@@ -2566,17 +2733,19 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           />
         ) : activeTab === "timeline" ? (
           <>
-            {posts.length ? (
-              posts.map((post) => (
+            {xPosts.length ? (
+              xPosts.map((post) => (
                 <XPostCard
                   key={resolvePostFeedKey(post)}
                   post={post}
                   onOpenAuthor={() => openAuthorProfile(post)}
                   onOpen={() => openPostDetail(post)}
                   onReply={() => openReplyComposer(post)}
+                  beforeRepost={() => guardPostRepost(post)}
                   onRepost={() => handlePostRepost(post)}
                   onShare={() => handlePostShare(post)}
                   onLike={() => handlePostLike(post)}
+                  onSave={() => handlePostSave(post)}
                   onOpenActions={() => openPostActions(post)}
                 />
               ))
@@ -2595,7 +2764,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
                 </Text>
               </View>
             ) : null}
-            {!hasMorePosts && posts.length ? (
+            {!hasMorePosts && xPosts.length ? (
               <View style={styles.xLoadMoreState}>
                 <Text style={styles.xLoadMoreStateText}>
                   وصلت إلى نهاية المنشورات
@@ -2610,7 +2779,8 @@ export default function XFeedScreen(props: XFeedScreenProps) {
       onCreatePost &&
       !showAvatarMenu &&
       !showProfileSheet &&
-      !isHashtagDirectoryOpen ? (
+      !isHashtagDirectoryOpen &&
+      !isFeedChromeObscured ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="رسالة جديدة"
@@ -2631,8 +2801,9 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         </Pressable>
       ) : null}
 
+      {isHashtagDirectoryOpen ? (
       <Modal
-        visible={isHashtagDirectoryOpen}
+        visible
         animationType="slide"
         presentationStyle="fullScreen"
         onRequestClose={closeHashtagDirectory}
@@ -2763,9 +2934,11 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           </ScrollView>
         </View>
       </Modal>
+      ) : null}
 
+      {isNotificationsOpen ? (
       <Modal
-        visible={isNotificationsOpen}
+        visible
         animationType="slide"
         presentationStyle="fullScreen"
         onRequestClose={closeNotifications}
@@ -2778,6 +2951,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           onRequireAuth={() => onRequireAuth("سجل الدخول لعرض إشعارات X.")}
         />
       </Modal>
+      ) : null}
 
       {/* ── Part A: ChatOverlay replaces the old full-screen DM Modal ── */}
       <ChatOverlay
@@ -2787,62 +2961,25 @@ export default function XFeedScreen(props: XFeedScreenProps) {
         onClose={closePrivateMessageThread}
       />
 
-      <Modal
-        visible={Boolean(openedPost)}
-        animationType="slide"
-        presentationStyle="fullScreen"
-        onRequestClose={closePostDetail}
-      >
-        <View style={styles.xDetailScreen}>
-          <View style={styles.xDetailHeader}>
-            <View style={styles.xDetailHeaderSpacer} />
-
-            <Text style={styles.xDetailHeaderTitle}>المنشور</Text>
-
-            <Pressable
-              style={styles.xDetailCloseButton}
-              onPress={closePostDetail}
-            >
-              <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
-            </Pressable>
-          </View>
-
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            style={styles.xDetailScrollArea}
-            contentContainerStyle={styles.xDetailContent}
+      {postDetailContent ? (
+        Platform.OS === "web" ? (
+          <View style={styles.xPostDetailOverlay}>{postDetailContent}</View>
+        ) : (
+          <Modal
+            visible
+            animationType="slide"
+            presentationStyle="fullScreen"
+            transparent={false}
+            onRequestClose={closePostDetail}
           >
-            {openedPost ? (
-              <>
-                <XPostCard
-                  post={openedPost}
-                  onOpenAuthor={() => openAuthorProfile(openedPost)}
-                  interactive={false}
-                  onOpen={() => undefined}
-                  onReply={() => openReplyComposer(openedPost)}
-                  onRepost={() => handlePostRepost(openedPost)}
-                  onShare={() => handlePostShare(openedPost)}
-                  onLike={() => handlePostLike(openedPost)}
-                  onOpenActions={() => openPostActions(openedPost)}
-                />
+            {postDetailContent}
+          </Modal>
+        )
+      ) : null}
 
-                {(openedPost.replyItems ?? []).length ? (
-                  <View style={styles.xDetailRepliesSection}>
-                    <Text style={styles.xDetailRepliesTitle}>الردود</Text>
-
-                    {(openedPost.replyItems ?? []).map((reply) => (
-                      <XReplyCard key={reply.id} reply={reply} />
-                    ))}
-                  </View>
-                ) : null}
-              </>
-            ) : null}
-          </ScrollView>
-        </View>
-      </Modal>
-
+      {resolvedOpenedAuthorProfile ? (
       <Modal
-        visible={Boolean(resolvedOpenedAuthorProfile)}
+        visible
         animationType="slide"
         presentationStyle="fullScreen"
         onRequestClose={closeAuthorProfile}
@@ -2863,9 +3000,11 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           />
         ) : null}
       </Modal>
+      ) : null}
 
+      {replyTargetPost ? (
       <Modal
-        visible={Boolean(replyTargetPost)}
+        visible
         animationType="slide"
         presentationStyle="fullScreen"
         onRequestClose={closeReplyComposer}
@@ -2984,6 +3123,7 @@ export default function XFeedScreen(props: XFeedScreenProps) {
           </ScrollView>
         </View>
       </Modal>
+      ) : null}
 
       <XPostActionsModal
         post={actionsPost}

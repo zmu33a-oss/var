@@ -55,6 +55,7 @@ type HomeScreenProps = {
   onRequireAuth: (message?: string, pendingIntent?: PendingAuthIntent) => void;
   onTogglePostLike: (postId: number) => void;
   onTogglePostRepost: (postId: number) => void;
+  onTogglePostSave: (postId: number) => void;
   onSharePost: (postId: number) => Promise<boolean>;
   currentUserVarId: string;
   currentUserDisplayName: string;
@@ -105,6 +106,7 @@ export default function HomeScreen(props: HomeScreenProps) {
     onRequireAuth,
     onTogglePostLike,
     onTogglePostRepost,
+    onTogglePostSave,
     onSharePost,
     currentUserVarId,
     currentUserDisplayName,
@@ -203,6 +205,7 @@ export default function HomeScreen(props: HomeScreenProps) {
         onRequireAuth={onRequireAuth}
         onTogglePostLike={onTogglePostLike}
         onTogglePostRepost={onTogglePostRepost}
+        onTogglePostSave={onTogglePostSave}
         onSharePost={onSharePost}
         currentUserVarId={currentUserVarId}
         currentUserDisplayName={currentUserDisplayName}

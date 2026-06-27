@@ -203,12 +203,12 @@ export function UserActivitySheetPostItem(props: {
 const styles = StyleSheet.create({
   menuBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 98,
+    zIndex: 120,
   },
   menuItem: {
     position: "absolute",
     right: 10,
-    zIndex: 99,
+    zIndex: 121,
   },
   menuIconBtn: {
     flexDirection: "row-reverse",

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
@@ -14,6 +14,7 @@ import {
 import SealCheckIcon from "../../components/SealCheckIcon";
 import type { FollowingProfileCard } from "../../app.types";
 import type { MessageThreadEntry, XNotificationEntry } from "./x-feed.types";
+import { resolveNotificationTimeLabel } from "./x-feed.utils";
 
 export function XMessagesScreen(props: {
   isLoggedIn: boolean;
@@ -226,6 +227,16 @@ export function XNotificationsScreen(props: {
   onOpenNotification: (notification: XNotificationEntry) => void;
   onRequireAuth: () => void;
 }) {
+  const [, setTimeTick] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeTick((current) => current + 1);
+    }, 60_000);
+
+    return () => clearInterval(timer);
+  }, []);
+
   return (
     <View style={styles.xDetailScreen}>
       <View style={styles.xNotificationHeader}>
@@ -323,7 +334,7 @@ export function XNotificationsScreen(props: {
                         { color: notification.accentColor },
                       ]}
                     >
-                      {notification.timeLabel}
+                      {resolveNotificationTimeLabel(notification)}
                     </Text>
                     <Ionicons
                       name={notification.iconName}

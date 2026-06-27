@@ -230,6 +230,42 @@
     return client;
   }
 
+  function normalizeAdminApiPath(path) {
+    if (typeof path !== "string") {
+      return path;
+    }
+
+    const [rawPath, rawQuery = ""] = path.split("?");
+
+    if (!rawPath.startsWith("/api/admin/") || rawPath === "/api/admin/index") {
+      return path;
+    }
+
+    const tail = rawPath.slice("/api/admin/".length).replace(/^\/+|\/+$/g, "");
+    if (!tail) {
+      return path;
+    }
+
+    const segments = tail.split("/");
+    const section = segments[0] || "";
+    const action = segments[1] || "";
+
+    if (!section) {
+      return path;
+    }
+
+    const params = new URLSearchParams(rawQuery);
+    if (!params.has("section")) {
+      params.set("section", section);
+    }
+    if (action && !params.has("action")) {
+      params.set("action", action);
+    }
+
+    const query = params.toString();
+    return query ? `/api/admin/index?${query}` : "/api/admin/index";
+  }
+
   async function adminFetch(path, init) {
     const headers = new Headers(init?.headers || {});
     if (!headers.has("Content-Type") && init?.body) {
@@ -237,9 +273,11 @@
     }
     applyAuthHeader(headers, getSessionSecret());
 
+    const requestPath = normalizeAdminApiPath(path);
+
     let response;
     try {
-      response = await fetch(`${resolveApiBase()}${path}`, {
+      response = await fetch(`${resolveApiBase()}${requestPath}`, {
         ...init,
         headers,
       });
@@ -253,12 +291,24 @@
       throw new Error(`تعذر الاتصال بخادم الأدمن. ${hint}`);
     }
 
-    const payload = await response.json().catch(() => ({}));
+    const contentType = response.headers.get("content-type") || "";
+    const payload = contentType.includes("application/json")
+      ? await response.json().catch(() => ({}))
+      : {};
+    const rawText = contentType.includes("application/json")
+      ? ""
+      : await response.text().catch(() => "");
+
     if (!response.ok) {
       const error =
-        typeof payload.error === "string"
+        typeof payload.error === "string" && payload.error.trim()
           ? payload.error
-          : "تعذر تنفيذ الطلب.";
+          : rawText.trim()
+            ? `تعذر تنفيذ الطلب (${response.status}). ${rawText
+                .trim()
+                .replace(/\s+/g, " ")
+                .slice(0, 180)}`
+            : `تعذر تنفيذ الطلب (${response.status}).`;
       throw new Error(error);
     }
     return payload;
@@ -1979,11 +2029,15 @@
       switchTab("dashboard", null, { skipLoad: true });
       await loadDashboardData();
       showToast("تم تسجيل الدخول بنجاح.", "success");
-    } catch (error) {
+        } catch (error) {
       setSessionSecret("");
       if (errorEl) {
-        errorEl.textContent =
-          error instanceof Error ? error.message : "تعذر تسجيل الدخول.";
+        const msg = error instanceof Error ? error.message : "تعذر تسجيل الدخول.";
+        errorEl.innerHTML = `⚠️ ${msg}`;
+        errorEl.className = "text-xs text-red-400 min-h-[16px]";
+        
+        // Also show in toast
+        showToast(msg, "danger");
       }
     } finally {
       isBusy = false;
@@ -2614,582 +2668,4 @@
 
     const body = {
       displayVarId: editingUserDisplayVarId,
-      email: readUserEditField("user-edit-email"),
-      displayName: readUserEditField("user-edit-display-name"),
-      username: readUserEditField("user-edit-username"),
-      displayVarIdNext: readUserEditField("user-edit-display-var-id"),
-      phoneNumber: readUserEditField("user-edit-phone"),
-      nationalId: readUserEditField("user-edit-national-id"),
-      birthDate: readUserEditField("user-edit-birth-date"),
-      nationality: readUserEditField("user-edit-nationality"),
-      location: readUserEditField("user-edit-location"),
-      profession: readUserEditField("user-edit-profession"),
-      association: readUserEditField("user-edit-association"),
-      bio: readUserEditField("user-edit-bio"),
-      avatarUrl: readUserEditField("user-edit-avatar-url"),
-    };
-
-    const nextPassword = readUserEditField("user-edit-password");
-    if (nextPassword) {
-      body.password = nextPassword;
-    }
-
-    try {
-      await adminFetch("/api/admin/users/update", {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      showToast("تم حفظ بيانات المستخدم.", "success");
-      closeUserEditor();
-      await refreshUsers();
-      await refreshAuditLogs();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "تعذر حفظ بيانات المستخدم.";
-      if (errorEl) errorEl.textContent = message;
-      showToast(message, "warning");
-    } finally {
-      isBusy = false;
-    }
-  }
-
-  function filterUsers() {
-    applyUserFilters();
-  }
-
-  function filterUsersByRole(role) {
-    const select = document.getElementById("user-role-filter");
-    if (select instanceof HTMLSelectElement) {
-      select.value = role;
-    }
-    applyUserFilters();
-  }
-
-  async function toggleUserVerification(displayVarId, nextVerified) {
-    if (!displayVarId || isBusy) return;
-
-    isBusy = true;
-    try {
-      await adminFetch("/api/admin/users/verification", {
-        method: "POST",
-        body: JSON.stringify({
-          displayVarId,
-          verified: nextVerified,
-        }),
-      });
-      showToast(nextVerified ? "تم منح التوثيق." : "تم إلغاء التوثيق.", "success");
-      await refreshUsers();
-      await refreshAuditLogs();
-
-      if (
-        editingUserDisplayVarId &&
-        (displayVarId === editingUserDisplayVarId ||
-          usersData.some(
-            (user) =>
-              (user.displayVarId === displayVarId ||
-                user.varId === displayVarId) &&
-              user.displayVarId === editingUserDisplayVarId,
-          ))
-      ) {
-        updateUserEditVerificationUi(nextVerified);
-      }
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : "تعذر تحديث التوثيق.",
-        "warning",
-      );
-    } finally {
-      isBusy = false;
-    }
-  }
-
-  async function changeUserCardTier(displayVarId, cardTier) {
-    if (!displayVarId || !cardTier || isBusy) return;
-
-    isBusy = true;
-    try {
-      await adminFetch("/api/admin/users/card-tier", {
-        method: "POST",
-        body: JSON.stringify({ displayVarId, cardTier }),
-      });
-      showToast(`تم تعيين بطاقة ${formatCardTierLabel(cardTier)}.`, "success");
-      await refreshUsers();
-      await refreshAuditLogs();
-    } catch (error) {
-      showToast(error?.message || "تعذر تعيين البطاقة.", "warning");
-    } finally {
-      isBusy = false;
-    }
-  }
-
-  async function toggleUserStatus(displayVarId) {
-    if (!displayVarId || isBusy) return;
-    const user = usersData.find(
-      (item) => item.displayVarId === displayVarId || item.varId === displayVarId,
-    );
-    if (!user) return;
-
-    const nextStatus =
-      user.accountStatus === "suspended" ? "active" : "suspended";
-    isBusy = true;
-    try {
-      await adminFetch("/api/admin/users/status", {
-        method: "POST",
-        body: JSON.stringify({
-          displayVarId: user.displayVarId || displayVarId,
-          status: nextStatus,
-        }),
-      });
-      showToast(
-        nextStatus === "suspended" ? "تم إيقاف الحساب." : "تم تفعيل الحساب.",
-        nextStatus === "suspended" ? "warning" : "success",
-      );
-      await refreshUsers();
-      await refreshAuditLogs();
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : "تعذر تحديث الحالة.",
-        "danger",
-      );
-    } finally {
-      isBusy = false;
-    }
-  }
-
-  async function changeUserRole(displayVarId) {
-    if (!displayVarId || isBusy) return;
-    const user = usersData.find(
-      (item) => item.displayVarId === displayVarId || item.varId === displayVarId,
-    );
-    if (!user) return;
-
-    const nextRole = user.role === "admin" ? "member" : "admin";
-    isBusy = true;
-    try {
-      await adminFetch("/api/admin/users/role", {
-        method: "POST",
-        body: JSON.stringify({
-          displayVarId: user.displayVarId || displayVarId,
-          role: nextRole,
-        }),
-      });
-      showToast(
-        nextRole === "admin" ? "تمت الترقية إلى أدمن." : "تم التخفيض إلى عضو.",
-        "success",
-      );
-      await refreshUsers();
-      await refreshAuditLogs();
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : "تعذر تغيير الرتبة.",
-        "danger",
-      );
-    } finally {
-      isBusy = false;
-    }
-  }
-
-  async function deleteUser(displayVarId) {
-    if (!displayVarId || isBusy) return;
-    const user = usersData.find(
-      (item) => item.displayVarId === displayVarId || item.varId === displayVarId,
-    );
-    if (!user) return;
-
-    const confirmed = window.confirm(
-      `هل أنت متأكد من حذف حساب ${user.displayName || displayVarId}؟ لا يمكن التراجع.`,
-    );
-    if (!confirmed) return;
-
-    isBusy = true;
-    try {
-      await adminFetch("/api/admin/users/delete", {
-        method: "POST",
-        body: JSON.stringify({
-          displayVarId: user.displayVarId || displayVarId,
-        }),
-      });
-      showToast("تم حذف الحساب.", "success");
-      await refreshUsers();
-      await refreshAuditLogs();
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : "تعذر حذف الحساب.",
-        "danger",
-      );
-    } finally {
-      isBusy = false;
-    }
-  }
-
-  function switchTab(tabId, event, options = {}) {
-    if (event?.preventDefault) {
-      event.preventDefault();
-    }
-
-    const config = TAB_VIEWS[tabId] || TAB_VIEWS.dashboard;
-    currentTab = tabId in TAB_VIEWS ? tabId : "dashboard";
-
-    document.querySelectorAll(".admin-view").forEach((view) => {
-      view.classList.add("hidden");
-    });
-
-    const activeView = document.getElementById(config.viewId);
-    if (activeView) {
-      activeView.classList.remove("hidden");
-    }
-
-    highlightNavTab(currentTab);
-    updatePageHeader(currentTab);
-    closeNavDrawer();
-
-    document.getElementById("admin-views")?.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-
-    if (window.lucide) window.lucide.createIcons();
-
-    if (options.skipLoad) return;
-
-    if (currentTab === "moderation-panel") {
-      void loadModerationCenter(true);
-    } else if (currentTab === "users-panel") {
-      void refreshUsers();
-    } else if (currentTab === "keys-panel") {
-      void refreshAdminKeys(true);
-    } else if (currentTab === "mode-panel") {
-      void loadAppSettings(true);
-    }
-  }
-
-  function bindEvents() {
-    document
-      .getElementById("login-form")
-      ?.addEventListener("submit", handleLoginSubmit);
-    document
-      .getElementById("logout-btn")
-      ?.addEventListener("click", handleLogout);
-    document
-      .getElementById("drawer-logout-btn")
-      ?.addEventListener("click", handleLogout);
-    document
-      .getElementById("nav-menu-btn")
-      ?.addEventListener("click", openNavDrawer);
-    document
-      .getElementById("nav-drawer-close-btn")
-      ?.addEventListener("click", closeNavDrawer);
-    document
-      .getElementById("nav-drawer-overlay")
-      ?.addEventListener("click", closeNavDrawer);
-    document
-      .getElementById("refresh-logs-btn")
-      ?.addEventListener("click", () => {
-        void refreshAuditLogs();
-        showToast("تم تحديث سجل العمليات.", "info");
-      });
-    document
-      .getElementById("refresh-dashboard-btn")
-      ?.addEventListener("click", () => {
-        void loadDashboardData();
-        showToast("تم تحديث البيانات.", "info");
-      });
-    document
-      .getElementById("refresh-moderation-btn")
-      ?.addEventListener("click", () => {
-        void loadModerationCenter(true);
-        showToast("تم تحديث مركز الإشراف.", "info");
-      });
-    document.getElementById("run-ai-scan-btn")?.addEventListener("click", () => {
-      void runAiModerationScan();
-    });
-    document.getElementById("mode-rich-icons")?.addEventListener("change", (event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLInputElement)) return;
-      void updateModeFeatureSetting("richIcons", target.checked);
-    });
-    document.getElementById("mode-gpu-accel")?.addEventListener("change", (event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLInputElement)) return;
-      void updateModeFeatureSetting("gpu", target.checked);
-    });
-    document
-      .getElementById("refresh-users-btn")
-      ?.addEventListener("click", () => {
-        void refreshUsers();
-        showToast("تم تحديث قائمة الأعضاء.", "info");
-      });
-    document
-      .getElementById("users-prev-page")
-      ?.addEventListener("click", () => {
-        void changeUsersPage(-1);
-      });
-    document
-      .getElementById("users-next-page")
-      ?.addEventListener("click", () => {
-        void changeUsersPage(1);
-      });
-
-    document
-      .getElementById("reports-status-filter")
-      ?.addEventListener("change", (event) => {
-        if (!(event.target instanceof HTMLSelectElement)) return;
-        moderationReportsStatus = event.target.value;
-        moderationReportsOffset = 0;
-        void loadModerationCenter(false);
-      });
-    document
-      .getElementById("reports-prev-page")
-      ?.addEventListener("click", () => {
-        void changeReportsPage(-1);
-      });
-    document
-      .getElementById("reports-next-page")
-      ?.addEventListener("click", () => {
-        void changeReportsPage(1);
-      });
-    document
-      .getElementById("report-detail-close-btn")
-      ?.addEventListener("click", closeReportDetail);
-    document
-      .getElementById("report-detail-overlay")
-      ?.addEventListener("click", (event) => {
-        if (event.target?.id === "report-detail-overlay") {
-          closeReportDetail();
-        }
-      });
-    document
-      .getElementById("report-detail-actions")
-      ?.addEventListener("click", (event) => {
-        const target = event.target.closest("[data-review-report]");
-        if (!target) return;
-        void reviewModerationReport(
-          target.dataset.reviewReport,
-          target.dataset.reportLegacy === "1",
-          target.dataset.reportAction === "resolved" ? "resolved" : "dismissed",
-          target.dataset.hidePost === "1",
-        );
-      });
-
-    document.getElementById("moderation-reports-list")?.addEventListener("click", (event) => {
-      const viewTarget = event.target.closest("[data-view-report]");
-      if (viewTarget) {
-        void openReportDetail(
-          viewTarget.dataset.viewReport,
-          viewTarget.dataset.reportLegacy === "1",
-        );
-        return;
-      }
-      const target = event.target.closest("[data-review-report]");
-      if (!target) return;
-      void reviewModerationReport(
-        target.dataset.reviewReport,
-        target.dataset.reportLegacy === "1",
-        target.dataset.reportAction === "resolved" ? "resolved" : "dismissed",
-        target.dataset.hidePost === "1",
-      );
-    });
-
-    document.getElementById("moderation-flagged-list")?.addEventListener("click", (event) => {
-      const target = event.target.closest("[data-flagged-hide], [data-flagged-delete]");
-      if (!target) return;
-      if (target.dataset.flaggedDelete) {
-        void deleteFlaggedPost(target.dataset.flaggedDelete);
-        return;
-      }
-      if (target.dataset.flaggedHide) {
-        void toggleFlaggedPostVisibility(
-          target.dataset.flaggedHide,
-          target.dataset.flaggedHidden === "1",
-        );
-      }
-    });
-
-    document.getElementById("moderation-all-posts-list")?.addEventListener("click", (event) => {
-      const target = event.target.closest("[data-all-post-hide], [data-all-post-delete]");
-      if (!target) return;
-      if (target.dataset.allPostDelete) {
-        void deleteFlaggedPost(target.dataset.allPostDelete);
-        return;
-      }
-      if (target.dataset.allPostHide) {
-        void toggleFlaggedPostVisibility(
-          target.dataset.allPostHide,
-          target.dataset.allPostHidden === "1",
-        );
-      }
-    });
-
-    document.getElementById("moderation-comments-list")?.addEventListener("click", (event) => {
-      const target = event.target.closest("[data-comment-hide], [data-comment-delete]");
-      if (!target) return;
-      if (target.dataset.commentDelete) {
-        void deleteModerationComment(
-          target.dataset.commentDelete,
-          target.dataset.commentSource,
-        );
-        return;
-      }
-      if (target.dataset.commentHide) {
-        void toggleModerationCommentVisibility(
-          target.dataset.commentHide,
-          target.dataset.commentSource,
-          target.dataset.commentHidden === "1",
-        );
-      }
-    });
-
-    document.getElementById("keys-table-body")?.addEventListener("click", (event) => {
-      const target = event.target.closest("[data-copy-key], [data-toggle-key], [data-delete-key]");
-      if (!target) return;
-      if (target.dataset.copyKey) {
-        void copyToClipboard(target.dataset.copyKey);
-        return;
-      }
-      if (target.dataset.toggleKey) {
-        void toggleAdminKeyStatus(
-          target.dataset.toggleKey,
-          target.dataset.keyStatus || "active",
-        );
-        return;
-      }
-      if (target.dataset.deleteKey) {
-        void deleteAdminKeyRecord(
-          target.dataset.deleteKey,
-          target.dataset.keyPreview || "",
-        );
-      }
-    });
-
-    document.getElementById("users-table-body")?.addEventListener("change", (event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLSelectElement)) return;
-      const displayVarId = target.dataset.cardTier;
-      if (!displayVarId) return;
-      updateCardTierSwatch(target);
-      void changeUserCardTier(displayVarId, target.value);
-    });
-
-    document.getElementById("users-table-body")?.addEventListener("click", (event) => {
-      const target = event.target.closest(
-        "[data-toggle-status], [data-change-role], [data-delete-user], [data-copy-var-id], [data-edit-user], [data-toggle-verification]",
-      );
-      if (!target) return;
-      if (target.dataset.copyVarId) {
-        void copyToClipboard(target.dataset.copyVarId);
-      } else if (target.dataset.editUser) {
-        void openUserEditor(target.dataset.editUser);
-      } else if (target.dataset.toggleVerification) {
-        void toggleUserVerification(
-          target.dataset.toggleVerification,
-          target.dataset.verified !== "1",
-        );
-      } else if (target.dataset.toggleStatus) {
-        void toggleUserStatus(target.dataset.toggleStatus);
-      } else if (target.dataset.changeRole) {
-        void changeUserRole(target.dataset.changeRole);
-      } else if (target.dataset.deleteUser) {
-        void deleteUser(target.dataset.deleteUser);
-      }
-    });
-
-    document.getElementById("user-search-input")?.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        void runQuickUserSearch(event.target.value);
-      }
-    });
-
-    document.getElementById("user-search-btn")?.addEventListener("click", () => {
-      const input = document.getElementById("user-search-input");
-      void runQuickUserSearch(input instanceof HTMLInputElement ? input.value : "");
-    });
-
-    document.getElementById("quick-var-search-btn")?.addEventListener("click", () => {
-      const input = document.getElementById("quick-var-search-input");
-      void runQuickUserSearch(input instanceof HTMLInputElement ? input.value : "");
-    });
-
-    document.getElementById("quick-var-search-input")?.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        void runQuickUserSearch(event.target.value);
-      }
-    });
-
-    document.getElementById("global-search-input")?.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter") return;
-      event.preventDefault();
-      void runQuickUserSearch(event.target.value);
-    });
-
-    document
-      .getElementById("user-edit-verification-btn")
-      ?.addEventListener("click", () => {
-        if (!editingUserDisplayVarId) return;
-        void toggleUserVerification(
-          editingUserDisplayVarId,
-          !editingUserVerified,
-        );
-      });
-
-    document
-      .getElementById("user-edit-form")
-      ?.addEventListener("submit", (event) => {
-        void saveUserEditor(event);
-      });
-    document
-      .getElementById("user-edit-close-btn")
-      ?.addEventListener("click", closeUserEditor);
-    document
-      .getElementById("user-edit-cancel-btn")
-      ?.addEventListener("click", closeUserEditor);
-    document.getElementById("user-edit-overlay")?.addEventListener("click", (event) => {
-      if (event.target?.id === "user-edit-overlay") {
-        closeUserEditor();
-      }
-    });
-
-    document.getElementById("user-edit-posts-list")?.addEventListener("click", (event) => {
-      const target = event.target.closest(
-        "[data-toggle-post-visibility], [data-delete-post]",
-      );
-      if (!target) return;
-
-      if (target.dataset.deletePost) {
-        void deleteUserPost(target.dataset.deletePost);
-        return;
-      }
-
-      if (target.dataset.togglePostVisibility) {
-        void toggleUserPostVisibility(
-          target.dataset.togglePostVisibility,
-          target.dataset.postHidden === "1",
-        );
-      }
-    });
-  }
-
-  window.generateNewKey = () => {
-    void generateNewKey();
-  };
-  window.toggleCustomDatePicker = toggleCustomDatePicker;
-  window.resetKeyForm = resetKeyForm;
-  window.filterUsers = filterUsers;
-  window.filterUsersByRole = filterUsersByRole;
-  window.setGlobalMode = (mode) => setGlobalMode(mode, true);
-  window.switchTab = (tabId, event) => switchTab(tabId, event || window.event);
-  window.showToast = showToast;
-  window.handleLogout = handleLogout;
-  window.clearLogs = () => {
-    void refreshAuditLogs();
-    showToast("تم تحديث السجل من الخادم.", "info");
-  };
-
-  window.addEventListener("DOMContentLoaded", () => {
-    if (window.lucide) window.lucide.createIcons();
-    consumeSessionFromUrl();
-    bindEvents();
-    void restoreSession();
-  });
-})();
+      

@@ -1,4 +1,5 @@
 import {
+  createAdminJwtForUser,
   createEmailSession,
   createJwtForSession,
   handleOptions,
@@ -65,7 +66,7 @@ export async function handler(request: any, response: any) {
 
     const authToken = sessionSecret
       ? sessionSecret
-      : await createJwtForSession(config, sessionId);
+      : await createAdminJwtForUser(config, userId, sessionId);
 
     const admin = await requireAdminSession(
       { headers: buildAuthHeader(authToken) },

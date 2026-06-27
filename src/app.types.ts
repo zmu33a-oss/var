@@ -38,6 +38,7 @@ export type PendingAuthIntent =
   | { type: "reply-post"; postId: number }
   | { type: "toggle-post-like"; postId: number }
   | { type: "toggle-post-repost"; postId: number }
+  | { type: "toggle-post-save"; postId: number }
   | { type: "share-post"; postId: number }
   | { type: "toggle-follow-author"; authorVarId: string }
   | { type: "toggle-support"; clubId: FanClubId };
@@ -82,6 +83,7 @@ export type Post = {
   id: number;
   feedKey?: string;
   feedScope?: PostFeedScope;
+  clubId?: FanClubId;
   sourceId?: string;
   title?: string;
   authorId?: string;
@@ -90,6 +92,7 @@ export type Post = {
   authorVerified?: boolean;
   handle: string;
   time: string;
+  createdAt?: string;
   content: string;
   mediaUri?: string;
   fromVarLibrary?: boolean;
@@ -102,16 +105,19 @@ export type Post = {
   likedByMe: boolean;
   repostedByMe?: boolean;
   sharedByMe?: boolean;
+  savedByMe?: boolean;
 };
 
 export type PostReply = {
   id: number;
+  authorId?: string;
   author: string;
   authorAvatarUri?: string;
   authorVerified?: boolean;
   handle: string;
   time: string;
   content: string;
+  createdAt?: string;
 };
 
 export type FollowingProfileCard = {

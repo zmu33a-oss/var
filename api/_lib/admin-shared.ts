@@ -390,6 +390,166 @@ export function createServerClient(config: AdminConfig) {
     .setKey(config.apiKey);
 }
 
+type DetailedAdminAccessError = Error & {
+  code?: string;
+  detail?: string;
+};
+
+function createAdminAccessError(
+  message: string,
+  code?: string,
+  detail?: string,
+) {
+  const error = new Error(message) as DetailedAdminAccessError;
+  error.code = code;
+  error.detail = detail;
+  return error;
+}
+
+function readAppwriteErrorType(error: unknown) {
+  if (
+    error instanceof AppwriteException &&
+    typeof error.type === "string" &&
+    error.type.trim()
+  ) {
+    return error.type.trim();
+  }
+
+  if (
+    error &&
+    typeof error === "object" &&
+    "type" in error &&
+    typeof (error as { type?: unknown }).type === "string"
+  ) {
+    return ((error as { type: string }).type || "").trim();
+  }
+
+  return "";
+}
+
+function readAppwriteErrorCode(error: unknown) {
+  if (error instanceof AppwriteException && typeof error.code === "number") {
+    return error.code;
+  }
+
+  if (
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    typeof (error as { code?: unknown }).code === "number"
+  ) {
+    return (error as { code: number }).code;
+  }
+
+  return 0;
+}
+
+function isAppwriteDocumentNotFoundError(error: unknown) {
+  const type = readAppwriteErrorType(error);
+  const code = readAppwriteErrorCode(error);
+  const message = error instanceof Error ? error.message : "";
+
+  return (
+    code === 404 ||
+    type === "document_not_found" ||
+    message.includes("could not be found")
+  );
+}
+
+function isAppwritePermissionError(error: unknown) {
+  const type = readAppwriteErrorType(error);
+  const code = readAppwriteErrorCode(error);
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+
+  return (
+    code === 401 ||
+    code === 403 ||
+    type === "general_access_forbidden" ||
+    type === "general_unauthorized_scope" ||
+    type === "user_unauthorized" ||
+    message.includes("permission") ||
+    message.includes("missing scope") ||
+    message.includes("not authorized")
+  );
+}
+
+type ProfileAdminStatus =
+  | { status: "found"; value: string }
+  | { status: "missing"; value: "" }
+  | { status: "unconfigured"; value: "" }
+  | { status: "unreadable"; value: ""; detail: string };
+
+async function readProfileAdminStatus(
+  config: AdminConfig,
+  auth: AdminAuth,
+  userId: string,
+): Promise<ProfileAdminStatus> {
+  if (!config.databaseId || !config.profilesCollectionId) {
+    return { status: "unconfigured", value: "" };
+  }
+
+  const databases = new Databases(createAuthClient(config, auth));
+
+  try {
+    const document = (await databases.getDocument(
+      config.databaseId,
+      config.profilesCollectionId,
+      userId,
+    )) as Record<string, unknown>;
+
+    return {
+      status: "found",
+      value: typeof document.admin === "string" ? document.admin.trim() : "",
+    };
+  } catch (error) {
+    if (isAppwritePermissionError(error)) {
+      return {
+        status: "unreadable",
+        value: "",
+        detail:
+          "لا يمكن قراءة profile لهذا الحساب. تأكد من صلاحيات القراءة في مجموعة profiles.",
+      };
+    }
+
+    if (!isAppwriteDocumentNotFoundError(error)) {
+      return {
+        status: "unreadable",
+        value: "",
+        detail:
+          error instanceof Error ? error.message : "تعذر قراءة profile.",
+      };
+    }
+  }
+
+  try {
+    const response = await databases.listDocuments(
+      config.databaseId,
+      config.profilesCollectionId,
+      [Query.equal("userId", userId), Query.limit(1)],
+    );
+    const document = response.documents[0] as Record<string, unknown> | undefined;
+
+    if (!document) {
+      return { status: "missing", value: "" };
+    }
+
+    return {
+      status: "found",
+      value: typeof document.admin === "string" ? document.admin.trim() : "",
+    };
+  } catch (error) {
+    return {
+      status: "unreadable",
+      value: "",
+      detail: isAppwritePermissionError(error)
+        ? "لا يمكن قراءة profile لهذا الحساب. تأكد من صلاحيات القراءة في مجموعة profiles."
+        : error instanceof Error
+          ? error.message
+          : "تعذر البحث عن profile.",
+    };
+  }
+}
+
 export function normalizeDisplayVarId(value: string) {
   const digitsOnly = value.trim().replace(/\D/g, "");
   if (!digitsOnly) {
@@ -404,10 +564,19 @@ export function isAdminAccount(input: {
   username: string;
   role: string;
   adminEmail: string;
+  profileAdmin?: string;
 }) {
   const email = input.email.trim().toLowerCase();
   const username = input.username.trim().toLowerCase();
   const role = input.role.trim().toLowerCase();
+  const profileAdmin =
+    typeof input.profileAdmin === "string"
+      ? input.profileAdmin.trim().toUpperCase()
+      : "";
+
+  if (profileAdmin === "VAR") {
+    return true;
+  }
 
   if (role === "admin") {
     return true;
@@ -440,11 +609,49 @@ export async function requireAdminSession(
   const username = typeof prefs.username === "string" ? prefs.username : "";
   const role = typeof prefs.role === "string" ? prefs.role : "member";
   const email = (user.email ?? "").trim().toLowerCase();
+  const hasLegacyAdminAccess = isAdminAccount({
+    email,
+    username,
+    role,
+    adminEmail: config.adminEmail,
+  });
+  let resolvedRole = role;
 
-  if (
-    !isAdminAccount({ email, username, role, adminEmail: config.adminEmail })
-  ) {
-    throw new Error("NOT_ADMIN");
+  if (!hasLegacyAdminAccess) {
+    const profileAdmin = await readProfileAdminStatus(config, auth, user.$id);
+
+    if (profileAdmin.status === "found") {
+      if (
+        isAdminAccount({
+          email,
+          username,
+          role,
+          adminEmail: config.adminEmail,
+          profileAdmin: profileAdmin.value,
+        })
+      ) {
+        resolvedRole = "admin";
+      } else {
+        const normalizedProfileAdmin = profileAdmin.value.trim().toUpperCase();
+        throw createAdminAccessError(
+          "NOT_ADMIN",
+          normalizedProfileAdmin ? "PROFILE_ADMIN_NOT_VAR" : "PROFILE_ADMIN_EMPTY",
+          profileAdmin.value,
+        );
+      }
+    } else if (profileAdmin.status === "missing") {
+      throw createAdminAccessError("NOT_ADMIN", "PROFILE_NOT_FOUND");
+    } else if (profileAdmin.status === "unconfigured") {
+      throw createAdminAccessError("NOT_ADMIN", "PROFILE_ADMIN_UNCONFIGURED");
+    } else {
+      throw createAdminAccessError(
+        "PROFILE_ADMIN_UNREADABLE",
+        "PROFILE_ADMIN_UNREADABLE",
+        profileAdmin.detail,
+      );
+    }
+  } else {
+    resolvedRole = "admin";
   }
 
   return {
@@ -452,7 +659,7 @@ export async function requireAdminSession(
     email,
     name: user.name ?? "",
     username,
-    role,
+    role: resolvedRole,
     session: auth.token,
   } satisfies AdminActor;
 }
@@ -735,11 +942,14 @@ export async function createJwtForSession(
 }
 
 export function mapLoginError(error: unknown) {
-  const type =
+  const mappedError =
     error instanceof Error
-      ? (error as Error & { type?: string }).type
-      : undefined;
-  const message = error instanceof Error ? error.message : "UNKNOWN";
+      ? (error as Error & { type?: string; code?: string; detail?: string })
+      : null;
+  const type = mappedError?.type;
+  const message = mappedError?.message ?? "UNKNOWN";
+  const code = mappedError?.code;
+  const detail = mappedError?.detail;
 
   if (
     type === "user_invalid_credentials" ||
@@ -753,10 +963,57 @@ export function mapLoginError(error: unknown) {
   }
 
   if (message === "NOT_ADMIN") {
+    if (code === "PROFILE_NOT_FOUND") {
+      return {
+        status: 403,
+        code: "PROFILE_NOT_FOUND",
+        error: "لا يوجد profile مرتبط بهذا الحساب في مجموعة profiles.",
+      };
+    }
+
+    if (code === "PROFILE_ADMIN_EMPTY") {
+      return {
+        status: 403,
+        code: "PROFILE_ADMIN_EMPTY",
+        error: "تم العثور على profile لكن حقل admin فارغ.",
+      };
+    }
+
+    if (code === "PROFILE_ADMIN_NOT_VAR") {
+      const value = detail?.trim();
+
+      return {
+        status: 403,
+        code: "PROFILE_ADMIN_NOT_VAR",
+        error: value
+          ? `حقل admin لهذا الحساب يساوي "${value}" وليس "VAR".`
+          : "حقل admin لهذا الحساب لا يساوي VAR.",
+      };
+    }
+
+    if (code === "PROFILE_ADMIN_UNCONFIGURED") {
+      return {
+        status: 500,
+        code: "PROFILE_ADMIN_UNCONFIGURED",
+        error:
+          "إعدادات profiles ناقصة على السيرفر. تأكد من APPWRITE_DATABASE_ID و APPWRITE_PROFILES_COLLECTION_ID.",
+      };
+    }
+
     return {
       status: 403,
       code: "NOT_ADMIN",
       error: "هذا الحساب ليس لديه صلاحية أدمن.",
+    };
+  }
+
+  if (message === "PROFILE_ADMIN_UNREADABLE") {
+    return {
+      status: 500,
+      code: "PROFILE_ADMIN_UNREADABLE",
+      error:
+        detail?.trim() ||
+        "تعذر التحقق من صلاحية الأدمن من مجموعة profiles.",
     };
   }
 
@@ -2768,7 +3025,7 @@ export type AppRuntimeSettings = {
 };
 
 const DEFAULT_APP_RUNTIME_SETTINGS: AppRuntimeSettings = {
-  uiMode: "tiktok",
+  uiMode: "x",
   richIconsEnabled: true,
   gpuAccelerationEnabled: true,
   updatedAt: "",

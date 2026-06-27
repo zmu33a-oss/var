@@ -8,6 +8,7 @@ import {
   Easing,
   Image,
   PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -152,13 +153,16 @@ function FansCheerSwipeButton(props: {
     void playCheerClickSound();
   };
 
+  const resolveSwipeDelta = (dx: number) =>
+    Math.max(0, Math.min(swipeTravel, Math.abs(dx)));
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onStartShouldSetPanResponderCapture: () => true,
         onMoveShouldSetPanResponder: (_, gesture) =>
-          Math.abs(gesture.dx) > Math.abs(gesture.dy) && Math.abs(gesture.dx) > 2,
+          Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) > 2,
         onMoveShouldSetPanResponderCapture: (_, gesture) =>
           Math.abs(gesture.dx) > Math.abs(gesture.dy) && Math.abs(gesture.dx) > 2,
         onPanResponderTerminationRequest: () => false,
@@ -176,8 +180,7 @@ function FansCheerSwipeButton(props: {
             return;
           }
 
-          const next = Math.max(0, Math.min(swipeTravel, gesture.dx));
-          dragX.setValue(next);
+          dragX.setValue(resolveSwipeDelta(gesture.dx));
         },
         onPanResponderRelease: (_, gesture) => {
           if (!props.isLoggedIn) {
@@ -185,7 +188,7 @@ function FansCheerSwipeButton(props: {
             return;
           }
 
-          const total = Math.max(0, Math.min(swipeTravel, gesture.dx));
+          const total = resolveSwipeDelta(gesture.dx);
           const didToggle = total >= swipeTravel * SWIPE_TRIGGER_RATIO;
 
           if (didToggle) {
@@ -228,6 +231,7 @@ function FansCheerSwipeButton(props: {
       style={[
         styles.swipeTrack,
         props.isSupported ? styles.swipeTrackSupported : null,
+        Platform.OS === "web" ? styles.swipeTrackWeb : null,
         {
           backgroundColor: trackBackground,
           width: SWIPE_TRACK_WIDTH,
@@ -459,7 +463,13 @@ const styles = createCompatStyleSheet({
     padding: SWIPE_TRACK_PADDING,
     justifyContent: "center",
     overflow: "hidden",
+    direction: "ltr",
   },
+  swipeTrackWeb: {
+    touchAction: "none",
+    userSelect: "none",
+    cursor: "grab",
+  } as const,
   swipeTrackSupported: {
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.24)",

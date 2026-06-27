@@ -47,6 +47,7 @@ export async function saveAppwriteNotification(
       title: notification.title,
       body: notification.body,
       timeLabel: notification.timeLabel,
+      createdAt: notification.createdAt,
       iconName: notification.iconName,
       accentColor: notification.accentColor,
       sortOrder: notification.sortOrder,
@@ -101,14 +102,20 @@ export async function loadAppwriteNotifications(
           typeof d.$id === "string"
             ? `persisted-${d.$id}`
             : `persisted-${Math.random()}`;
+        const docCreatedAt =
+          typeof d.$createdAt === "string" ? d.$createdAt : "";
 
         try {
           const parsed = JSON.parse(rawValue) as Partial<XNotificationEntry>;
+          const createdAt =
+            (typeof parsed.createdAt === "string" && parsed.createdAt.trim()) ||
+            docCreatedAt;
           return {
             id: parsed.id ?? id,
             title: parsed.title ?? "إشعار",
             body: parsed.body ?? "",
             timeLabel: parsed.timeLabel ?? "",
+            createdAt,
             iconName:
               (parsed.iconName as XNotificationEntry["iconName"]) ??
               "notifications-outline",

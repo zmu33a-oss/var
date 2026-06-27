@@ -104,15 +104,15 @@ export const styles = createCompatStyleSheet({
     alignItems: "flex-end",
   },
   identityNameRow: {
-    width: "100%",
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "flex-end",
     gap: 7,
+    alignSelf: "flex-end",
+    marginTop: 6,
   },
   identityName: {
     color: "#FFFFFF",
-    flex: 1,
-    minWidth: 0,
     fontSize: 23,
     fontWeight: "900",
     textAlign: "right",
@@ -137,8 +137,9 @@ export const styles = createCompatStyleSheet({
     letterSpacing: 0.3,
   },
   identityRewardsTracker: {
-    marginTop: 14,
+    marginTop: 18,
     width: "100%",
+    paddingRight: 0,
   },
   profileMetricGroupsGrid: {
     flexDirection: "row-reverse",

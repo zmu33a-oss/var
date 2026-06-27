@@ -132,6 +132,27 @@ export async function sendAppwriteDirectMessage(input: {
 
 // ─── Social interactions ──────────────────────────────────────────────────────
 
+const POST_SCOPED_SOCIAL_ACTIONS = new Set<
+  AppwriteSocialInteractionInput["action"]
+>(["reply", "comment", "like", "repost", "share", "save", "post"]);
+
+function normalizeSocialInteractionTargetId(
+  action: AppwriteSocialInteractionInput["action"],
+  targetId: string,
+) {
+  const trimmedTargetId = targetId.trim();
+
+  if (!trimmedTargetId) {
+    return "";
+  }
+
+  if (POST_SCOPED_SOCIAL_ACTIONS.has(action)) {
+    return trimmedTargetId;
+  }
+
+  return normalizeAppwriteVarId(trimmedTargetId);
+}
+
 export async function listAppwriteVarSocialInteractions(
   varId: string,
 ): Promise<AppwriteVarSocialSummary> {
@@ -465,7 +486,10 @@ export async function syncAppwriteSocialInteraction(
   }
 
   const normalizedVarId = normalizeAppwriteVarId(input.varId);
-  const normalizedTargetId = normalizeAppwriteVarId(input.targetId);
+  const normalizedTargetId = normalizeSocialInteractionTargetId(
+    input.action,
+    input.targetId,
+  );
 
   if (!normalizedVarId || !normalizedTargetId) {
     return null;
