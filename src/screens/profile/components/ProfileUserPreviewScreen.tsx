@@ -471,38 +471,51 @@ export function ProfileUserPreviewScreen(props: {
         >
           <View style={styles.identityAccentGlow} />
 
-          <View style={styles.identityHeaderLine}>
+                    <View style={styles.identityHeaderLine}>
 
-            {/* يمين: الاسم + النوادي */}
-            <View style={styles.identityCopy}>
-              <View style={styles.identityNameRow}>
-                <Ionicons name="checkmark-circle" size={18} color="#5DB9FF" />
-                <Text
-                  numberOfLines={1}
-                  style={[
-                    styles.identityName,
-                    getArabicFontStyle(
-                      props.arabicFontFamily,
-                      props.profile.displayName,
-                    ),
-                  ]}
-                >
-                  {props.profile.displayName}
-                </Text>
+            {/* يمين: الاسم + النوادي + مربع النقاط بالأعلى */}
+            <View style={{ flex: 1 }}>
+              {/* مربع النقاط (Milestone) في الزاوية اليمنى العليا */}
+              <View style={localStyles.milestoneTopRight}>
+                <MilestoneProgressBar
+                  compactProfile
+                  embedded
+                  points={earnedPoints}
+                  showControls={false}
+                  titleTextStyle={titleArabicTextStyle}
+                />
               </View>
 
-              {leagueClubEntries.length > 0 ? (
-                <View style={localStyles.clubsGrid}>
-                  {leagueClubEntries.slice(0, 4).map((entry, idx) => (
-                    <View key={entry.leagueId + idx} style={localStyles.clubChip}>
-                      <Ionicons name="football-outline" size={11} color="#F4C565" />
-                      <Text numberOfLines={1} style={localStyles.clubChipText}>
-                        {entry.club}
-                      </Text>
-                    </View>
-                  ))}
+              <View style={styles.identityCopy}>
+                <View style={styles.identityNameRow}>
+                  <Ionicons name="checkmark-circle" size={18} color="#5DB9FF" />
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.identityName,
+                      getArabicFontStyle(
+                        props.arabicFontFamily,
+                        props.profile.displayName,
+                      ),
+                    ]}
+                  >
+                    {props.profile.displayName}
+                  </Text>
                 </View>
-              ) : null}
+
+                {leagueClubEntries.length > 0 ? (
+                  <View style={localStyles.clubsGrid}>
+                    {leagueClubEntries.slice(0, 4).map((entry, idx) => (
+                      <View key={entry.leagueId + idx} style={localStyles.clubChip}>
+                        <Ionicons name="football-outline" size={11} color="#F4C565" />
+                        <Text numberOfLines={1} style={localStyles.clubChipText}>
+                          {entry.club}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
             </View>
 
             {/* يسار: الأفتار + الرابطة + VAR ID تحته */}
@@ -522,15 +535,6 @@ export function ProfileUserPreviewScreen(props: {
             </View>
 
           </View>
-
-          <MilestoneProgressBar
-            compactProfile
-            embedded
-            points={earnedPoints}
-            showControls={false}
-            style={styles.identityRewardsTracker}
-            titleTextStyle={titleArabicTextStyle}
-          />
         </LinearGradient>
 
       <PredictionsBar
@@ -1000,6 +1004,10 @@ const localStyles = StyleSheet.create({
     textAlign: "right",
     flex: 1,
     marginLeft: 8,
+  },
+  milestoneTopRight: {
+    alignItems: "flex-end",
+    marginBottom: 8,
   },
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
