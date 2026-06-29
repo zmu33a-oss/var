@@ -1,59 +1,4 @@
-  const authoredPosts = useMemo(
-    () => filterProfileAuthoredPosts(props.posts, props.profile),
-    [props.posts, props.profile],
-  );
-  const profileReplies = useMemo(
-    () =>
-      mergeProfileReplies(
-        props.posts,
-        props.profile,
-        props.socialInteractions,
-      ),
-    [props.posts, props.profile, props.socialInteractions],
-  );
-  const repostPosts = useMemo(
-    () =>
-      mergeProfileRepostPosts(
-        props.posts,
-        props.profile,
-        props.socialInteractions,
-      ),
-    [props.posts, props.profile, props.socialInteractions],
-  );
-  const likedPosts = useMemo(
-    () =>
-      filterInteractionPosts(props.posts, props.socialInteractions, "like"),
-    [props.posts, props.socialInteractions],
-  );
-
-  // --- بيانات الرابطة (fansPosts) ---
-  const fanClubAuthoredPosts = useMemo(
-    () => filterProfileAuthoredPosts(props.fansPosts ?? [], props.profile),
-    [props.fansPosts, props.profile],
-  );
-  const fanClubReplies = useMemo(
-    () =>
-      mergeProfileReplies(
-        props.fansPosts ?? [],
-        props.profile,
-        props.socialInteractions,
-      ),
-    [props.fansPosts, props.profile, props.socialInteractions],
-  );
-  const fanClubRepostPosts = useMemo(
-    () =>
-      mergeProfileRepostPosts(
-        props.fansPosts ?? [],
-        props.profile,
-        props.socialInteractions,
-      ),
-    [props.fansPosts, props.profile, props.socialInteractions],
-  );
-  const fanClubLikedPosts = useMemo(
-    () =>
-      filterInteractionPosts(props.fansPosts ?? [], props.socialInteractions, "like"),
-    [props.fansPosts, props.socialInteractions],
-  );import { Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMemo, useState } from "react";
 import {
@@ -73,6 +18,7 @@ import type {
   ProfileData,
   SocialInteractionRecord,
 } from "../../../app.types";
+import { LEAGUES } from "../../../app.data";
 import { buildComposerDisplayVarId } from "../../../appshell/appshell.helpers";
 import { MilestoneProgressBar } from "../../../components/MilestoneProgressBar";
 import {
@@ -248,6 +194,90 @@ function PredictionShowcaseCard(props: {
   );
 }
 
+function PredictionsBar(props: {
+  earnedPoints: number;
+  predictionsCount: number;
+  wonPredictions: number;
+  predictions: LockedPredictionSummary[];
+  arabicFontFamily?: string;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [expandAnim] = useState(() => new Animated.Value(0));
+  const titleStyle = getArabicFontStyle(props.arabicFontFamily, "التوقعات");
+
+  const toggleExpand = () => {
+    if (isExpanded) {
+      Animated.timing(expandAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start(() => setIsExpanded(false));
+    } else {
+      setIsExpanded(true);
+      Animated.spring(expandAnim, {
+        toValue: 1,
+        damping: 20,
+        stiffness: 300,
+        useNativeDriver: false,
+      }).start();
+    }
+  };
+
+  return (
+    <View style={localStyles.predictionsWrapper}>
+      <Text style={[localStyles.predictionsTitle, titleStyle]}>التوقعات</Text>
+      <Pressable style={localStyles.predictionsBar} onPress={toggleExpand}>
+        <View style={localStyles.predictionsBarRow}>
+          <View style={localStyles.predictionsBarItem}>
+            <Text style={localStyles.predictionsBarLabel}>نقاط فار</Text>
+            <Text style={localStyles.predictionsBarValue}>{props.earnedPoints}</Text>
+          </View>
+          <View style={localStyles.predictionsBarDivider} />
+          <View style={localStyles.predictionsBarItem}>
+            <Text style={localStyles.predictionsBarLabel}>توقعات</Text>
+            <Text style={localStyles.predictionsBarValue}>{props.predictionsCount}</Text>
+          </View>
+          <View style={localStyles.predictionsBarDivider} />
+          <View style={localStyles.predictionsBarItem}>
+            <Text style={localStyles.predictionsBarLabel}>فوز</Text>
+            <Text style={localStyles.predictionsBarValue}>{props.wonPredictions}</Text>
+          </View>
+        </View>
+
+        {isExpanded && (
+          <Animated.View
+            style={[
+              localStyles.expandedContent,
+              {
+                opacity: expandAnim,
+                maxHeight: expandAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 500],
+                }),
+              },
+            ]}
+          >
+            <View style={localStyles.expandedDivider} />
+            <Text style={localStyles.expandedTitle}>سجل التوقعات</Text>
+            {props.predictions.length === 0 ? (
+              <Text style={localStyles.expandedEmpty}>لا توجد توقعات مقفلة بعد</Text>
+            ) : (
+              props.predictions.map((pred) => (
+                <View key={pred.id} style={localStyles.expandedItem}>
+                  <Text style={localStyles.expandedItemTitle}>{pred.title}</Text>
+                  <Text style={localStyles.expandedItemMeta}>
+                    {pred.lockedAt} · {pred.pointsAwarded > 0 ? `+${pred.pointsAwarded} نقطة` : "بانتظار النتيجة"}
+                  </Text>
+                </View>
+              ))
+            )}
+          </Animated.View>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
 function ProfileMetricGroupCard(props: {
   accentColor: string;
   arabicFontFamily?: string;
@@ -316,6 +346,23 @@ export function ProfileUserPreviewScreen(props: {
   const earnedPoints = Math.max(0, props.profile.earnedPoints);
   const associationLabel =
     props.profile.association?.trim() || props.clubName || "بدون رابطة";
+  const leagueNameMap = Object.fromEntries(LEAGUES.map((l) => [l.id, l.name]));
+  const leagueClubEntries: { leagueId: string; leagueName: string; club: string }[] = (() => {
+    const raw = props.profile.leagueClub?.trim() || "";
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw) as Record<string, string>;
+      return Object.entries(parsed)
+        .filter(([, club]) => club)
+        .map(([leagueId, club]) => ({
+          leagueId,
+          leagueName: leagueNameMap[leagueId] || leagueId,
+          club,
+        }));
+    } catch {
+      return raw ? [{ leagueId: "other", leagueName: "الرابطة", club: raw }] : [];
+    }
+  })();
   const previewVarIdLabel = sportsCardNumber.replace(/^VAR-/i, "VAR ");
   const wonPredictions = predictions.filter(
     (prediction) => prediction.pointsAwarded > 0,
@@ -352,10 +399,39 @@ export function ProfileUserPreviewScreen(props: {
       ),
     [props.posts, props.profile, props.socialInteractions],
   );
-  const likedPosts = useMemo(
+    const likedPosts = useMemo(
     () =>
       filterInteractionPosts(props.posts, props.socialInteractions, "like"),
     [props.posts, props.socialInteractions],
+  );
+
+  // --- بيانات الرابطة (fansPosts) ---
+  const fanClubAuthoredPosts = useMemo(
+    () => filterProfileAuthoredPosts(props.fansPosts ?? [], props.profile),
+    [props.fansPosts, props.profile],
+  );
+  const fanClubReplies = useMemo(
+    () =>
+      mergeProfileReplies(
+        props.fansPosts ?? [],
+        props.profile,
+        props.socialInteractions,
+      ),
+    [props.fansPosts, props.profile, props.socialInteractions],
+  );
+  const fanClubRepostPosts = useMemo(
+    () =>
+      mergeProfileRepostPosts(
+        props.fansPosts ?? [],
+        props.profile,
+        props.socialInteractions,
+      ),
+    [props.fansPosts, props.profile, props.socialInteractions],
+  );
+  const fanClubLikedPosts = useMemo(
+    () =>
+      filterInteractionPosts(props.fansPosts ?? [], props.socialInteractions, "like"),
+    [props.fansPosts, props.socialInteractions],
   );
 
   return (
@@ -397,23 +473,7 @@ export function ProfileUserPreviewScreen(props: {
 
           <View style={styles.identityHeaderLine}>
 
-            {/* يمين: الأفتار + الرابطة + VAR ID تحته */}
-            <View style={[localStyles.avatarColumn, { alignSelf: "flex-start" }]}>
-              <View style={styles.avatarRing}>
-                <Image
-                  source={{ uri: resolveProfileAvatarUri(props.profile.avatarUri) }}
-                  style={styles.avatarImage}
-                />
-              </View>
-              <Text numberOfLines={1} style={localStyles.avatarBelowAssociation}>
-                الرابطة : {associationLabel}
-              </Text>
-              <Text numberOfLines={1} style={localStyles.avatarBelowVarId}>
-                {previewVarIdLabel}
-              </Text>
-            </View>
-
-            {/* يسار: الاسم */}
+            {/* يمين: الاسم + النوادي */}
             <View style={styles.identityCopy}>
               <View style={styles.identityNameRow}>
                 <Ionicons name="checkmark-circle" size={18} color="#5DB9FF" />
@@ -430,6 +490,35 @@ export function ProfileUserPreviewScreen(props: {
                   {props.profile.displayName}
                 </Text>
               </View>
+
+              {leagueClubEntries.length > 0 ? (
+                <View style={localStyles.clubsGrid}>
+                  {leagueClubEntries.slice(0, 4).map((entry, idx) => (
+                    <View key={entry.leagueId + idx} style={localStyles.clubChip}>
+                      <Ionicons name="football-outline" size={11} color="#F4C565" />
+                      <Text numberOfLines={1} style={localStyles.clubChipText}>
+                        {entry.club}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+
+            {/* يسار: الأفتار + الرابطة + VAR ID تحته */}
+            <View style={[localStyles.avatarColumn, { alignSelf: "flex-start" }]}>
+              <View style={styles.avatarRing}>
+                <Image
+                  source={{ uri: resolveProfileAvatarUri(props.profile.avatarUri) }}
+                  style={styles.avatarImage}
+                />
+              </View>
+              <Text numberOfLines={1} style={localStyles.avatarBelowAssociation}>
+                الرابطة : {associationLabel}
+              </Text>
+              <Text numberOfLines={1} style={localStyles.avatarBelowVarId}>
+                {previewVarIdLabel}
+              </Text>
             </View>
 
           </View>
@@ -443,6 +532,14 @@ export function ProfileUserPreviewScreen(props: {
             titleTextStyle={titleArabicTextStyle}
           />
         </LinearGradient>
+
+      <PredictionsBar
+        predictions={predictions}
+        earnedPoints={earnedPoints}
+        predictionsCount={predictions.length}
+        wonPredictions={wonPredictions}
+        arabicFontFamily={props.arabicFontFamily}
+      />
 
         <View style={localStyles.sectionWrapper}>
 
@@ -520,8 +617,8 @@ export function ProfileUserPreviewScreen(props: {
                     </Pressable>
                   ))}
                 </View>
-                                <View style={localStyles.varXContent}>
-                  {fanClubActiveTab === "activity" && (
+                <View style={localStyles.varXContent}>
+                                    {fanClubActiveTab === "activity" && (
                     <ProfileXPostFeed posts={fanClubAuthoredPosts} profile={props.profile} emptyText="لا توجد منشورات في الرابطة" />
                   )}
                   {fanClubActiveTab === "likes" && (
@@ -605,6 +702,95 @@ const localStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.20)",
     marginBottom: 10,
+  },
+  predictionsWrapper: {
+    marginHorizontal: 16,
+    marginVertical: 12,
+  },
+  predictionsTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "right",
+    marginBottom: 10,
+    marginRight: 4,
+  },
+  predictionsBar: {
+    backgroundColor: "rgba(12,12,16,0.98)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  predictionsBarRow: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  predictionsBarItem: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+  },
+  predictionsBarDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 20,
+    backgroundColor: "rgba(255,255,255,0.15)",
+  },
+  predictionsBarValue: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#F4C565",
+  },
+  predictionsBarLabel: {
+    fontSize: 13,
+    color: "#FFFFFF",
+    fontWeight: "600",
+    backgroundColor: "rgba(135,206,235,0.65)",
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  expandedContent: {
+    overflow: "hidden",
+    marginTop: 12,
+  },
+  expandedDivider: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    marginBottom: 12,
+  },
+  expandedTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#F4C565",
+    textAlign: "right",
+    marginBottom: 10,
+  },
+  expandedEmpty: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.5)",
+    textAlign: "center",
+    paddingVertical: 20,
+  },
+  expandedItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  expandedItemTitle: {
+    fontSize: 14,
+    color: "#FFFFFF",
+    textAlign: "right",
+    marginBottom: 4,
+  },
+  expandedItemMeta: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.5)",
+    textAlign: "right",
   },
   activityLogSection: {
     marginTop: 18,
@@ -839,10 +1025,11 @@ const localStyles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   clubsGrid: {
-    flexDirection: "column-reverse",
-    gap: 4,
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: 6,
     marginTop: 8,
-    alignItems: "flex-start",
+    justifyContent: "flex-start",
   },
   clubChip: {
     flexDirection: "row-reverse",
@@ -854,60 +1041,11 @@ const localStyles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    alignSelf: "flex-start",
+    maxWidth: "48%",
   },
   clubChipText: {
     color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "600",
-  },
-  clubsDropdownWrapper: {
-    marginTop: 8,
-    alignSelf: "flex-start",
-    minWidth: 130,
-  },
-  clubDropdownTrigger: {
-    flexDirection: "row-reverse",
-    alignItems: "flex-start",
-    gap: 4,
-    backgroundColor: "rgba(244,197,101,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(244,197,101,0.3)",
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    alignSelf: "flex-start",
-  },
-  clubsDropdownMenu: {
-    marginTop: 6,
-    backgroundColor: "rgba(12,12,16,0.98)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-    gap: 2,
-  },
-  clubsDropdownHint: {
-    color: "rgba(255,255,255,0.55)",
-    fontSize: 10,
-    fontWeight: "700",
-    textAlign: "right",
-    marginBottom: 4,
-    paddingHorizontal: 4,
-  },
-  clubsDropdownItem: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  clubsDropdownItemActive: {
-    backgroundColor: "rgba(244,197,101,0.12)",
-  },
-  clubsDropdownItemSpacer: {
-    width: 13,
   },
 });
